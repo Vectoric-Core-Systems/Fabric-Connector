@@ -1,6 +1,6 @@
 // Godot shading language -> HLSL. Emits structs, uniform accessors over a float4 register array, texture and sampler-state declarations, global
 // constants, the custom functions and the processor functions (vertex / fragment / light / start / process / sky / fog) as `<prefix>_<name>`.
-// Built-in variables become `AVER_GD_<NAME>` macros the engine side defines (SH2 / SH3); math built-ins become HLSL intrinsics or helpers from
+// Built-in variables become `AVER_CUSTOM_<NAME>` macros the engine side defines (SH2 / SH3); math built-ins become HLSL intrinsics or helpers from
 // gdShaderHlslLibrary(). Matrices keep GLSL's memory order (HLSL rows hold GLSL columns), so m[i] is column i and `A * B` is mul(B, A).
 #include "GodotShaderInternal.hpp"
 
@@ -69,10 +69,10 @@ const char* hlslTypeOf(GdBase b) {
     case B::UInt: return "uint"; case B::UVec2: return "uint2"; case B::UVec3: return "uint3"; case B::UVec4: return "uint4";
     case B::Float: return "float"; case B::Vec2: return "float2"; case B::Vec3: return "float3"; case B::Vec4: return "float4";
     case B::Mat2: return "float2x2"; case B::Mat3: return "float3x3"; case B::Mat4: return "float4x4";
-    case B::Sampler2D: return "GdSampler2D"; case B::ISampler2D: return "GdISampler2D"; case B::USampler2D: return "GdUSampler2D";
-    case B::Sampler2DArray: return "GdSampler2DArray"; case B::ISampler2DArray: return "GdISampler2DArray"; case B::USampler2DArray: return "GdUSampler2DArray";
-    case B::Sampler3D: return "GdSampler3D"; case B::ISampler3D: return "GdISampler3D"; case B::USampler3D: return "GdUSampler3D";
-    case B::SamplerCube: return "GdSamplerCube"; case B::SamplerCubeArray: return "GdSamplerCubeArray";
+    case B::Sampler2D: return "EmbSampler2D"; case B::ISampler2D: return "EmbISampler2D"; case B::USampler2D: return "EmbUSampler2D";
+    case B::Sampler2DArray: return "EmbSampler2DArray"; case B::ISampler2DArray: return "EmbISampler2DArray"; case B::USampler2DArray: return "EmbUSampler2DArray";
+    case B::Sampler3D: return "EmbSampler3D"; case B::ISampler3D: return "EmbISampler3D"; case B::USampler3D: return "EmbUSampler3D";
+    case B::SamplerCube: return "EmbSamplerCube"; case B::SamplerCubeArray: return "EmbSamplerCubeArray";
     default: return "float";
     }
 }
@@ -125,7 +125,7 @@ public:
 
         o_ += "// Generated from a Godot ";
         o_ += gdShaderTypeName(m_.shaderType);
-        o_ += " shader by gdShaderEmitHlsl. Needs gdShaderHlslLibrary() first and the AVER_GD_* hook macros.\n";
+        o_ += " shader by gdShaderEmitHlsl. Needs gdShaderHlslLibrary() first and the AVER_CUSTOM_* hook macros.\n";
         emitStructs();
         emitTextures();
         emitVaryingIo();
@@ -209,7 +209,7 @@ private:
         const GdUniformBlock& b = u.scope == GdUniformScope::Instance ? r_.instanceUniforms : u.scope == GdUniformScope::Global ? r_.globalUniforms : r_.uniforms;
         return b.slots[static_cast<usize>(slotOfUniform_[static_cast<usize>(ui)])];
     }
-    static const char* bufName(GdUniformScope s) { return s == GdUniformScope::Instance ? "AVER_GD_IBUF" : s == GdUniformScope::Global ? "AVER_GD_GBUF" : "AVER_GD_UBUF"; }
+    static const char* bufName(GdUniformScope s) { return s == GdUniformScope::Instance ? "AVER_CUSTOM_IBUF" : s == GdUniformScope::Global ? "AVER_CUSTOM_GBUF" : "AVER_CUSTOM_UBUF"; }
 
     void emitTextures() {
         int texIndex = 0;
@@ -240,7 +240,7 @@ private:
                                  (f == GdFilter::Nearest || f == GdFilter::Linear ? 0 : 4) | (unbound << 8);
                 texOfUniform_[i] = static_cast<int>(r_.textures.size());
                 r_.textures.push_back(t);
-                slotLines_.push_back(std::string("GdSampler2D ") + gn("gdsm_" + t.name) + "() { GdSampler2D r; r.slot = " + std::to_string(t.reg) + "u; r.m = " + std::to_string(mode) + "u; return r; }");
+                slotLines_.push_back(std::string("EmbSampler2D ") + gn("gdsm_" + t.name) + "() { EmbSampler2D r; r.slot = " + std::to_string(t.reg) + "u; r.m = " + std::to_string(mode) + "u; return r; }");
                 continue;
             }
             usize si = 0;
@@ -349,7 +349,7 @@ private:
         else r_.hooks[it->second].read = true;
     }
     void markWritten(const GdExpr& e) {
-        if (e.kind == GdExprKind::Var && e.ref == GdRefKind::Builtin) noteHook(std::string("AVER_GD_") + bv_[e.refIdx].name, bv_[e.refIdx].type, true);
+        if (e.kind == GdExprKind::Var && e.ref == GdRefKind::Builtin) noteHook(std::string("AVER_CUSTOM_") + bv_[e.refIdx].name, bv_[e.refIdx].type, true);
         else if (e.kind == GdExprKind::Member || e.kind == GdExprKind::Index || e.kind == GdExprKind::Swizzle) markWritten(*e.args[0]);
     }
 
@@ -378,7 +378,7 @@ private:
         switch (e.ref) {
         case GdRefKind::Local: case GdRefKind::Param: return lname(e.name);
         case GdRefKind::GlobalConst: return gn("gdc_" + e.name);
-        case GdRefKind::Varying: return "AVER_GD_VARYINGS." + px() + "gdv_" + e.name;
+        case GdRefKind::Varying: return "AVER_CUSTOM_VARYINGS." + px() + "gdv_" + e.name;
         case GdRefKind::Uniform: {
             const GdUniform& u = m_.uniforms[static_cast<usize>(e.refIdx)];
             if (gdIsSampler(u.type.base)) return gn("gdsm_" + u.name) + "()";
@@ -392,8 +392,8 @@ private:
             if (n == "PI") return "3.14159265358979323846";
             if (n == "TAU") return "6.28318530717958647692";
             if (n == "E") return "2.71828182845904523536";
-            if (&e != noRead_) noteHook("AVER_GD_" + n, b.type, false);
-            return "AVER_GD_" + n;
+            if (&e != noRead_) noteHook("AVER_CUSTOM_" + n, b.type, false);
+            return "AVER_CUSTOM_" + n;
         }
         default: return "0";
         }
@@ -478,7 +478,7 @@ private:
         }
         if ((e.op == "==" || e.op == "!=") && !isScalarT(a.type)) {
             if (a.type.base == B::Struct || a.type.isArray()) { unsupported(&e, "comparing structs or arrays has no HLSL spelling"); return "false"; }
-            if (isMat(a.type)) return std::string(e.op == "==" ? "" : "!") + "gd_eq(" + sa + ", " + sb + ")";   // DXC's SPIR-V back end has no matrix ==
+            if (isMat(a.type)) return std::string(e.op == "==" ? "" : "!") + "emb_eq(" + sa + ", " + sb + ")";   // DXC's SPIR-V back end has no matrix ==
 
             return std::string(e.op == "==" ? "all" : "any") + "(" + sa + " " + e.op + " " + sb + ")";
         }
@@ -543,9 +543,9 @@ private:
             const int d = gdDim(a0.type.base);
             if (d == n) return expr(a0);
             if (d > n) return "((" + T + ")(" + expr(a0) + "))";
-            return "gd_mat" + std::to_string(n) + "_from" + std::to_string(d) + "(" + expr(a0) + ")";
+            return "emb_mat" + std::to_string(n) + "_from" + std::to_string(d) + "(" + expr(a0) + ")";
         }
-        if (e.args.size() == 1 && isScalarT(a0.type)) return "gd_mat" + std::to_string(n) + "_diag((float)(" + expr(a0) + "))";
+        if (e.args.size() == 1 && isScalarT(a0.type)) return "emb_mat" + std::to_string(n) + "_diag((float)(" + expr(a0) + "))";
         std::string s = T + "(";
         for (usize i = 0; i < e.args.size(); ++i) {
             const GdExpr& a = *e.args[i];

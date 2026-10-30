@@ -236,7 +236,7 @@ public class PhysicsBody3D : CollisionObject3D
     internal void ApplySurface(PhysBody body)
     {
         // Godot's own defaults apply with the Godot combine rule; with Jolt's, the body keeps Aver's.
-        if (_material == null && Aver.Physics.Physics.CombineRule != Aver.Physics.CombineMode.Godot) return;
+        if (_material == null && Aver.Physics.Physics.CombineRule != Aver.Physics.CombineMode.Material) return;
         float friction = _material?.Friction ?? 1f, bounce = _material?.Bounce ?? 0f;
         body.SetFriction(friction);
         body.SetRestitution(bounce);

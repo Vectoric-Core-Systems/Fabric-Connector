@@ -1,13 +1,13 @@
 // Godot ShaderMaterial to Aver (docs/plans/fabric/G6_SHADERS.md, SH2).
 //
 // A shader (a .gdshader file or an inline Shader resource) is prepared once by the front-end (GodotShaderEngine.hpp) and written as a DOMAIN material
-// graph, Shaders/<name>.ocgraph, holding the emitted HLSL in one GodotShader node. Each ShaderMaterial that uses it becomes Materials/<name>.ocmat: a
-// GRAPHREF to that graph, the FX record the render modes ask for, GDREGS (the uniform table at the material's shader_parameter/* values) and a TEX per
+// graph, Shaders/<name>.ocgraph, holding the emitted HLSL in one EmbeddedHlsl node. Each ShaderMaterial that uses it becomes Materials/<name>.ocmat: a
+// GRAPHREF to that graph, the FX record the render modes ask for, EMBREGS (the uniform table at the material's shader_parameter/* values) and a TEX per
 // texture parameter in the material slot the shader's sampler was given. StandardMaterial3D and ORMMaterial3D are not touched (FabricResources.cpp).
 #include "FabricInternal.hpp"
 
 #include "aver/formats/OcGraph.hpp"
-#include "aver/formats/OcGraphGodot.hpp"
+#include "aver/formats/OcGraphHlsl.hpp"
 #include "aver/formats/godot/GodotShaderEngine.hpp"
 #include "aver/formats/godot/GodotShaderEnv.hpp"
 #include "aver/formats/godot/GodotVisualShader.hpp"
@@ -208,7 +208,7 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
         si.ok = gde::gdShaderForEngine(source, fileForDiag, opt, si.prepared);
         si.graphAsset = "Shaders/" + unique + ".ocgraph";
         if (si.ok) {
-            fmt::GodotShaderPart part;
+            fmt::EmbeddedHlslPart part;
             part.name = si.prepared.name;
             part.ns = si.prepared.ns;
             part.regsU = static_cast<u32>(si.prepared.uniforms.registerCount);
@@ -219,11 +219,11 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
             part.hasVertex = si.prepared.hasVertex;
             part.fragmentSource = si.prepared.fragmentSource;
             part.vertexSource = si.prepared.vertexSource;
-            for (const gde::GdVaryingSlot& v : si.prepared.varyings) part.varyings.push_back(fmt::GodotShaderVarying{v.decl, v.flat, static_cast<u32>(v.rows)});
+            for (const gde::GdVaryingSlot& v : si.prepared.varyings) part.varyings.push_back(fmt::EmbeddedHlslVarying{v.decl, v.flat, static_cast<u32>(v.rows)});
             fmt::OcGraphData g;
             g.name = unique;
             g.description = "Converted from " + shaderKey + " by AverAssetC fabric";
-            fmt::packGodotShader(part, g);
+            fmt::packEmbeddedHlsl(part, g);
             createDirectories(contentDir_ + "/Shaders");
             if (!writeFileText(contentDir_ + "/" + si.graphAsset, fmt::writeOcgraph(g))) {
                 si.ok = false;
@@ -273,8 +273,8 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
     else if (ps.depthDraw == 2) addFx("depthdraw=never");
     if (ps.depthTestDisabled) addFx("nodepthtest=1");
     if (ps.shadowsDisabled) addFx("noshadows=1");
-    if (ps.hasVertex) addFx("gdvs=1");
-    if (ps.usesDiscard || ps.writesAlphaScissor) addFx("gddiscard=1");
+    if (ps.hasVertex) addFx("embvs=1");
+    if (ps.usesDiscard || ps.writesAlphaScissor) addFx("embdiscard=1");
     if (const Var* rp = getProp(props, "render_priority"); rp && rp->isNumber()) {
         addFx("priority=" + std::to_string(static_cast<int>(rp->asNumber())));
     }
@@ -332,8 +332,8 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
     if (const Var* np = getProp(props, "next_pass"); np && np->type != VType::Nil)
         report_.add("property", doc.file, w.node, "ShaderMaterial", "next_pass", Rating::Unsupported, "the engine draws one pass per material; the next pass is dropped", 0);
     if (!regs.empty()) {
-        d.gd.regs = regs;
-        d.textures[pbr::kGdTableSlot].path = "@gdu";
+        d.embedded.regs = regs;
+        d.textures[pbr::kEmbeddedTableSlot].path = "@embu";
     }
 
     fmt::OcMatExtras ex;
@@ -464,7 +464,7 @@ std::string Converter::envShaderAsset(const std::string& materialKey, int kindIn
         report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Unsupported, "a " + std::string(kindName) + " shader has no equivalent for this ShaderMaterial property", p.line);
     }
 
-    fmt::GodotEnvPart part;
+    fmt::EmbeddedHlslEnvPart part;
     part.kind = kindName;
     part.name = unique;
     part.ns = es.ns;
@@ -477,7 +477,7 @@ std::string Converter::envShaderAsset(const std::string& materialKey, int kindIn
     fmt::OcGraphData g;
     g.name = unique;
     g.description = "Converted from " + shaderKey + " by AverAssetC fabric";
-    fmt::packGodotEnvShader(part, g);
+    fmt::packEmbeddedHlslEnv(part, g);
     createDirectories(contentDir_ + "/Shaders");
     const std::string asset = "Shaders/" + unique + "." + kindName + ".ocgraph";
     if (!writeFileText(contentDir_ + "/" + asset, fmt::writeOcgraph(g))) return fail("could not write " + asset);
@@ -555,7 +555,7 @@ void Converter::emitGpuParticles(const FNode& fn, const std::vector<std::pair<st
     t += "EMITTER " + fn.name + "\nSIM gpu\nSHAPE point 0 0 0\nBLEND premultiplied\n";
     t += "EMISSION " + num(oneShot ? 0.0 : amount / lifetime) + " " + std::to_string(oneShot ? amount : 0) + " " + std::to_string(amount) + "\n";
     t += "LIFETIME " + num(lifetime) + " " + num(lifetime) + "\nDIRECTION 0 0 1 0\nSPEED 0 0\nGRAVITY 0 0 0\nDAMPING 0\n";
-    t += "SIZE " + num(sizeCm) + " " + num(sizeCm) + "\nCOLOR start 1 1 1 1\nCOLOR end 1 1 1 1\nGDSHADER " + shaderName + "\n";
+    t += "SIZE " + num(sizeCm) + " " + num(sizeCm) + "\nCOLOR start 1 1 1 1\nCOLOR end 1 1 1 1\nCUSTOMSHADER " + shaderName + "\n";
     createDirectories(contentDir_ + "/Particles");
     const std::string file = safeName(name_ + "_" + fn.name, "Particles") + ".ocparticle";
     if (!writeFileText(contentDir_ + "/Particles/" + file, t)) { note("process_material", Rating::Unsupported, "could not write Particles/" + file); return; }

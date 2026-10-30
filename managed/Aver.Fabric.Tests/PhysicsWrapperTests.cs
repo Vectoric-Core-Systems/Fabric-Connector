@@ -213,9 +213,9 @@ static class PhysicsWrapperTests
                                               T.Near(fl.SuspensionTravel, 0.2f) && T.Near(fl.SuspensionMaxForce, 6000f) && T.Near(fl.WheelRollInfluence, 0.1f));
         T.Check("a wheel with no vehicle reports no contact", !fl.IsInContact() && fl.GetRpm() == 0f && fl.GetSkidinfo() == 1f && fl.GetContactBody() == null);
         // The force conversions the wheels hand the vehicle (G2 helpers): metres/newtons into the ABI's units.
-        T.CheckNum("engine force newtons to kg*cm/s^2", 80000f, Aver.Physics.RaycastWheelSettings.EngineForceFromGodot(800f));
-        T.CheckNum("steering left is negative in the ABI", -0.3f, Aver.Physics.RaycastWheelSettings.SteeringFromGodot(0.3f));
-        T.CheckNum("brake impulse per step to a force at 60 Hz", 2f * 60f * 100f, Aver.Physics.RaycastWheelSettings.BrakeFromGodot(2f, 60f));
+        T.CheckNum("engine force newtons to kg*cm/s^2", 80000f, Aver.Fabric.RaycastWheelGodot.EngineForceFromGodot(800f));
+        T.CheckNum("steering left is negative in the ABI", -0.3f, Aver.Fabric.RaycastWheelGodot.SteeringFromGodot(0.3f));
+        T.CheckNum("brake impulse per step to a force at 60 Hz", 2f * 60f * 100f, Aver.Fabric.RaycastWheelGodot.BrakeFromGodot(2f, 60f));
     }
 
     private static void Queries()

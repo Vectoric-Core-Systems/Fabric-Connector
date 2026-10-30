@@ -397,37 +397,37 @@ struct SigRow { const char* name; const char* sigs; const char* hlsl; };
 const SigRow kFns[] = {
     {"radians", "F(F)", ""}, {"degrees", "F(F)", ""}, {"sin", "F(F)", ""}, {"cos", "F(F)", ""}, {"tan", "F(F)", ""},
     {"asin", "F(F)", ""}, {"acos", "F(F)", ""}, {"atan", "F(F);F(F,F)", "@atan"},
-    {"sinh", "F(F)", ""}, {"cosh", "F(F)", ""}, {"tanh", "F(F)", ""}, {"asinh", "F(F)", "gd_asinh"}, {"acosh", "F(F)", "gd_acosh"}, {"atanh", "F(F)", "gd_atanh"},
+    {"sinh", "F(F)", ""}, {"cosh", "F(F)", ""}, {"tanh", "F(F)", ""}, {"asinh", "F(F)", "emb_asinh"}, {"acosh", "F(F)", "emb_acosh"}, {"atanh", "F(F)", "emb_atanh"},
     {"pow", "F(F,F)", ""}, {"exp", "F(F)", ""}, {"exp2", "F(F)", ""}, {"log", "F(F)", ""}, {"log2", "F(F)", ""}, {"sqrt", "F(F)", ""},
     {"inversesqrt", "F(F)", "rsqrt"},
-    {"abs", "F(F);I(I)", ""}, {"sign", "F(F);I(I)", "gd_sign"}, {"floor", "F(F)", ""}, {"trunc", "F(F)", ""}, {"round", "F(F)", "round"},
+    {"abs", "F(F);I(I)", ""}, {"sign", "F(F);I(I)", "emb_sign"}, {"floor", "F(F)", ""}, {"trunc", "F(F)", ""}, {"round", "F(F)", "round"},
     {"roundEven", "F(F)", "round"}, {"ceil", "F(F)", ""}, {"fract", "F(F)", "frac"},
-    {"mod", "F(F,F);F(F,f)", "gd_mod"}, {"modf", "F(F,oF)", ""},
+    {"mod", "F(F,F);F(F,f)", "emb_mod"}, {"modf", "F(F,oF)", ""},
     {"min", "F(F,F);F(F,f);I(I,I);I(I,i);U(U,U);U(U,u)", "@splat"}, {"max", "F(F,F);F(F,f);I(I,I);I(I,i);U(U,U);U(U,u)", "@splat"},
     {"clamp", "F(F,F,F);F(F,f,f);I(I,I,I);I(I,i,i);U(U,U,U);U(U,u,u)", "@splat"},
-    {"mix", "F(F,F,F);F(F,F,f);F(F,F,B)", "gd_mix"}, {"fma", "F(F,F,F)", "mad"},
+    {"mix", "F(F,F,F);F(F,F,f);F(F,F,B)", "emb_mix"}, {"fma", "F(F,F,F)", "mad"},
     {"isinf", "B(F)", ""}, {"isnan", "B(F)", ""},
-    {"step", "F(F,F);F(f,F)", "gd_step"}, {"smoothstep", "F(F,F,F);F(f,f,F)", "gd_smoothstep"},
+    {"step", "F(F,F);F(f,F)", "emb_step"}, {"smoothstep", "F(F,F,F);F(f,f,F)", "emb_smoothstep"},
     {"floatBitsToInt", "I(F)", "asint"}, {"floatBitsToUint", "U(F)", "asuint"}, {"intBitsToFloat", "F(I)", "asfloat"}, {"uintBitsToFloat", "F(U)", "asfloat"},
     {"length", "f(F)", ""}, {"distance", "f(F,F)", ""}, {"dot", "f(F,F)", ""}, {"cross", "v3(v3,v3)", ""}, {"normalize", "F(F)", ""},
     {"reflect", "F(F,F)", ""}, {"refract", "F(F,F,f)", ""}, {"faceforward", "F(F,F,F)", ""},
-    {"matrixCompMult", "M(M,M)", "@compmult"}, {"outerProduct", "m2(v2,v2);m3(v3,v3);m4(v4,v4)", "gd_outer"},
-    {"transpose", "M(M)", ""}, {"determinant", "f(M)", ""}, {"inverse", "M(M)", "gd_inverse"},
+    {"matrixCompMult", "M(M,M)", "@compmult"}, {"outerProduct", "m2(v2,v2);m3(v3,v3);m4(v4,v4)", "emb_outer"},
+    {"transpose", "M(M)", ""}, {"determinant", "f(M)", ""}, {"inverse", "M(M)", "emb_inverse"},
     {"lessThan", "2B(F,F);2B(I,I);2B(U,U)", "@cmp<"}, {"lessThanEqual", "2B(F,F);2B(I,I);2B(U,U)", "@cmp<="},
     {"greaterThan", "2B(F,F);2B(I,I);2B(U,U)", "@cmp>"}, {"greaterThanEqual", "2B(F,F);2B(I,I);2B(U,U)", "@cmp>="},
     {"equal", "2B(F,F);2B(I,I);2B(U,U);2B(B,B)", "@cmp=="}, {"notEqual", "2B(F,F);2B(I,I);2B(U,U);2B(B,B)", "@cmp!="},
     {"any", "2b(B)", ""}, {"all", "2b(B)", ""}, {"not", "2B(B)", "@not"},
     {"dFdx", "F(F)", "ddx"}, {"dFdy", "F(F)", "ddy"}, {"fwidth", "F(F)", ""},
     {"dFdxCoarse", "F(F)", "ddx_coarse"}, {"dFdyCoarse", "F(F)", "ddy_coarse"}, {"dFdxFine", "F(F)", "ddx_fine"}, {"dFdyFine", "F(F)", "ddy_fine"},
-    {"fwidthCoarse", "F(F)", "gd_fwidthCoarse"}, {"fwidthFine", "F(F)", "gd_fwidthFine"},
-    {"packHalf2x16", "u(v2)", "gd_packHalf2x16"}, {"unpackHalf2x16", "v2(u)", "gd_unpackHalf2x16"},
-    {"packUnorm2x16", "u(v2)", "gd_packUnorm2x16"}, {"unpackUnorm2x16", "v2(u)", "gd_unpackUnorm2x16"},
-    {"packSnorm2x16", "u(v2)", "gd_packSnorm2x16"}, {"unpackSnorm2x16", "v2(u)", "gd_unpackSnorm2x16"},
-    {"packUnorm4x8", "u(v4)", "gd_packUnorm4x8"}, {"unpackUnorm4x8", "v4(u)", "gd_unpackUnorm4x8"},
-    {"packSnorm4x8", "u(v4)", "gd_packSnorm4x8"}, {"unpackSnorm4x8", "v4(u)", "gd_unpackSnorm4x8"},
-    {"bitfieldExtract", "I(I,i,i);U(U,i,i)", "gd_bitfieldExtract"}, {"bitfieldInsert", "I(I,I,i,i);U(U,U,i,i)", "gd_bitfieldInsert"},
-    {"bitfieldReverse", "I(I);U(U)", "reversebits"}, {"bitCount", "I(I);I(U)", "gd_bitCount"},
-    {"findLSB", "I(I);I(U)", "gd_findLSB"}, {"findMSB", "I(I);I(U)", "gd_findMSB"},
+    {"fwidthCoarse", "F(F)", "emb_fwidthCoarse"}, {"fwidthFine", "F(F)", "emb_fwidthFine"},
+    {"packHalf2x16", "u(v2)", "emb_packHalf2x16"}, {"unpackHalf2x16", "v2(u)", "emb_unpackHalf2x16"},
+    {"packUnorm2x16", "u(v2)", "emb_packUnorm2x16"}, {"unpackUnorm2x16", "v2(u)", "emb_unpackUnorm2x16"},
+    {"packSnorm2x16", "u(v2)", "emb_packSnorm2x16"}, {"unpackSnorm2x16", "v2(u)", "emb_unpackSnorm2x16"},
+    {"packUnorm4x8", "u(v4)", "emb_packUnorm4x8"}, {"unpackUnorm4x8", "v4(u)", "emb_unpackUnorm4x8"},
+    {"packSnorm4x8", "u(v4)", "emb_packSnorm4x8"}, {"unpackSnorm4x8", "v4(u)", "emb_unpackSnorm4x8"},
+    {"bitfieldExtract", "I(I,i,i);U(U,i,i)", "emb_bitfieldExtract"}, {"bitfieldInsert", "I(I,I,i,i);U(U,U,i,i)", "emb_bitfieldInsert"},
+    {"bitfieldReverse", "I(I);U(U)", "reversebits"}, {"bitCount", "I(I);I(U)", "emb_bitCount"},
+    {"findLSB", "I(I);I(U)", "emb_findLSB"}, {"findMSB", "I(I);I(U)", "emb_findMSB"},
     {"frexp", "F(F,oI)", "!"}, {"ldexp", "F(F,I)", "!"},
     {"umulExtended", "U(U,U,oU,oU)", "!"}, {"imulExtended", "I(I,I,oI,oI)", "!"}, {"uaddCarry", "U(U,U,oU)", "!"}, {"usubBorrow", "U(U,U,oU)", "!"},
 };
@@ -542,25 +542,25 @@ void addTextureFns(Table& t) {
         t.add(std::move(o));
     };
     for (const Fam& f : fams) {
-        mk("texture", f.ret, {f.s, f.coord}, "gd_texture");
-        mk("texture", f.ret, {f.s, f.coord, B::Float}, "gd_texture");
-        mk("textureLod", f.ret, {f.s, f.coord, B::Float}, "gd_textureLod");
-        mk("textureGrad", f.ret, {f.s, f.coord, f.grad, f.grad}, "gd_textureGrad");
-        mk("textureSize", f.size, {f.s, B::Int}, "gd_textureSize");
-        mk("textureQueryLevels", B::Int, {f.s}, "gd_textureQueryLevels");
+        mk("texture", f.ret, {f.s, f.coord}, "emb_texture");
+        mk("texture", f.ret, {f.s, f.coord, B::Float}, "emb_texture");
+        mk("textureLod", f.ret, {f.s, f.coord, B::Float}, "emb_textureLod");
+        mk("textureGrad", f.ret, {f.s, f.coord, f.grad, f.grad}, "emb_textureGrad");
+        mk("textureSize", f.size, {f.s, B::Int}, "emb_textureSize");
+        mk("textureQueryLevels", B::Int, {f.s}, "emb_textureQueryLevels");
         const bool arr2d = f.s == B::Sampler2DArray || f.s == B::ISampler2DArray || f.s == B::USampler2DArray;
-        mk("textureQueryLod", V2, {f.s, arr2d ? V2 : f.s == B::SamplerCubeArray ? V3 : f.coord}, "gd_textureQueryLod");
+        mk("textureQueryLod", V2, {f.s, arr2d ? V2 : f.s == B::SamplerCubeArray ? V3 : f.coord}, "emb_textureQueryLod");
         if (f.coordProj != B::Error) {
-            mk("textureProj", f.ret, {f.s, f.coordProj}, "gd_textureProj");
-            mk("textureProj", f.ret, {f.s, V4}, "gd_textureProj");
-            mk("textureProj", f.ret, {f.s, f.coordProj, B::Float}, "gd_textureProj");
-            mk("textureProjLod", f.ret, {f.s, f.coordProj, B::Float}, "gd_textureProjLod");
-            mk("textureProjLod", f.ret, {f.s, V4, B::Float}, "gd_textureProjLod");
+            mk("textureProj", f.ret, {f.s, f.coordProj}, "emb_textureProj");
+            mk("textureProj", f.ret, {f.s, V4}, "emb_textureProj");
+            mk("textureProj", f.ret, {f.s, f.coordProj, B::Float}, "emb_textureProj");
+            mk("textureProjLod", f.ret, {f.s, f.coordProj, B::Float}, "emb_textureProjLod");
+            mk("textureProjLod", f.ret, {f.s, V4, B::Float}, "emb_textureProjLod");
         }
-        if (f.icoord != B::Error) mk("texelFetch", f.ret, {f.s, f.icoord, B::Int}, "gd_texelFetch");
+        if (f.icoord != B::Error) mk("texelFetch", f.ret, {f.s, f.icoord, B::Int}, "emb_texelFetch");
         if (f.s != B::Sampler3D && f.s != B::ISampler3D && f.s != B::USampler3D) {
-            mk("textureGather", f.ret, {f.s, f.coord}, "gd_textureGather");
-            mk("textureGather", f.ret, {f.s, f.coord, B::Int}, "gd_textureGather");
+            mk("textureGather", f.ret, {f.s, f.coord}, "emb_textureGather");
+            mk("textureGather", f.ret, {f.s, f.coord, B::Int}, "emb_textureGather");
         }
     }
 }

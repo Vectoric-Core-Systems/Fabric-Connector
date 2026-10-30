@@ -22,8 +22,8 @@ static class EnvShaderTests
         public readonly List<string> Calls = new();
         public readonly Dictionary<string, float[]> Registers = new();
         public string? Sky;
-        public bool Register(GodotEnvKind kind, string name, string graphText) { Calls.Add($"register {kind} {name}"); return graphText.Contains("DOMAIN godotenv"); }
-        public bool SetRegisters(GodotEnvKind kind, string name, float[] registers) { Calls.Add($"regs {kind} {name} x{registers.Length}"); Registers[kind + ":" + name] = (float[])registers.Clone(); return true; }
+        public bool Register(CustomEnvKind kind, string name, string graphText) { Calls.Add($"register {kind} {name}"); return graphText.Contains("DOMAIN customenv"); }
+        public bool SetRegisters(CustomEnvKind kind, string name, float[] registers) { Calls.Add($"regs {kind} {name} x{registers.Length}"); Registers[kind + ":" + name] = (float[])registers.Clone(); return true; }
         public bool UseSky(string? name) { Calls.Add("sky " + (name ?? "<engine>")); Sky = name; return true; }
     }
 
@@ -162,12 +162,16 @@ static class EnvShaderTests
         File.WriteAllText(file, "OCGRAPH 1\nDOMAIN material\n");
         try
         {
-            T.Check("a graph that is not a godotenv graph loads as nothing", ShaderMaterial.TryLoadEnv(file, "Shaders/x.sky.ocgraph") is null);
-            File.WriteAllText(file, "OCGRAPH 1\nDOMAIN godotenv\nNODE gd GodotEnvShader kind=bogus name=x ns=ge1_ regs=0 gregs=0 start=0 process=0 src0=a\n");
+            T.Check("a graph that is not a customenv graph loads as nothing", ShaderMaterial.TryLoadEnv(file, "Shaders/x.sky.ocgraph") is null);
+            File.WriteAllText(file, "OCGRAPH 1\nDOMAIN customenv\nNODE hlsl EmbeddedHlslEnv kind=bogus name=x ns=ge1_ regs=0 gregs=0 start=0 process=0 src0=a\n");
             T.Check("an unknown kind loads as nothing", ShaderMaterial.TryLoadEnv(file, "Shaders/x.sky.ocgraph") is null);
-            File.WriteAllText(file, "OCGRAPH 1\nDOMAIN godotenv\nNODE gd GodotEnvShader kind=sky name=x ns=ge1_ regs=1 gregs=0 start=0 process=0 reg=3F800000,00000000,00000000,3F800000 src0=a\n");
+            File.WriteAllText(file, "OCGRAPH 1\nDOMAIN customenv\nNODE hlsl EmbeddedHlslEnv kind=sky name=x ns=ge1_ regs=1 gregs=0 start=0 process=0 reg=3F800000,00000000,00000000,3F800000 src0=a\n");
             ShaderMaterial? m = ShaderMaterial.TryLoadEnv(file, "Shaders/x.sky.ocgraph");
             T.Check("a sky graph loads as a ShaderMaterial of kind sky with its default registers", m is { EnvironmentKind: "sky" } && m.EnvRegisters.Length == 4 && T.Near(m.EnvRegisters[0], 1f) && T.Near(m.EnvRegisters[3], 1f));
+            // A graph written before the rename (DOMAIN godotenv, NODE gd GodotEnvShader) still loads.
+            File.WriteAllText(file, "OCGRAPH 1\nDOMAIN godotenv\nNODE gd GodotEnvShader kind=sky name=x ns=ge1_ regs=1 gregs=0 start=0 process=0 reg=3F800000,00000000,00000000,3F800000 src0=a\n");
+            ShaderMaterial? old = ShaderMaterial.TryLoadEnv(file, "Shaders/x.sky.ocgraph");
+            T.Check("a graph with the old domain spelling still loads as a sky shader", old is { EnvironmentKind: "sky" } && old.EnvRegisters.Length == 4);
             T.Check("a plain ShaderMaterial is not an environment shader", new ShaderMaterial().EnvironmentKind.Length == 0 && !new ShaderMaterial().RegisterWithEngine());
         }
         finally

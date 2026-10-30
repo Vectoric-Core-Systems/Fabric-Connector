@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // Shader and ShaderMaterial under Godot's names, and RenderingServer.global_shader_parameter_* (docs/plans/fabric/G6_SHADERS.md, SH2).
 //
-// The converter wrote each shader as a material graph and each ShaderMaterial as an .ocmat holding the uniform table (GDREGS); Fabric/shaders.json says
+// The converter wrote each shader as a material graph and each ShaderMaterial as an .ocmat holding the uniform table (EMBREGS); Fabric/shaders.json says
 // where every uniform lives in that table. A ShaderMaterial loaded from such an .ocmat packs set_shader_parameter values into the table the way the
-// converter's emitter reads them and hands the table to the engine (aver_pbr_set_gd_registers), which re-uploads one small texture: nothing recompiles.
+// converter's emitter reads them and hands the table to the engine (aver_pbr_set_embedded_registers), which re-uploads one small texture: nothing recompiles.
 // A texture parameter goes to the material slot the shader's sampler was given (aver_pbr_set_texture_path).
 
 using System.Text.Json;
@@ -124,7 +124,7 @@ internal sealed class NativeShaderBackend : IShaderBackend
         return 0;
     }
 
-    public bool SetRegisters(int material, float[] values) => Available && Aver.Scripting.Pbr.FromHandle(material).SetGdRegisters(values);
+    public bool SetRegisters(int material, float[] values) => Available && Aver.Scripting.Pbr.FromHandle(material).SetEmbeddedRegisters(values);
     public bool SetTexturePath(int material, int slot, string path) => Available && Aver.Scripting.Pbr.FromHandle(material).SetTexturePath((Aver.Scripting.PbrTextureSlot)slot, path);
     public bool ClearTexture(int material, int slot) => Available && Aver.Scripting.Pbr.FromHandle(material).ClearTexture((Aver.Scripting.PbrTextureSlot)slot);
 }
@@ -421,7 +421,7 @@ public partial class ShaderMaterial : Material
             string line = raw.Trim();
             if (line.StartsWith("GRAPHREF ", StringComparison.Ordinal)) graph = line["GRAPHREF ".Length..].Trim();
             else if (line.StartsWith("NAME ", StringComparison.Ordinal)) name = line["NAME ".Length..].Trim();
-            else if (line.StartsWith("GDREGS", StringComparison.Ordinal))
+            else if (line.StartsWith("EMBREGS", StringComparison.Ordinal) || line.StartsWith("GDREGS", StringComparison.Ordinal))   // GDREGS: written before the rename
                 foreach (string w in line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1))
                     if (uint.TryParse(w, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out uint bits)) words.Add(bits);
         }

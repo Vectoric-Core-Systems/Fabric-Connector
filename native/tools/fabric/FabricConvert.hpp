@@ -29,6 +29,9 @@ struct Host {
     std::function<ModelResult(const std::string& input, const std::string& contentDir, const std::string& outSubdir,
                               const std::string& base)>
         importModel;
+    // This extension's installed folder (<executable dir>/Extensions/FabricConnector), where the managed runtime and the script converter are.
+    // Empty: that folder beside the running executable.
+    std::string extensionDir;
 };
 
 // argv as AverAssetC's main receives it (argv[1] == "fabric"). Returns the process exit code.

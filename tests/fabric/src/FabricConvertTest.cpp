@@ -180,7 +180,7 @@ int main() {
     check(pd.hasGravity && near(pd.gravity[0], 0) && near(pd.gravity[1], 0) && near(pd.gravity[2], -981, 1e-2),
           "PHYSICS.GRAVITY is 9.81 m/s^2 down, in centimetres on Aver's +Z up axis");
     check(near(pd.fixedStep, 1.0 / 120.0, 1e-6), "PHYSICS.FIXEDSTEP is 1 / physics_ticks_per_second");
-    check(pd.physCombine == 1, "PHYSICS.COMBINE godot");
+    check(pd.physCombine == 1, "PHYSICS.COMBINE material");
     check(pd.physInterpolation == 1, "PHYSICS.INTERPOLATION follows physics/common/physics_interpolation");
     check(pd.localeDefault == "en", "LOCALE.DEFAULT is the fallback locale");
     check(pd.inputScheme == "Input/ConvertGame.ocinput", "INPUT.SCHEME names the converted map");

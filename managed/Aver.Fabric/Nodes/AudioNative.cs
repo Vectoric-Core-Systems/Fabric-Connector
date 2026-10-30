@@ -1,7 +1,7 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// P/Invoke into Aver.Audio.Abi (modules/audio.abi, audio_abi.h): the bus graph, the effects and the Godot-style players AudioServer and the
+// P/Invoke into Aver.Audio.Abi (modules/audio.abi, audio_abi.h): the bus graph, the effects and the players AudioServer and the
 // AudioStreamPlayer nodes drive. The declarations are checked against the header's names and types by AbiEnumTest.
 
 using System.Runtime.InteropServices;
@@ -105,7 +105,7 @@ internal static class AudioNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_audio_bus_layout_text(byte[] textOut, int cap);
 
     // ---- effects ----
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_audio_effect_add(int bus, [MarshalAs(UnmanagedType.LPUTF8Str)] string godotClass, int at);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_audio_effect_add(int bus, [MarshalAs(UnmanagedType.LPUTF8Str)] string effectClass, int at);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_audio_effect_remove(int bus, int index);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_audio_effect_move(int bus, int from, int to);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_audio_effect_count(int bus);

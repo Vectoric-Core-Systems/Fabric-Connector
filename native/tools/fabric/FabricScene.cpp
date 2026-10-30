@@ -5,8 +5,8 @@
 
 #include "aver/core/Hash.hpp"
 #include "aver/formats/AxisMap.hpp"
-#include "aver/formats/GodotEnvironment.hpp"
-#include "aver/formats/GodotLight.hpp"
+#include "aver/formats/godot/GodotEnvironment.hpp"
+#include "aver/formats/godot/GodotLight.hpp"
 #include "aver/formats/PanoramaSky.hpp"
 #include "aver/formats/OcPrefab.hpp"
 #include "aver/platform/FileSystem.hpp"

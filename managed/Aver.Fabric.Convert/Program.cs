@@ -8,7 +8,7 @@ namespace Aver.Fabric.Convert;
 public static class ConvertCli
 {
     private const string Usage =
-        "usage: Aver.Fabric.Convert scripts --project <godot-dir> --out <aver-project-dir> [--manifest scripts.json] [--refs <bin/Scripting>]\n" +
+        "usage: Aver.Fabric.Convert scripts --project <godot-dir> --out <aver-project-dir> [--manifest scripts.json] [--refs <managed-dir>[;<bin/Scripting>]]\n" +
         "                                   [--report <FabricReport.jsonl>] [--engine <engine-checkout>]\n" +
         "exit codes: 0 converted and compiled, 1 compile errors or unreadable project, 2 bad usage, 3 reference folder unusable (scripts written, not compiled)";
 

@@ -25,14 +25,24 @@ internal static class References
         catch (Exception ex) when (ex is BadImageFormatException or FileLoadException or IOException) { return false; }
     }
 
-    /// <summary>The references, or null with the reason when the folder does not hold the runtime.</summary>
+    /// <summary>The folders of a reference list (one folder, or several separated by <see cref="Path.PathSeparator"/>), as full paths.</summary>
+    public static List<string> Folders(string refsDir) =>
+        refsDir.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Path.GetFullPath).ToList();
+
+    /// <summary>The first folder of the list that holds <paramref name="fileName"/>, as the file's full path; null when none does.</summary>
+    public static string? Find(string refsDir, string fileName) =>
+        Folders(refsDir).Select(f => Path.Combine(f, fileName)).FirstOrDefault(File.Exists);
+
+    /// <summary>The references, or null with the reason when the folders do not hold the runtime.</summary>
     public static List<MetadataReference>? Build(string refsDir, out string? problem)
     {
         problem = null;
-        string key = Path.GetFullPath(refsDir);
+        List<string> folders = Folders(refsDir);
+        string key = string.Join(Path.PathSeparator, folders);
         lock (s_cache) if (s_cache.TryGetValue(key, out var cached)) return cached;
 
-        if (!Directory.Exists(key)) { problem = $"the reference folder {key} does not exist (pass --refs <bin/Scripting>)"; return null; }
+        foreach (string folder in folders)
+            if (!Directory.Exists(folder)) { problem = $"the reference folder {folder} does not exist (pass --refs <extension managed folder>{Path.PathSeparator}<bin/Scripting>)"; return null; }
 
         // One path per assembly name: a name in both the framework list and the folder would be two assemblies of one identity.
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -43,14 +53,18 @@ internal static class References
             if (n.StartsWith("Microsoft.CodeAnalysis", StringComparison.OrdinalIgnoreCase) || n.StartsWith("Aver.", StringComparison.OrdinalIgnoreCase)) continue;
             byName.TryAdd(n, p);
         }
-        foreach (string p in Directory.GetFiles(key, "*.dll"))
-        {
-            string n = Path.GetFileNameWithoutExtension(p);
-            if (!n.StartsWith("Aver.", StringComparison.OrdinalIgnoreCase) || s_notForScripts.Contains(n) || !IsManaged(p)) continue;
-            byName[n] = p;
-        }
+        // A later folder does not replace an earlier one: the list is in order of preference.
+        var fromFolders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string folder in folders)
+            foreach (string p in Directory.GetFiles(folder, "*.dll"))
+            {
+                string n = Path.GetFileNameWithoutExtension(p);
+                if (!n.StartsWith("Aver.", StringComparison.OrdinalIgnoreCase) || s_notForScripts.Contains(n) || !IsManaged(p)) continue;
+                fromFolders.TryAdd(n, p);
+            }
+        foreach ((string n, string p) in fromFolders) byName[n] = p;
         foreach (string need in new[] { "Aver.Fabric", "Aver.Framework" })
-            if (!byName.ContainsKey(need)) { problem = $"{need}.dll was not found in {key} (build the Aver.Scripting.Host target, or pass --refs)"; return null; }
+            if (!byName.ContainsKey(need)) { problem = $"{need}.dll was not found in {string.Join(Path.PathSeparator, folders)} (build the Aver.Fabric.Managed and Aver.Scripting.Host targets, or pass --refs)"; return null; }
 
         var refs = byName.Values.Select(p => (MetadataReference)MetadataReference.CreateFromFile(p)).ToList();
         lock (s_cache) s_cache[key] = refs;

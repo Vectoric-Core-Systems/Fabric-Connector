@@ -127,15 +127,16 @@ static void copyTree(const fsys::path& from, const fsys::path& to) {
 int main() {
     AVER_INFO("FabricE2ETest");
     const fsys::path exe = AVER_ASSETC_EXE;
-    const fsys::path toolDll = exe.parent_path() / "Tools" / "Aver.Fabric.Convert.dll";
-    const fsys::path refsDll = exe.parent_path() / "Scripting" / "Aver.Fabric.dll";
+    const fsys::path extDir = exe.parent_path() / "Extensions" / "FabricConnector";
+    const fsys::path toolDll = extDir / "tools" / "Aver.Fabric.Convert.dll";
+    const fsys::path refsDll = extDir / "managed" / "Aver.Fabric.dll";
     const fsys::path pluginLib = AVER_FABRIC_TEST_EXT;
     std::error_code ec;
     check(fsys::exists(exe, ec), "AverAssetC was built: " + exe.string());
     check(fsys::exists(pluginLib, ec), "the test plugin was built: " + pluginLib.string());
     if (g_failures) return exitCode(ExitCode::Failed);
     if (fabric::findDotnet().empty() || !fsys::exists(toolDll, ec) || !fsys::exists(refsDll, ec)) {
-        AVER_WARN("skipped: dotnet, Tools/Aver.Fabric.Convert.dll or Scripting/Aver.Fabric.dll is not available ({})", exe.parent_path().string());
+        AVER_WARN("skipped: dotnet, Extensions/FabricConnector/tools/Aver.Fabric.Convert.dll or managed/Aver.Fabric.dll is not available ({})", exe.parent_path().string());
         return 77;
     }
 

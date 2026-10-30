@@ -306,7 +306,7 @@ static class NodeTests
         d.QueueFree();
         T.Check("queue_free marks it but changes nothing yet", d.IsQueuedForDeletion() && GodotObject.IsInstanceValid(d) && d.IsInsideTree() && Rec.Trail.Count == 0);
         d.QueueFree();
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.CheckSeq("at the flush it is freed (once)", new[] { "exit E", "exit D" }, Rec.Trail);
         T.Check("and children go with it", !GodotObject.IsInstanceValid(d) && !GodotObject.IsInstanceValid(e) && a.GetChildCount() == 0);
         var lone = new Rec("Lone");

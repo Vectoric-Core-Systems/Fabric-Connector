@@ -128,7 +128,7 @@ public static class ResourceLoader
         ".tscn" or ".scn" or ".ocworld" => typeof(PackedScene),
         ".ocmesh" => typeof(Mesh),
         ".ocmat" => typeof(StandardMaterial3D),
-        ".ocgraph" => typeof(ShaderMaterial),   // G6 SH3: a converted sky / fog / particles shader (DOMAIN godotenv)
+        ".ocgraph" => typeof(ShaderMaterial),   // G6 SH3: a converted sky / fog / particles shader (DOMAIN customenv)
         ".ocanim" => typeof(Animation),
         ".octheme" => typeof(Theme),
         ".ttf" or ".otf" or ".woff" or ".woff2" => typeof(FontFile),
@@ -162,7 +162,7 @@ public static class ResourceLoader
                     ShaderMaterial.TryLoad(file, path) is { } shaderMaterial)
                     r = shaderMaterial;
                 if (r is ShaderMaterial && file != null && ext.Equals(".ocgraph", StringComparison.OrdinalIgnoreCase))
-                    r = ShaderMaterial.TryLoadEnv(file, path);   // G6 SH3: null (not a godotenv graph) falls through to no resource
+                    r = ShaderMaterial.TryLoadEnv(file, path);   // G6 SH3: null (not a customenv graph) falls through to no resource
                 if (r is Animation anim && file != null && !anim.LoadFrom(file))
                     Aver.Scripting.Log.Warn($"[Fabric] cannot read the animation '{path}'");
                 if (r is Theme theme && file != null) theme.LoadFrom(file);   // G5 U1: a malformed theme is reported there and stays empty

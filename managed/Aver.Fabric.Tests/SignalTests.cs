@@ -140,19 +140,19 @@ static class SignalTests
         e.Connect("Hit", Callable.From((int d) => seen.Add("direct " + d)));
         e.EmitSignal("Hit", 4);
         T.Check("the direct handler runs now, the deferred one not yet", seen.SequenceEqual(new[] { "direct 4" }));
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.Check("the deferred handler runs at the flush", seen.SequenceEqual(new[] { "direct 4", "deferred 4" }));
         e.Connect("Died", Callable.From(() => seen.Add("late")), (uint)GodotObject.ConnectFlags.Deferred);
         e.EmitSignal("Died");
         e.Free();
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.Check("a handler whose signal owner is freed still runs (the owner is not the target)", seen.Contains("late"));
         var target = new Emitter();
         var src = new Emitter();
         src.Connect("Hit", new Callable(target, "on_hit"), (uint)GodotObject.ConnectFlags.Deferred);
         src.EmitSignal("Hit", 8);
         target.Free();
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.Check("a deferred call to a freed target is dropped", T.ErrorCount() == 0);
     }
 
@@ -190,7 +190,7 @@ static class SignalTests
         int n = 0;
         e2.Connect("Hit", Callable.From((int d) => n++), all);
         e2.EmitSignal("Hit", 1); e2.EmitSignal("Hit", 1);
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.Check("flags combine: deferred one-shot runs once at the flush", n == 1);
     }
 

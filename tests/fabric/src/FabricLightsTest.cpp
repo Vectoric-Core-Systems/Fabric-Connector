@@ -4,7 +4,7 @@
 // and every stored light property is rated in the report (converted / approximated / unsupported) as docs/plans/fabric/G4_RENDER.md R2 lists.
 #include "aver/core/ErrorCodes.hpp"
 #include "aver/core/Log.hpp"
-#include "aver/formats/GodotLight.hpp"
+#include "aver/formats/godot/GodotLight.hpp"
 #include "aver/formats/OcWorld.hpp"
 #include "aver/platform/FileSystem.hpp"
 

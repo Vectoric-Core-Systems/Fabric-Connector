@@ -45,7 +45,7 @@ AVER_GDEXT_API const char* aver_gdext_last_error(void);
 
 /* ---- setup ---- */
 /* extension_api.json of the Godot version the plugins target, for the method-hash checks. Without it hashes are not checked
- * (the host looks for extension_api.json beside the executable on the first load). */
+ * (on the first load the host looks for it in the extension's data folder, <library dir>/../../data, then beside the executable). */
 AVER_GDEXT_API int32_t aver_gdext_set_api_path(const char* extension_api_json);
 /* Feature tags used to pick the library from [libraries], comma separated ("windows,debug,x86_64"); "" restores the default. */
 AVER_GDEXT_API int32_t aver_gdext_set_features(const char* csv);

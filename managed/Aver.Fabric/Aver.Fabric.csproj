@@ -21,12 +21,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aver.Framework\Aver.Framework.csproj" />
+    <ProjectReference Include="..\..\..\..\scripting\csharp\Aver.Framework\Aver.Framework.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Loads Aver.Fabric.GDExt.Abi (the GDExtension host) from the executable folder; one shared file, a resolver per assembly. -->
-    <Compile Include="../Shared/NativeResolver.cs" Link="NativeResolver.cs" />
+    <!-- Loads Aver.Fabric.Native (the GDExtension host, in the extension's native/<platform> folder) for this assembly; one shared file, a resolver per assembly. -->
+    <Compile Include="../../../../scripting/csharp/Shared/NativeResolver.cs" Link="NativeResolver.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -944,6 +944,6 @@ internal sealed class GuiDriver : Node
     public override void OnUnhandledInput(Aver.Framework.InputEvent e)
     {
         InputEvent ge = InputBridge.FromFramework(e);
-        if (Gui.HandleInput(ge)) e.Handled = true;
+        if (Gui.HandleInput(ge)) Aver.Framework.Hosting.ExtensionHost.MarkHandled(e);
     }
 }

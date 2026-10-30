@@ -1,8 +1,8 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// Loads the native Godot plugins (.gdextension) of a converted project through the Aver GDExtension host (modules/fabric.gdext,
-// Aver.Fabric.GDExt.Abi) and makes their classes available to ClassDB. docs/plans/fabric/G3_GDEXT.md says what the host implements.
+// Loads the native Godot plugins (.gdextension) of a converted project through the Aver GDExtension host (native/gdext,
+// in Aver.Fabric.Native) and makes their classes available to ClassDB. docs/plans/fabric/G3_GDEXT.md says what the host implements.
 
 using Aver.Scripting;
 
@@ -15,7 +15,7 @@ public static class GDExtensionManager
     private static readonly Dictionary<string, int> s_libraries = new(StringComparer.Ordinal);
     private static int s_available = -1;
 
-    /// <summary>True when the native host library (Aver.Fabric.GDExt.Abi) can be loaded and speaks this ABI version.</summary>
+    /// <summary>True when the native host library (Aver.Fabric.Native) can be loaded and speaks this ABI version.</summary>
     public static bool IsNativeAvailable
     {
         get
@@ -26,7 +26,7 @@ public static class GDExtensionManager
                 catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
                 {
                     s_available = 0;
-                    LastError = "the GDExtension host library (Aver.Fabric.GDExt.Abi) is not available: " + ex.Message;
+                    LastError = "the GDExtension host library (Aver.Fabric.Native) is not available: " + ex.Message;
                 }
             }
             return s_available == 1;

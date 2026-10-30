@@ -62,7 +62,7 @@ public abstract class InputEvent : RefCounted
     internal void MarkHandled()
     {
         _handled = true;
-        if (Source != null) Source.Handled = true;
+        if (Source != null) Aver.Framework.Hosting.ExtensionHost.MarkHandled(Source);
     }
 
     /// <summary>True for a press (a key, button or action going down, or an axis past the action's dead zone is a separate question).</summary>

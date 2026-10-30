@@ -331,10 +331,10 @@ static class VariantTests
         T.Check("exported names are listed", o.GetExportedPropertyNames().SequenceEqual(new[] { "MoveSpeed" }));
         o.CallDeferred("set_pos", new Vector3(7, 7, 7));
         T.Check("call_deferred waits for the flush", o.Pos == new Vector3(1, 2, 3));
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.Check("and runs at it", o.Pos == new Vector3(7, 7, 7));
         o.SetDeferred("counter", 11);
-        Aver.Framework.GameThread.Flush();
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
         T.Check("set_deferred", o.Counter == 11);
         T.Check("class names", o.GetClass() == "RefCounted" && o.IsClass("Reflected") && o.IsClass("RefCounted"));
     }

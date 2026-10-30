@@ -89,7 +89,7 @@ internal sealed class EngineNodeHost : INodeHost
     {
         Entity parentEntity = subtreeRoot.GetParent()?.Self ?? default;
         bool anyFresh = NodeHost.PreOrder(subtreeRoot).Any(n => !n.Self.IsValid);
-        if (anyFresh) Fw.aver_fw_spawn_batch_begin();
+        if (anyFresh) Aver.Framework.Hosting.ExtensionHost.BeginSpawnBatch();
         try
         {
             foreach (Node n in NodeHost.PreOrder(subtreeRoot).ToList())
@@ -106,7 +106,7 @@ internal sealed class EngineNodeHost : INodeHost
         }
         finally
         {
-            if (anyFresh) Fw.aver_fw_spawn_batch_end();
+            if (anyFresh) Aver.Framework.Hosting.ExtensionHost.EndSpawnBatch();
         }
         // Nodes that were already entities do not go through the framework's spawn path; notify them here.
         var reentering = NodeHost.PreOrder(subtreeRoot).Where(n => n.Self.IsValid && !n.IsInsideTree()).ToList();
@@ -140,16 +140,13 @@ internal sealed class EngineNodeHost : INodeHost
         float[] pos = { 0, 0, 0 }, quat = { 0, 0, 0, 1 }, scale = { 1, 1, 1 };
         if (n is Node3D n3) n3.GetLocalForEngine(pos, quat, scale);
 
-        AverActor.OfferPending(n);
-        int e;
-        try { e = Fw.aver_fw_spawn(cls.Handle, n.Name.ToString(), pos, quat, scale); }
-        finally { AverActor.OfferPending(null); }
+        int e = Aver.Framework.Hosting.ExtensionHost.SpawnActor(cls, n.Name.ToString(), pos, quat, scale, n);
         if (e == 0)
         {
             Log.Error($"[Fabric] {n.GetType().Name} '{n.Name}' could not be spawned");
             return;
         }
-        var entity = new Entity(e);
+        var entity = Aver.Framework.Hosting.ExtensionHost.EntityFromHandle(e);
         if (n is Node3D spawned) spawned.MarkSpawned();
         if (parent.IsValid) entity.SetParent(parent);
         if (!entity.IsBoundTo(n)) Log.Error($"[Fabric] the scripting bridge did not bind the {n.GetType().Name} '{n.Name}' it was handed");

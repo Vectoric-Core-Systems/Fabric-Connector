@@ -1,10 +1,10 @@
 // FabricShaderTest -- G6 SH2 through the Godot converter: `AverAssetC fabric` on tests/fabric/data/ShaderGame (five ShaderMaterials over .gdshader files, an inline
 // Shader, a .tres material, a shader with an error and a particle shader), then what it wrote read back with the engine's own loaders: the .ocmat (GRAPHREF, FX
-// record, GDREGS, TEX slots), the .ocgraph (the GodotShader node, compiled by pbr::compileMaterialGraph), Fabric/shaders.json and the per-property report.
+// record, EMBREGS, TEX slots), the .ocgraph (the EmbeddedHlsl node, compiled by pbr::compileMaterialGraph), Fabric/shaders.json and the per-property report.
 #include "aver/core/ErrorCodes.hpp"
 #include "aver/core/Log.hpp"
 #include "aver/formats/OcGraph.hpp"
-#include "aver/formats/OcGraphGodot.hpp"
+#include "aver/formats/OcGraphHlsl.hpp"
 #include "aver/formats/OcMat.hpp"
 #include "aver/pbr/MaterialGraphHlsl.hpp"
 #include "aver/platform/FileSystem.hpp"
@@ -104,27 +104,27 @@ int main() {
         fmt::OcMatExtras ex;
         check(load("ShaderGame_main_M_Water", d, ex), "the inline-parameter material loads");
         check(ex.graphRef == "Shaders/water.ocgraph", "its GRAPHREF names the shared graph");
-        check(d.fx.cull == pbr::FxCull::None && d.twoSided && d.fx.depthDraw == pbr::FxDepthDraw::Always && d.fx.gdVertex && !d.fx.gdDiscard,
+        check(d.fx.cull == pbr::FxCull::None && d.twoSided && d.fx.depthDraw == pbr::FxDepthDraw::Always && d.fx.embVertex && !d.fx.embDiscard,
               "render_mode cull_disabled, depth_draw_always and the shader's vertex() become the FX record");
         check(d.alphaMode == pbr::AlphaMode::Blend, "fragment() writes ALPHA, so the material is blended");
         // layout: shallow (vec4) reg 0; deep (vec3) reg 1; amplitude reg 1.w; speed reg 2.x; octaves 2.y; foam 2.z; flow reg 3.xy; global wind_strength reg 4
-        check(d.gd.registerCount() == 5, "five uniform registers (got " + std::to_string(d.gd.registerCount()) + ")");
-        if (d.gd.registerCount() == 5) {
-            const std::vector<float>& r = d.gd.regs;
+        check(d.embedded.registerCount() == 5, "five uniform registers (got " + std::to_string(d.embedded.registerCount()) + ")");
+        if (d.embedded.registerCount() == 5) {
+            const std::vector<float>& r = d.embedded.regs;
             check(near(r[0], lin(0.1)) && near(r[1], lin(0.5)) && near(r[2], lin(0.6)) && near(r[3], 0.7f), "shallow: the shader's default, source_color decoded to linear, alpha as written");
             check(near(r[4], 0.0f) && near(r[5], lin(0.1)) && near(r[6], lin(0.3)) && near(r[7], 0.25f), "deep (default) in register 1 with amplitude 0.25 in its w");
             check(near(r[8], 1.5f) && asInt(r[9]) == 2 && asInt(r[10]) == 1, "speed 1.5, octaves 2 and foam true (the int and bool bit patterns)");
             check(near(r[12], 0.1f) && near(r[13], 0.0f), "flow (vec2) in register 3");
             check(near(r[16], 0.75f), "the global uniform wind_strength takes the project's [shader_globals] default (0.75)");
         }
-        check(d.textures[pbr::kGdTableSlot].path == "@gdu" && d.textures[0].empty() && d.textures[1].empty(), "slot 7 marks the uniform table; unset texture parameters leave their slots empty");
+        check(d.textures[pbr::kEmbeddedTableSlot].path == "@embu" && d.textures[0].empty() && d.textures[1].empty(), "slot 7 marks the uniform table; unset texture parameters leave their slots empty");
 
         pbr::MaterialDesc o;
         fmt::OcMatExtras ox;
         check(load("ShaderGame_ocean", o, ox), "the .tres material loads");
         check(ox.graphRef == "Shaders/water.ocgraph" && o.fx.renderPriority == 2, "it shares the graph; render_priority 2 is the FX priority");
-        if (o.gd.registerCount() == 5) {
-            const std::vector<float>& r = o.gd.regs;
+        if (o.embedded.registerCount() == 5) {
+            const std::vector<float>& r = o.embedded.regs;
             check(near(r[0], lin(0.2)) && near(r[1], lin(0.7)) && near(r[2], lin(0.8)) && near(r[3], 0.6f), "its shallow overrides the default");
             check(near(r[7], 0.5f) && asInt(r[9]) == 3 && asInt(r[10]) == 0, "amplitude 0.5, octaves 3, foam false");
             check(near(r[12], 0.25f) && near(r[13], -0.5f), "flow (0.25, -0.5)");
@@ -143,16 +143,16 @@ int main() {
         fmt::OcMatExtras bx;
         std::string err;
         check(fmt::parseOcmat(text, back, &bx, &err), "the written text parses again (" + err + ")");
-        check(back.gd.regs.size() == d.gd.regs.size() && std::memcmp(back.gd.regs.data(), d.gd.regs.data(), d.gd.regs.size() * sizeof(float)) == 0, "GDREGS round-trips bit for bit");
-        check(bx.graphRef == ex.graphRef && back.fx.gdVertex == d.fx.gdVertex && back.fx.renderPriority == d.fx.renderPriority && back.textures[pbr::kGdTableSlot].path == "@gdu" &&
+        check(back.embedded.regs.size() == d.embedded.regs.size() && std::memcmp(back.embedded.regs.data(), d.embedded.regs.data(), d.embedded.regs.size() * sizeof(float)) == 0, "EMBREGS round-trips bit for bit");
+        check(bx.graphRef == ex.graphRef && back.fx.embVertex == d.fx.embVertex && back.fx.renderPriority == d.fx.renderPriority && back.textures[pbr::kEmbeddedTableSlot].path == "@embu" &&
                   back.textures[0].path == d.textures[0].path,
-              "GRAPHREF, the FX gdvs flag, the priority, the uniform-table slot and the textures round-trip");
+              "GRAPHREF, the FX embvs flag, the priority, the uniform-table slot and the textures round-trip");
         check(text.find("TEX layer1normal") == std::string::npos, "the uniform-table slot is not written as a TEX record");
-        // an ordinary material is written exactly as before: no GDREGS, no gd keys
+        // an ordinary material is written exactly as before: no EMBREGS, no emb keys
         pbr::MaterialDesc plain;
         plain.name = "Plain";
         const std::string plainText = fmt::writeOcmat(plain, nullptr);
-        check(plainText.find("GDREGS") == std::string::npos && plainText.find("gdvs") == std::string::npos && plainText.find("gddiscard") == std::string::npos, "an ordinary material writes none of the shader records");
+        check(plainText.find("EMBREGS") == std::string::npos && plainText.find("embvs") == std::string::npos && plainText.find("embdiscard") == std::string::npos, "an ordinary material writes none of the shader records");
     }
 
     AVER_INFO("-- dissolve: render modes, discard, a matrix --");
@@ -160,14 +160,14 @@ int main() {
         pbr::MaterialDesc d;
         fmt::OcMatExtras ex;
         check(load("ShaderGame_main_M_Dissolve", d, ex), "the dissolve material loads");
-        check(d.fx.cull == pbr::FxCull::Front && d.fx.blend == pbr::FxBlend::Add && d.fx.noReceiveShadows && d.fx.gdDiscard && !d.fx.gdVertex,
+        check(d.fx.cull == pbr::FxCull::Front && d.fx.blend == pbr::FxBlend::Add && d.fx.noReceiveShadows && d.fx.embDiscard && !d.fx.embVertex,
               "cull_front, blend_add, shadows_disabled, and a discarding fragment compiled without forced early depth");
         check(d.alphaMode == pbr::AlphaMode::Mask, "ALPHA_SCISSOR_THRESHOLD makes the material masked");
         check(d.textures[1].path == "Textures/textures/height.png", "the linear noise texture takes slot 1");
         // layout: threshold reg 0.x; edge_color (vec4) reg 1; uv_xform (mat3) regs 2-4
-        check(d.gd.registerCount() == 5, "five registers");
-        if (d.gd.registerCount() == 5) {
-            const std::vector<float>& r = d.gd.regs;
+        check(d.embedded.registerCount() == 5, "five registers");
+        if (d.embedded.registerCount() == 5) {
+            const std::vector<float>& r = d.embedded.regs;
             check(near(r[0], 0.35f), "threshold 0.35");
             check(near(r[4], lin(0.5)) && near(r[5], lin(0.25)) && near(r[6], lin(0.1)) && near(r[7], 1.0f), "edge_color decoded to linear");
             check(near(r[8], 2.0f) && near(r[13], 2.0f) && near(r[18], 1.0f) && near(r[9], 0.0f), "uv_xform (a Basis) is the mat3 whose columns are the basis columns, one per register");
@@ -179,18 +179,18 @@ int main() {
         pbr::MaterialDesc d;
         fmt::OcMatExtras ex;
         check(load("ShaderGame_main_M_Toon", d, ex), "the toon material loads");
-        check(d.fx.cull == pbr::FxCull::Back && !d.fx.gdVertex && d.alphaMode == pbr::AlphaMode::Opaque, "default cull back, no vertex(), opaque");
+        check(d.fx.cull == pbr::FxCull::Back && !d.fx.embVertex && d.alphaMode == pbr::AlphaMode::Opaque, "default cull back, no vertex(), opaque");
         // layout: color reg 0.xyz, bands 0.w, instance tint_amount reg 1
-        check(d.gd.registerCount() == 2, "an instance uniform has its own register (got " + std::to_string(d.gd.registerCount()) + ")");
-        if (d.gd.registerCount() == 2) {
-            check(near(d.gd.regs[0], lin(0.1)) && near(d.gd.regs[1], lin(0.6)) && near(d.gd.regs[2], lin(0.2)) && near(d.gd.regs[3], 4.0f), "color decoded, bands 4");
-            check(near(d.gd.regs[4], 0.5f), "tint_amount 0.5 in the instance register");
+        check(d.embedded.registerCount() == 2, "an instance uniform has its own register (got " + std::to_string(d.embedded.registerCount()) + ")");
+        if (d.embedded.registerCount() == 2) {
+            check(near(d.embedded.regs[0], lin(0.1)) && near(d.embedded.regs[1], lin(0.6)) && near(d.embedded.regs[2], lin(0.2)) && near(d.embedded.regs[3], 4.0f), "color decoded, bands 4");
+            check(near(d.embedded.regs[4], 0.5f), "tint_amount 0.5 in the instance register");
         }
         pbr::MaterialDesc i;
         fmt::OcMatExtras ix;
         check(load("ShaderGame_main_M_Inline", i, ix), "the inline-Shader material loads");
-        check(ix.graphRef == "Shaders/main_Shader_inline.ocgraph" && i.gd.registerCount() == 1, "its graph is named after the scene and the sub-resource");
-        if (i.gd.registerCount() == 1) check(near(i.gd.regs[0], 0.0f) && near(i.gd.regs[2], 1.0f) && near(i.gd.regs[3], 1.0f), "col = blue, alpha 1");
+        check(ix.graphRef == "Shaders/main_Shader_inline.ocgraph" && i.embedded.registerCount() == 1, "its graph is named after the scene and the sub-resource");
+        if (i.embedded.registerCount() == 1) check(near(i.embedded.regs[0], 0.0f) && near(i.embedded.regs[2], 1.0f) && near(i.embedded.regs[3], 1.0f), "col = blue, alpha 1");
     }
 
     AVER_INFO("-- the graphs and the manifest --");
@@ -202,15 +202,15 @@ int main() {
             std::string err;
             if (!fmt::loadOcgraph(content + "/Shaders/" + g + ".ocgraph", data, &err)) { allOk = false; AVER_ERROR("  cannot load {}: {}", g, err); continue; }
             const pbr::MaterialGraphBody body = pbr::compileMaterialGraph(data);
-            if (!body.ok || !body.isGodot || body.gd.ns.empty() || (!body.gd.hasFragment && !body.gd.hasVertex)) { allOk = false; AVER_ERROR("  {} did not compile: {}", g, body.error); }
+            if (!body.ok || !body.isEmbedded || body.emb.ns.empty() || (!body.emb.hasFragment && !body.emb.hasVertex)) { allOk = false; AVER_ERROR("  {} did not compile: {}", g, body.error); }
         }
         check(allOk, "every written graph loads and compiles into a Godot shader entry for the registry");
         fmt::OcGraphData water;
         fmt::loadOcgraph(content + "/Shaders/water.ocgraph", water, nullptr);
-        fmt::GodotShaderPart p;
-        fmt::unpackGodotShader(water, p, nullptr);
-        check(p.hasFragment && p.hasVertex && p.varyings.size() == 1 && p.regsU == 4 && p.regsG == 1 && p.fragmentSource.find("GDN(main_fragment)") != std::string::npos &&
-                  p.vertexSource.find("GDN(main_vertex)") != std::string::npos && p.fragmentSource.find("WAVE_SCALE") == std::string::npos,
+        fmt::EmbeddedHlslPart p;
+        fmt::unpackEmbeddedHlsl(water, p, nullptr);
+        check(p.hasFragment && p.hasVertex && p.varyings.size() == 1 && p.regsU == 4 && p.regsG == 1 && p.fragmentSource.find("EMBN(main_fragment)") != std::string::npos &&
+                  p.vertexSource.find("EMBN(main_vertex)") != std::string::npos && p.fragmentSource.find("WAVE_SCALE") == std::string::npos,
               "the water graph carries fragment and vertex sources with the include expanded, one varying, 4 normal registers and 1 global");
         const std::string manifest = slurp(out1 + "/ShaderGame/Fabric/shaders.json");
         check(manifest.find("\"name\": \"wind_strength\"") != std::string::npos && manifest.find("\"scope\": \"global\"") != std::string::npos &&

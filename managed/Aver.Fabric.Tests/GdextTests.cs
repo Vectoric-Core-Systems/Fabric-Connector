@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // G3 F5: the GDExtension host seen from C#. The wire form of a Variant is checked on its own; the rest (load a plugin, ClassDB
 // instantiates its class, calls, properties, signals, the lifecycle, Node3D transform sync, unload) needs the native host library
-// (Aver.Fabric.GDExt.Abi) and the test plugin (FabricTestExt) from the C++ build, and is skipped with a message when either is missing.
+// (Aver.Fabric.Native) and the test plugin (FabricTestExt) from the C++ build, and is skipped with a message when either is missing.
 
 using System.Runtime.InteropServices;
 using Aver.Fabric;
@@ -90,22 +90,39 @@ static class GdextTests
         for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
         {
             string bin = Path.Combine(d.FullName, "build", "bin");
-            if (File.Exists(Path.Combine(bin, HostFile())) && File.Exists(Path.Combine(bin, "gdext_test", "FabricTest.gdextension"))) return bin;
+            if (File.Exists(HostPath(bin)) && File.Exists(Path.Combine(bin, "gdext_test", "FabricTest.gdextension"))) return bin;
         }
         return null;
     }
 
+    // The extension's folder under bin: Extensions/FabricConnector/{native/<platform>, data}.
+    private static string ExtensionDir(string bin) => Path.Combine(bin, "Extensions", "FabricConnector");
+
     private static string HostFile() =>
-        OperatingSystem.IsWindows() ? "Aver.Fabric.GDExt.Abi.dll" : OperatingSystem.IsMacOS() ? "libAver.Fabric.GDExt.Abi.dylib" : "libAver.Fabric.GDExt.Abi.so";
+        OperatingSystem.IsWindows() ? "Aver.Fabric.Native.dll" : OperatingSystem.IsMacOS() ? "Aver.Fabric.Native.dylib" : "Aver.Fabric.Native.so";
+
+    // native/<platform>: win-x64, linux-x64, osx-arm64 ... (the folder name the engine's extension loader uses).
+    private static string PlatformDir() =>
+        (OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux") + "-" +
+        (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "x64");
+
+    private static string HostPath(string bin) =>
+        Path.Combine(ExtensionDir(bin), "native", PlatformDir(), HostFile());
 
     private static void Host()
     {
         string? bin = FindBin();
-        if (bin == null) { Console.WriteLine("  SKIP: the native host (build/bin/Aver.Fabric.GDExt.Abi) or the test plugin (build/bin/gdext_test) is not built"); return; }
+        if (bin == null) { Console.WriteLine("  SKIP: the native host (build/bin/Extensions/FabricConnector/native) or the test plugin (build/bin/gdext_test) is not built"); return; }
         // the host library goes beside this assembly, where the default DllImport probing looks
         string beside = Path.Combine(AppContext.BaseDirectory, HostFile());
-        try { if (!File.Exists(beside) || File.GetLastWriteTimeUtc(beside) < File.GetLastWriteTimeUtc(Path.Combine(bin, HostFile()))) File.Copy(Path.Combine(bin, HostFile()), beside, true); }
+        try { if (!File.Exists(beside) || File.GetLastWriteTimeUtc(beside) < File.GetLastWriteTimeUtc(HostPath(bin))) File.Copy(HostPath(bin), beside, true); }
         catch (IOException) { /* a copy from an earlier run is in use */ }
+        // The library also links the material system's DLL (the converter cooks materials); a game or the editor has it beside the executable.
+        string pbr = OperatingSystem.IsWindows() ? "Aver.Render.PBR.dll" : OperatingSystem.IsMacOS() ? "libAver.Render.PBR.dylib" : "libAver.Render.PBR.so";
+        try { if (File.Exists(Path.Combine(bin, pbr))) File.Copy(Path.Combine(bin, pbr), Path.Combine(AppContext.BaseDirectory, pbr), true); }
+        catch (IOException) { /* in use by an earlier run */ }
+        // A dependency is searched for beside the process's executable (dotnet), not beside this assembly: load it first so the loader finds it by name.
+        System.Runtime.InteropServices.NativeLibrary.TryLoad(Path.Combine(AppContext.BaseDirectory, pbr), out _);
         if (!GDExtensionManager.IsNativeAvailable) { T.Check("the native host loads", false, GDExtensionManager.LastError); return; }
         T.Check("the native host loads and speaks ABI 1", true);
         string dir = Path.Combine(bin, "gdext_test");
@@ -115,7 +132,7 @@ static class GdextTests
         T.Check("a plugin for Godot 4.0 is refused with a message", !GDExtensionManager.Load(Path.Combine(dir, "FabricTestOld.gdextension")) && GDExtensionManager.LastError.Contains("older than 4.1"), GDExtensionManager.LastError);
         T.Check("ClassDB does not know the class before the load", !ClassDB.ClassExists("FabricTestNode") && ClassDB.Instantiate("FabricTestNode").IsNil);
 
-        T.Check("extension_api.json is accepted", GDExtensionManager.SetApiPath(Path.Combine(bin, "extension_api.json")));
+        T.Check("extension_api.json is accepted", GDExtensionManager.SetApiPath(Path.Combine(ExtensionDir(bin), "data", "extension_api.json")));
         T.Check("Load", GDExtensionManager.Load(ext, dir), GDExtensionManager.LastError);
         T.Check("IsLoaded", GDExtensionManager.IsLoaded(ext) && GDExtensionManager.GetLoadedExtensions().Length == 1);
         T.Check("Load twice is a no-op", GDExtensionManager.Load(ext, dir));

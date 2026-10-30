@@ -1,7 +1,7 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// P/Invoke of the aver_gdext_* C ABI (modules/fabric.gdext, fabric_gdext_abi.h). Handles are int32; names UTF-8; values travel in
+// P/Invoke of the aver_gdext_* C ABI (native/gdext, fabric_gdext_abi.h; exported by Aver.Fabric.Native). Handles are int32; names UTF-8; values travel in
 // the flat wire form VariantWire reads and writes. Layout of every call: docs/plans/fabric/G3_GDEXT.md.
 
 using System.Runtime.InteropServices;
@@ -10,7 +10,7 @@ namespace Aver.Fabric;
 
 internal static class GdextNative
 {
-    private const string Lib = "Aver.Fabric.GDExt.Abi";
+    private const string Lib = "Aver.Fabric.Native";
 
     /// <summary>A signal an object emitted: the object handle, the signal name and the arguments as a wire-form Array.</summary>
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

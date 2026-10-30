@@ -15,7 +15,7 @@ public sealed class ProjectOptions
     /// <summary>The Aver project folder the scene converter wrote (holds Fabric/scripts.json and Content/).</summary>
     public string OutDir { get; set; } = "";
     public string? ManifestPath { get; set; }
-    /// <summary>The folder with Aver.Fabric.dll (default: ../Scripting beside the tool, i.e. bin/Scripting).</summary>
+    /// <summary>The folder with Aver.Fabric.dll, or a list of folders separated by <see cref="Path.PathSeparator"/> (default: <see cref="DefaultRefs"/>).</summary>
     public string? RefsDir { get; set; }
     public string? ReportPath { get; set; }
     /// <summary>The engine checkout: when given, a missing Content/Scripts/Scripts.csproj is written with references into it.</summary>
@@ -91,7 +91,7 @@ public static class ProjectConverter
             Manifest.Utf8NoBom(target, s.Text);
             res.Written.Add(target);
         }
-        if (o.EnginePath != null && sources.Count > 0) WriteScriptsProject(outDir, o.EnginePath, res.Written);
+        if (o.EnginePath != null && sources.Count > 0) WriteScriptsProject(outDir, o.EnginePath, refs, res.Written);
 
         res.Items.AddRange(conv.Items);
         foreach (string g in conv.GeneralErrors)
@@ -109,8 +109,11 @@ public static class ProjectConverter
         return res;
     }
 
-    /// <summary>bin/Scripting beside the tool's own folder (bin/Tools).</summary>
-    public static string DefaultRefs() => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Scripting"));
+    /// <summary>The extension's managed folder beside the tool's own folder (Extensions/FabricConnector/tools), then the engine's bin/Scripting three
+    /// levels up (Extensions/FabricConnector/tools to the executable's folder).</summary>
+    public static string DefaultRefs() =>
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "managed")) + Path.PathSeparator +
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Scripting"));
 
     // NuGet packages the Godot project's .csproj asks for: an Aver project restores offline, so they are the author's to add.
     private static IEnumerable<ReportItem> PackageReferences(string projectDir, ISet<string> handled)
@@ -138,7 +141,7 @@ public static class ProjectConverter
         return items;
     }
 
-    private static void WriteScriptsProject(string outDir, string engine, List<string> written)
+    private static void WriteScriptsProject(string outDir, string engine, string refs, List<string> written)
     {
         string dir = Path.Combine(outDir, "Content", "Scripts");
         string csproj = Path.Combine(dir, "Scripts.csproj");
@@ -147,15 +150,24 @@ public static class ProjectConverter
         var sb = new StringBuilder();
         sb.Append("<Project Sdk=\"Microsoft.NET.Sdk\">\n\n");
         sb.Append("  <!-- Written by Aver.Fabric.Convert for a converted Godot project. Tools > Compile Scripts builds this file; the converted scripts\n");
-        sb.Append("       compile against Aver.Fabric (the Godot-compatible node layer) and Aver.Framework. -->\n");
+        sb.Append("       compile against Aver.Fabric (the Godot-compatible node layer, from the installed Fabric Connector extension) and Aver.Framework. -->\n");
         sb.Append("  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n  </PropertyGroup>\n\n");
         sb.Append("  <ItemGroup>\n");
-        foreach (string name in new[] { "Aver.Scripting", "Aver.Framework", "Aver.UI", "Aver.Materials", "Aver.Fabric" })
+        foreach (string name in new[] { "Aver.Scripting", "Aver.Framework", "Aver.UI", "Aver.Materials" })
         {
             string target = Path.Combine(engine, "scripting", "csharp", name, name + ".csproj");
             sb.Append("    <ProjectReference Include=\"").Append(Path.GetRelativePath(dir, target).Replace('/', '\\')).Append("\" />\n");
         }
-        sb.Append("  </ItemGroup>\n\n  <ItemGroup>\n    <Compile Include=\"..\\Materials\\**\\*.cs\" />\n  </ItemGroup>\n\n</Project>\n");
+        sb.Append("  </ItemGroup>\n\n");
+        // Aver.Fabric is the extension's file, not an engine project: a HintPath to the installed assembly, relative to this folder like the
+        // engine references. Private=false because the host loads that one assembly (a copy in Binaries/Scripts would be a second Aver.Fabric).
+        string? fabric = References.Find(refs, "Aver.Fabric.dll");
+        if (fabric != null)
+            sb.Append("  <ItemGroup>\n    <Reference Include=\"Aver.Fabric\">\n      <HintPath>").Append(Path.GetRelativePath(dir, fabric).Replace('/', '\\'))
+              .Append("</HintPath>\n      <Private>false</Private>\n    </Reference>\n  </ItemGroup>\n\n");
+        else
+            sb.Append("  <!-- Aver.Fabric.dll was not found when this project was converted: add a Reference to Extensions\\FabricConnector\\managed\\Aver.Fabric.dll. -->\n\n");
+        sb.Append("  <ItemGroup>\n    <Compile Include=\"..\\Materials\\**\\*.cs\" />\n  </ItemGroup>\n\n</Project>\n");
         Manifest.Utf8NoBom(csproj, sb.ToString());
         written.Add(csproj);
     }

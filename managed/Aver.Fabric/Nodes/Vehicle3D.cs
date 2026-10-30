@@ -1,7 +1,7 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// VehicleBody3D and VehicleWheel3D on the G2 raycast vehicle (docs/physics/GODOT_VEHICLE.md): a chassis body with a ray per wheel,
+// VehicleBody3D and VehicleWheel3D on the G2 raycast vehicle (docs/physics/RAYCAST_VEHICLE.md): a chassis body with a ray per wheel,
 // engine force, brake and steering spread over the wheels the way Godot's VehicleBody3D does it. Engine side; not run headless.
 
 using Aver.Scripting;
@@ -45,9 +45,9 @@ public class VehicleWheel3D : Node3D
         if (Index < 0 || !Vehicle.IsValid) return;
         try
         {
-            Vehicle.SetEngineForce(Index, Aver.Physics.RaycastWheelSettings.EngineForceFromGodot(_engineForce));
-            Vehicle.SetBrake(Index, Aver.Physics.RaycastWheelSettings.BrakeFromGodot(_brake, 1f / PhysicsDelta));
-            Vehicle.SetSteering(Index, Aver.Physics.RaycastWheelSettings.SteeringFromGodot(_steering));
+            Vehicle.SetEngineForce(Index, RaycastWheelGodot.EngineForceFromGodot(_engineForce));
+            Vehicle.SetBrake(Index, RaycastWheelGodot.BrakeFromGodot(_brake, 1f / PhysicsDelta));
+            Vehicle.SetSteering(Index, RaycastWheelGodot.SteeringFromGodot(_steering));
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
     }
@@ -111,7 +111,7 @@ public class VehicleBody3D : RigidBody3D
             Transform3D t = w.Transform;
             // Godot: the suspension runs along the wheel's -Y, the axle along its X, both in the body's frame.
             Vector3 down = -t.Basis.Y, axle = t.Basis.X;
-            Aver.Physics.RaycastWheelSettings s = Aver.Physics.RaycastWheelSettings.FromGodot(
+            Aver.Physics.RaycastWheelSettings s = RaycastWheelGodot.FromGodot(
                 ToFloat3(t.Origin), new PhysFloat3(down.X, down.Y, down.Z), new PhysFloat3(axle.X, axle.Y, axle.Z),
                 w.WheelRestLength, w.SuspensionTravel, w.SuspensionStiffness,
                 Aver.Physics.RaycastWheelSettings.DampingFromRatio(w.DampingCompression, w.SuspensionStiffness),

@@ -31,6 +31,7 @@ static class ConvertScriptsTests
         T.Run("cli: scripts.json decides the class and the output, the report merges, a rerun changes nothing", CliManifestAndReport);
         T.Run("cli: errors give exit 1 with // FABRIC: lines, usage 2, a bad reference folder 3 with the scripts still written", CliExitCodes);
         T.Run("cli: --engine writes Scripts.csproj once, referencing Aver.Fabric", CliScriptsProject);
+        T.Run("cli: --refs takes a list of folders, the first one's Aver.Fabric.dll wins", CliRefsList);
     });
 
     // ---- helpers ----
@@ -49,7 +50,7 @@ static class ConvertScriptsTests
     private static string RepoRoot()
     {
         for (DirectoryInfo? d = new DirectoryInfo(T.DataDir()); d != null; d = d.Parent)
-            if (Directory.Exists(Path.Combine(d.FullName, "scripting", "csharp", "Aver.Fabric"))) return d.FullName;
+            if (Directory.Exists(Path.Combine(d.FullName, "scripting", "csharp", "Aver.Framework"))) return d.FullName;
         throw new DirectoryNotFoundException("the repository root was not found above tests/fabric/data");
     }
 
@@ -505,6 +506,25 @@ static class ConvertScriptsTests
         finally { try { Directory.Delete(root, true); } catch (IOException) { } }
     }
 
+    // The extension's managed folder holds only Aver.Fabric.dll; the engine's assemblies come from the second folder of the list.
+    private static void CliRefsList()
+    {
+        string root = Temp("cli4");
+        try
+        {
+            string managed = Path.Combine(root, "managed");
+            Directory.CreateDirectory(managed);
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Aver.Fabric.dll"), Path.Combine(managed, "Aver.Fabric.dll"));
+            string proj = Path.Combine(root, "P");
+            int code = Cli(out _, out string se, "scripts", "--project", Path.Combine(T.DataDir(), "csharp"), "--out", proj,
+                           "--refs", managed + Path.PathSeparator + AppContext.BaseDirectory, "--engine", RepoRoot());
+            T.Check("a list of folders compiles the scripts: exit 0", code == 0, se);
+            string text = File.ReadAllText(Path.Combine(proj, "Content", "Scripts", "Scripts.csproj"));
+            T.Check("and the HintPath names Aver.Fabric.dll in the first folder", text.Contains("managed\\Aver.Fabric.dll</HintPath>"), text);
+        }
+        finally { try { Directory.Delete(root, true); } catch (IOException) { } }
+    }
+
     private static void CliScriptsProject()
     {
         string root = Temp("cli3");
@@ -517,7 +537,11 @@ static class ConvertScriptsTests
             string csproj = Path.Combine(proj, "Content", "Scripts", "Scripts.csproj");
             T.Check("Scripts.csproj is written", File.Exists(csproj));
             string text = File.ReadAllText(csproj);
-            T.Check("it references Aver.Fabric and Aver.Framework by a relative path into the engine", text.Contains("Aver.Fabric\\Aver.Fabric.csproj") && text.Contains("Aver.Framework\\Aver.Framework.csproj") && text.Contains("..\\"));
+            T.Check("it references Aver.Framework by a relative path into the engine", text.Contains("Aver.Framework\\Aver.Framework.csproj") && text.Contains("..\\"));
+            T.Check("and Aver.Fabric by a HintPath to the installed assembly, not as an engine project",
+                    text.Contains("<Reference Include=\"Aver.Fabric\">") && text.Contains("Aver.Fabric.dll</HintPath>") && text.Contains("<Private>false</Private>") && !text.Contains("Aver.Fabric.csproj"));
+            string hint = System.Text.RegularExpressions.Regex.Match(text, "<HintPath>([^<]+)</HintPath>").Groups[1].Value;
+            T.Check("which resolves from the Scripts folder to a file that exists", File.Exists(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(csproj)!, hint.Replace('\\', Path.DirectorySeparatorChar)))), hint);
             T.Check("with ImplicitUsings and Nullable like every project the editor makes", text.Contains("<ImplicitUsings>enable</ImplicitUsings>") && text.Contains("<Nullable>enable</Nullable>"));
             T.Check("and no XML-illegal -- in a comment", !System.Text.RegularExpressions.Regex.IsMatch(text, "<!--(?:(?!-->).)*--(?!>)", System.Text.RegularExpressions.RegexOptions.Singleline));
             File.WriteAllText(csproj, "<Project />");

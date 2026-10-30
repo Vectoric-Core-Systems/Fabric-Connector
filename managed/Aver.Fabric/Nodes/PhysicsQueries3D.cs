@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // Space queries and the physics server in Godot's shapes: World3D.DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D) returns
 // the dictionary Godot returns, RayCast3D and ShapeCast3D nodes, and a lite PhysicsServer3D keyed by the Rid of a collision object.
-// All on the G2 space-state ABI (docs/physics/GODOT_QUERIES.md). Godot units at the boundary: metres, with Godot's axes.
+// All on the G2 space-state ABI (docs/physics/SPACE_QUERIES.md). Godot units at the boundary: metres, with Godot's axes.
 
 using Aver.Scripting;
 using PhysBody = Aver.Physics.Body;

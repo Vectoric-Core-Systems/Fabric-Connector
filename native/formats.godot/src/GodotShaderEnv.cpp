@@ -169,9 +169,9 @@ bool gdShaderForEnv(std::string_view source, std::string_view fileName, const Gd
     for (const GdHookUse& u : h.hooks) {
         if (u.read) read.insert(u.macro);
         if (u.written) written.insert(u.macro);
-        if (u.macro == "AVER_GD_TIME") r.usesTime = true;
+        if (u.macro == "AVER_CUSTOM_TIME") r.usesTime = true;
     }
-    if (r.kind == GdEnvKind::Sky && (read.count("AVER_GD_RADIANCE") || written.count("AVER_GD_RADIANCE"))) {
+    if (r.kind == GdEnvKind::Sky && (read.count("AVER_CUSTOM_RADIANCE") || written.count("AVER_CUSTOM_RADIANCE"))) {
         r.error = "the sky shader samples RADIANCE (the radiance cubemap); the engine renders the sky shader directly and has no cubemap to hand it";
         return false;
     }
@@ -207,7 +207,7 @@ bool gdShaderForEnv(std::string_view source, std::string_view fileName, const Gd
     for (const std::string& rm : m.renderModes) addNote(r, "approximated", "render_mode " + rm, "no engine counterpart; ignored");
     for (const HookRule& h2 : kRules) {
         if (h2.kind != r.kind) continue;
-        const std::string macro = std::string("AVER_GD_") + h2.name;
+        const std::string macro = std::string("AVER_CUSTOM_") + h2.name;
         if (h2.onlyWritten ? written.count(macro) != 0 : read.count(macro) != 0) addNote(r, h2.severity, h2.name, h2.reason);
     }
     r.ok = true;

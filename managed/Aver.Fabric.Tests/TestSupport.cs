@@ -19,7 +19,7 @@ static class T
     {
         NodeHost.Current = new ManagedNodeHost();
         SceneTree.Reset();
-        Aver.Framework.GameThread.Reset();
+        Aver.Framework.Hosting.ExtensionHost.ResetDeferred();
         Logs.Clear();
         Rec.Trail.Clear();
         Log.SetSink((l, m) => Logs.Add((l, m)));

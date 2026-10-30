@@ -3,7 +3,8 @@
 
 #include "aver/core/Version.hpp"
 #include "aver/formats/AxisMap.hpp"
-#include "aver/formats/GodotEnvironment.hpp"
+#include "aver/formats/godot/GodotEnvironment.hpp"
+#include "aver/formats/Json.hpp"
 #include "aver/formats/OcInput.hpp"
 #include "aver/formats/OcProject.hpp"
 #include "aver/platform/FileSystem.hpp"
@@ -27,6 +28,14 @@ bool Converter::settingBool(const char* path, bool def) const { return boolOf(pr
 namespace {
 
 constexpr const char* kProject = "res://project.godot";
+
+// The "version" of <extension dir>/extension.json, or empty when the manifest cannot be read.
+std::string manifestVersion(const std::string& extensionDir) {
+    std::string text;
+    fmt::JsonValue root;
+    if (!readFileText(extensionDir + "/extension.json", text) || !fmt::parseJson(text, root)) return {};
+    return std::string(root["version"].asString());
+}
 
 // Godot's Key enum values for the keys Aver's Key enum has (scripting/csharp/Aver.Framework/Input.cs).
 const char* averKeyName(long long code) {
@@ -343,6 +352,8 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
     d.createdWith = std::string(kEngineVersion);
     d.contentRoot = "Content";
     d.startMap = startLevelAsset;
+    // The project's scripts and nodes run on this extension's managed runtime; opening it without the extension installed says so by name.
+    d.extensions.push_back({"FabricConnector", manifestVersion(extensionDir())});
     if (!project_.inputActions.empty()) d.inputScheme = "Input/" + name_ + ".ocinput";
     d.localeDefault = settingString("internationalization/locale/fallback", "en");
     d.audioBusLayout = audioBusLayout_;   // G5 S1: the default AudioBusLayout converted by convertStandaloneResources, "" when the project has none
@@ -365,12 +376,12 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
     d.gravity[0] = g.x + 0.0f; d.gravity[1] = g.y + 0.0f; d.gravity[2] = g.z + 0.0f;   // + 0.0f: no negative zero in the file
     const double ticks = std::max(1.0, setting("physics/common/physics_ticks_per_second", 60));
     d.fixedStep = static_cast<f32>(1.0 / ticks);
-    d.physCombine = 1;   // PHYSICS.COMBINE godot: friction min or max when rough, bounce a clamped sum
+    d.physCombine = 1;   // PHYSICS.COMBINE material: friction min or max when rough, bounce a clamped sum
     d.physInterpolation = settingBool("physics/common/physics_interpolation", false) ? 1 : 0;
     report_.add("setting", kProject, "", "", "physics/3d/default_gravity", Rating::Converted, "PHYSICS.GRAVITY, converted to centimetres and Aver's axes", 0);
     report_.add("setting", kProject, "", "", "physics/common/physics_ticks_per_second", Rating::Converted, "PHYSICS.FIXEDSTEP", 0);
     report_.add("setting", kProject, "", "", "physics/common/physics_interpolation", Rating::Converted, "PHYSICS.INTERPOLATION", 0);
-    report_.add("setting", kProject, "", "", "physics", Rating::Converted, "PHYSICS.COMBINE godot", 0);
+    report_.add("setting", kProject, "", "", "physics", Rating::Converted, "PHYSICS.COMBINE material", 0);
 
     // The start scene's environment: bloom and exposure are project-wide in Aver.
     // Godot's exposure is fixed unless CameraAttributes asks for auto exposure, so eye adaptation is off; the tonemapper is Godot's.

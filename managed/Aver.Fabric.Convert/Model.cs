@@ -93,7 +93,8 @@ public sealed class ConversionResult
 /// <summary>What a conversion needs besides the sources.</summary>
 public sealed class ConvertSettings
 {
-    /// <summary>The folder holding Aver.Fabric.dll and Aver.Framework.dll (bin/Scripting). Null: rewrite only, nothing is compiled.</summary>
+    /// <summary>The folder holding Aver.Fabric.dll and Aver.Framework.dll, or several folders separated by <see cref="Path.PathSeparator"/>
+    /// (the extension's managed folder, then the engine's bin/Scripting). Null: rewrite only, nothing is compiled.</summary>
     public string? RefsDir { get; init; }
     /// <summary>Keep the compiled assembly in the result (tests load it).</summary>
     public bool KeepAssembly { get; init; }

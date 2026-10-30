@@ -1,7 +1,7 @@
 #pragma once
 // Fabric G6 SH3: a Godot sky, fog or particles shader prepared for the engine. Like GodotShaderEngine.hpp for spatial shaders, this is the one place
-// that decides how the shader's uniforms, samplers and built-ins land on the engine; tools/fabric writes the result into a .ocgraph (GodotEnvShader
-// node, OcGraphGodot.hpp) and the tests compile it in the engine's real translation units. Pure text and numbers in, plain structs out.
+// that decides how the shader's uniforms, samplers and built-ins land on the engine; tools/fabric writes the result into a .ocgraph (EmbeddedHlslEnv
+// node, OcGraphHlsl.hpp) and the tests compile it in the engine's real translation units. Pure text and numbers in, plain structs out.
 // Contract: docs/plans/fabric/G6_SHADERS.md, section SH3.
 #include "aver/formats/godot/GodotShaderEngine.hpp"
 

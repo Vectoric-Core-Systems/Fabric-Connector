@@ -1,10 +1,10 @@
 // GodotShaderMaterialTest -- Fabric G6 SH2: a Godot spatial shader on an Aver material, checked headless.
 //
-// Part 1 is plain logic: the engine-side copy of the helper library equals the front-end's, the gdfx bits agree, the GodotShader graph node round-trips
+// Part 1 is plain logic: the engine-side copy of the helper library equals the front-end's, the hlslfx bits agree, the EmbeddedHlsl graph node round-trips
 // through the .ocgraph text format, the uniform defaults land in the right registers, samplers take the right texture slots, render modes become the
 // right material state, and a registry without a converted shader produces the generated code it always did.
 // Part 2 compiles the engine's real translation unit (shared prelude + material prelude + the registry's generated code + a test entry) with DXC, to DXIL
-// and to SPIR-V, for the raster pixel stage, the vertex stage (VSMainGd's hook) and the mesh-extra twins. No device, no GPU, nothing is run.
+// and to SPIR-V, for the raster pixel stage, the vertex stage (VSMainEmb's hook) and the mesh-extra twins. No device, no GPU, nothing is run.
 #include "GdGraphBridge.hpp"
 
 #include "aver/core/DynamicLibrary.hpp"
@@ -313,8 +313,8 @@ bool compileHlsl(const DxcLib& d, const std::string& source, const char* entry, 
 
 const char* kEntries = R"(
 float4 PSGdTest(VSOut i) : SV_Target {
-#ifdef AVER_GD_VARYINGS_ON
-    averGdLoadVaryings(i);
+#ifdef AVER_CUSTOM_VARYINGS_ON
+    averEmbLoadVaryings(i);
 #endif
     AverVertex vtx = averVertexOf(i);
     AverLight sun;
@@ -325,10 +325,10 @@ float4 PSGdTest(VSOut i) : SV_Target {
     float3 lit = averShadeDirect(float3(0, 0, 0), s, sun);
     return float4(lit, averOpacity(s));
 }
-#if AVER_MATX_GDVS
+#if AVER_MATX_EMBVS
 VSOut VSGdTest(VSIn i) {
     VSOut o = VSMain(i);
-    averGdVertex(i, o);
+    averEmbVertex(i, o);
     return o;
 }
 #endif
@@ -350,15 +350,15 @@ int main() {
 
     // ---------------------------------------------------------------------------------------------------------------- part 1: logic
     {
-        const std::string engineLib = noCr(readFile(fs::path(AVER_REPO_ROOT) / "modules" / "render.pbr" / "shaders" / "material_godot_lib.hlsl"));
-        check(!engineLib.empty() && engineLib == noCr(gdShaderHlslLibrary()), "material_godot_lib.hlsl is exactly gdShaderHlslLibrary() (regenerate with GodotShaderTest --library)");
-        check(fmt::gdfx::kUnshaded == 1u && fmt::gdfx::kAmbientDisabled == 2u && fmt::gdfx::kSpecularDisabled == 4u && fmt::gdfx::kDiffuseWrap == 8u &&
-              fmt::gdfx::kWorldVertexCoords == 16u && fmt::gdfx::kSkipVertexTransform == 32u && fmt::gdfx::kUsesNormalWrite == 64u,
-              "the gdfx bits are the ones the hook prelude reads (1 unshaded, 2 ambient, 4 specular, 8 wrap, 16 world vertex, 32 skip transform, 64 normal write)");
+        const std::string engineLib = noCr(readFile(fs::path(AVER_REPO_ROOT) / "modules" / "render.pbr" / "shaders" / "material_embedded_lib.hlsl"));
+        check(!engineLib.empty() && engineLib == noCr(gdShaderHlslLibrary()), "material_embedded_lib.hlsl is exactly gdShaderHlslLibrary() (regenerate with GodotShaderTest --library)");
+        check(fmt::hlslfx::kUnshaded == 1u && fmt::hlslfx::kAmbientDisabled == 2u && fmt::hlslfx::kSpecularDisabled == 4u && fmt::hlslfx::kDiffuseWrap == 8u &&
+              fmt::hlslfx::kWorldVertexCoords == 16u && fmt::hlslfx::kSkipVertexTransform == 32u && fmt::hlslfx::kUsesNormalWrite == 64u,
+              "the hlslfx bits are the ones the hook prelude reads (1 unshaded, 2 ambient, 4 specular, 8 wrap, 16 world vertex, 32 skip transform, 64 normal write)");
     }
     {
         // The node text survives the line format: spaces, '#', '%', newlines, a source longer than one chunk.
-        fmt::GodotShaderPart p;
+        fmt::EmbeddedHlslPart p;
         p.name = "Wavy Water #1 100%";
         p.ns = "gs12345678_";
         p.regsU = 5; p.regsI = 2; p.regsG = 1; p.fx = 0x2Bu;
@@ -367,23 +367,23 @@ int main() {
         for (int i = 0; i < 400; ++i) big += "float4 x" + std::to_string(i) + " = float4(1.0, 2.0, 3.0, 4.0); // a # comment, 100% \t tabs\r\n";
         p.fragmentSource = big;
         p.vertexSource = "void v() { }\n";
-        p.varyings.push_back(fmt::GodotShaderVarying{"float3 gs12345678_gdv_a", false, 1});
-        p.varyings.push_back(fmt::GodotShaderVarying{"int gs12345678_gdv_b", true, 1});
-        p.varyings.push_back(fmt::GodotShaderVarying{"float3 gs12345678_gdv_c[2]", false, 2});
+        p.varyings.push_back(fmt::EmbeddedHlslVarying{"float3 gs12345678_gdv_a", false, 1});
+        p.varyings.push_back(fmt::EmbeddedHlslVarying{"int gs12345678_gdv_b", true, 1});
+        p.varyings.push_back(fmt::EmbeddedHlslVarying{"float3 gs12345678_gdv_c[2]", false, 2});
         fmt::OcGraphData g;
-        fmt::packGodotShader(p, g);
+        fmt::packEmbeddedHlsl(p, g);
         const std::string text = fmt::writeOcgraph(g);
-        check(text.find("DOMAIN material") != std::string::npos && text.find("GodotShader") != std::string::npos, "the packed graph names its domain and node");
+        check(text.find("DOMAIN material") != std::string::npos && text.find("EmbeddedHlsl") != std::string::npos && text.find("GodotShader") == std::string::npos, "the packed graph names its domain and node");
         fmt::OcGraphData back;
         std::string err;
         check(fmt::parseOcgraph(text, back, &err), "the packed graph parses back (" + err + ")");
-        fmt::GodotShaderPart q;
-        check(fmt::unpackGodotShader(back, q, &err), "the GodotShader node unpacks (" + err + ")");
+        fmt::EmbeddedHlslPart q;
+        check(fmt::unpackEmbeddedHlsl(back, q, &err), "the EmbeddedHlsl node unpacks (" + err + ")");
         check(q.name == p.name && q.ns == p.ns && q.regsU == 5 && q.regsI == 2 && q.regsG == 1 && q.fx == 0x2Bu && q.hasFragment && q.hasVertex, "the node's scalar attributes round-trip");
         check(q.fragmentSource == big && q.vertexSource == p.vertexSource, "a 20 KB source with spaces, '#', '%', tabs and CRLF round-trips through the text format");
         check(q.varyings.size() == 3 && q.varyings[1].flat && q.varyings[2].rows == 2 && q.varyings[2].decl == "float3 gs12345678_gdv_c[2]", "the varyings round-trip");
         std::string ignored;
-        check(!fmt::gdGraphUnescape("%4", ignored) && !fmt::gdGraphUnescape("%zz", ignored), "a malformed escape is refused");
+        check(!fmt::hlslGraphUnescape("%4", ignored) && !fmt::hlslGraphUnescape("%zz", ignored), "a malformed escape is refused");
     }
     {
         // Defaults land in the right registers; every uniform type is packed the way the emitter reads it.
@@ -436,7 +436,7 @@ int main() {
         check(s.cull == 3 && s.depthDraw == 1 && s.blend == 0, "render_mode cull_disabled, depth_draw_always, blend_mix");
         check(!s.varyings.empty() && s.varyings[0].decl.find("gdv_v_pos") != std::string::npos, "the varying is a prefixed member");
         // the slot sampler constructors carry filter, repeat, mips and the unbound colour
-        check(s.fragmentSource.find("GDN(gdsm_albedo_tex)") != std::string::npos && s.fragmentSource.find("r.slot = 0u; r.m = 3u;") != std::string::npos,
+        check(s.fragmentSource.find("EMBN(gdsm_albedo_tex)") != std::string::npos && s.fragmentSource.find("r.slot = 0u; r.m = 3u;") != std::string::npos,
               "albedo_tex is slot 0 with mode 3 (nearest, repeat; no mipmaps)");
         check(s.fragmentSource.find("r.slot = 1u; r.m = 256u;") != std::string::npos, "mask_tex (filter_linear, no mipmaps) is mode 256: unbound reads black");
         check(s.fragmentSource.find("r.m = 772u;") != std::string::npos, "normal_tex is mode 4 | 768 (unbound reads the flat normal)");
@@ -445,11 +445,11 @@ int main() {
         // Render modes -> material state.
         const GdEngineShader a = prepare("shader_type spatial;\nrender_mode unshaded, blend_add, depth_test_disabled, shadows_disabled, specular_disabled, ambient_light_disabled, cull_front;\nvoid fragment() { ALBEDO = vec3(1.0); }\n", "Modes");
         check(a.ok && a.blend == 1 && a.cull == 2 && a.depthTestDisabled && a.shadowsDisabled, "blend_add, cull_front, depth_test_disabled, shadows_disabled");
-        check((a.fxBits & fmt::gdfx::kUnshaded) && (a.fxBits & fmt::gdfx::kSpecularDisabled) && (a.fxBits & fmt::gdfx::kAmbientDisabled), "unshaded, specular_disabled and ambient_light_disabled become gdfx bits");
+        check((a.fxBits & fmt::hlslfx::kUnshaded) && (a.fxBits & fmt::hlslfx::kSpecularDisabled) && (a.fxBits & fmt::hlslfx::kAmbientDisabled), "unshaded, specular_disabled and ambient_light_disabled become hlslfx bits");
         const GdEngineShader b = prepare("shader_type spatial;\nrender_mode world_vertex_coords, vertex_lighting, fog_disabled, diffuse_toon, specular_toon, depth_prepass_alpha;\nvoid vertex() { VERTEX.x += 1.0; }\n", "Modes2");
         bool vl = false, fd = false, dt = false;
         for (const auto& n : b.notes) { if (n.subject == "render_mode vertex_lighting") vl = true; if (n.subject == "render_mode fog_disabled" && n.severity == "unsupported") fd = true; if (n.subject == "render_mode diffuse_toon") dt = true; }
-        check(b.ok && b.hasVertex && !b.hasFragment && (b.fxBits & fmt::gdfx::kWorldVertexCoords) && vl && fd && dt, "a vertex-only shader prepares; vertex_lighting / diffuse_toon approximated, fog_disabled unsupported");
+        check(b.ok && b.hasVertex && !b.hasFragment && (b.fxBits & fmt::hlslfx::kWorldVertexCoords) && vl && fd && dt, "a vertex-only shader prepares; vertex_lighting / diffuse_toon approximated, fog_disabled unsupported");
         const GdEngineShader c = prepare("shader_type spatial;\nuniform sampler2D a : source_color;\nuniform sampler2D b : source_color;\nuniform sampler2D c : source_color;\nuniform sampler2D d : source_color;\nvoid fragment() { ALBEDO = texture(a, UV).rgb; }\n", "TooMany");
         check(!c.ok && c.error.find("sRGB") != std::string::npos, "four source_color textures do not fit the three sRGB slots (" + c.error + ")");
         const GdEngineShader d = prepare("shader_type particles;\nvoid process() { }\n", "Particles");
@@ -483,9 +483,9 @@ int main() {
         g.links.push_back(l);
         const u32 id = plain.add("flat.ocgraph", "M_Flat", g);
         check(id == 1 && !plain.hlsl().empty(), "a stock graph registers and generates code");
-        check(plain.hlsl().find("AVER_GD") == std::string::npos && plain.hlsl().find("gdFragment") == std::string::npos && plain.hlsl().find("GodotShader") == std::string::npos,
+        check(plain.hlsl().find("AVER_CUSTOM") == std::string::npos && plain.hlsl().find("embFragment") == std::string::npos && plain.hlsl().find("EmbeddedHlsl") == std::string::npos,
               "no Godot text appears in the generated code of a registry without a converted shader");
-        check(!plain.hasGodotShaders() && !plain.hasGodotVaryings() && plain.vsOutMembersDefine().empty(), "such a registry reports no Godot shader and no varyings");
+        check(!plain.hasEmbeddedShaders() && !plain.hasEmbeddedVaryings() && plain.vsOutMembersDefine().empty(), "such a registry reports no embedded shader and no varyings");
         check(plain.hlsl().rfind("// ---- generated from .ocgraph material graphs; do not edit ----\nAverSurface averEvalMaterial(AverVertex v, AverLight l) {\n", 0) == 0,
               "its generated code still opens with the stock averEvalMaterial");
         const std::string once = plain.hlsl();
@@ -495,11 +495,11 @@ int main() {
         // Variant keys: the new bits stay out of the pixel mask and mark the vertex stage and late Z.
         pbr::MaterialFx fx;
         check(!fx.active() && pbr::fxVariantKey(fx) == 0, "an untouched fx still has key 0");
-        fx.gdVertex = true;
-        check(fx.active() && (pbr::fxVariantKey(fx) & pbr::fxkey::kGdVertex) && !(pbr::fxVariantKey(fx) & pbr::fxkey::kShaderMask), "gdVertex sets kGdVertex only");
-        check((pbr::kFxNoPrepassKeys & pbr::fxkey::kGdVertex) != 0, "a vertex-shaded draw never joins the depth prepass");
+        fx.embVertex = true;
+        check(fx.active() && (pbr::fxVariantKey(fx) & pbr::fxkey::kEmbVertex) && !(pbr::fxVariantKey(fx) & pbr::fxkey::kShaderMask), "embVertex sets kEmbVertex only");
+        check((pbr::kFxNoPrepassKeys & pbr::fxkey::kEmbVertex) != 0, "a vertex-shaded draw never joins the depth prepass");
         pbr::MaterialFx dx;
-        dx.gdDiscard = true;
+        dx.embDiscard = true;
         check(dx.active() && (pbr::fxVariantKey(dx) & pbr::fxkey::kLateZ), "a discarding shader compiles without forced early depth");
     }
 
@@ -536,18 +536,18 @@ int main() {
             check(id != 0, label + ": " + s.name + " registers (id " + std::to_string(id) + ")");
             if (!id) return;
         }
-        check(pbr::materialGraphs().hasGodotShaders(), label + ": the registry reports a converted shader");
+        check(pbr::materialGraphs().hasEmbeddedShaders(), label + ": the registry reports a converted shader");
         const std::string unit = gdtest::compose(kEntries);
         struct Row { const char* name; const char* entry; char stage; std::string defines; };
-        const bool vary = pbr::materialGraphs().hasGodotVaryings();
-        const std::string va = vary ? ";AVER_GD_VARYINGS_ON=1" : "";
+        const bool vary = pbr::materialGraphs().hasEmbeddedVaryings();
+        const std::string va = vary ? ";AVER_CUSTOM_VARYINGS_ON=1" : "";
         const std::vector<Row> rows = {
             {"raster pixel", "PSGdTest", 'p', mat},
             {"raster pixel, layered BSDF", "PSGdTest", 'p', matLayered},
             {"raster pixel, fx variant", "PSGdTest", 'p', mat + ";AVER_MATX=1;AVER_MATX_LATEZ=1" + va},
             {"raster pixel, mesh extra", "PSGdTest", 'p', mat + ";AVER_MESH_EXTRA=1" + va},
-            {"vertex stage (VSMainGd's hook)", "VSGdTest", 'v', mat + ";AVER_MATX=1;AVER_MATX_GDVS=1;AVER_GD_NO_DERIVATIVES=1" + va},
-            {"vertex stage, mesh extra", "VSGdTest", 'v', mat + ";AVER_MATX=1;AVER_MATX_GDVS=1;AVER_GD_NO_DERIVATIVES=1;AVER_MESH_EXTRA=1" + va},
+            {"vertex stage (VSMainEmb's hook)", "VSGdTest", 'v', mat + ";AVER_MATX=1;AVER_MATX_EMBVS=1;AVER_CUSTOM_NO_DERIVATIVES=1" + va},
+            {"vertex stage, mesh extra", "VSGdTest", 'v', mat + ";AVER_MATX=1;AVER_MATX_EMBVS=1;AVER_CUSTOM_NO_DERIVATIVES=1;AVER_MESH_EXTRA=1" + va},
         };
         {   // ActorPreview and the editor's cluster path compose the same text without the fx fallback define and without the varyings: it must still compile
             std::string alt = rhi::sharedShaderPrelude();
@@ -558,7 +558,7 @@ int main() {
             if (dxil.ok()) { std::string err; const bool ok = compileHlsl(dxil, alt, "PSGdTest", 'p', false, mat, err); check(ok, label + ": the ActorPreview-style composition compiles to DXIL" + (ok ? "" : " -- " + err.substr(0, 1500))); }
             if (spirv.ok()) { std::string err; const bool ok = compileHlsl(spirv, alt, "PSGdTest", 'p', true, mat, err); check(ok, label + ": the ActorPreview-style composition compiles to SPIR-V" + (ok ? "" : " -- " + err.substr(0, 1500))); }
         }
-        if (std::getenv("AVER_GD_DUMP")) {   // the composed unit, for reading a DXC error against
+        if (std::getenv("AVER_EMB_DUMP")) {   // the composed unit, for reading a DXC error against
             std::error_code ec;
             const fs::path dir = fs::temp_directory_path() / "AverGodotShaderMaterialTest";
             fs::create_directories(dir, ec);
@@ -595,9 +595,9 @@ int main() {
         GdEngineShader s = prepare(kOutputs, "Outputs");
         gdtest::registerShader(s, "Outputs.ocgraph");
         const std::string& h = pbr::materialGraphs().hlsl();
-        check(h.find("gdLoadReg(k)") != std::string::npos && h.find("gdrLoadReg(k)") != std::string::npos, "the arms load the table in both flavours");
-        check(h.find("gdFragmentEnd(a, v,") != std::string::npos && h.find("gdPost(s, v, l, gGdFx)") != std::string::npos, "the arms map the context onto the AverAuthored and run the post step");
-        check(h.find("#define GD_NS_CUR " + s.ns + "R_") != std::string::npos && h.find("#define GD_NS_CUR " + s.ns + "T_") != std::string::npos, "the converted source is included once per flavour under its own name space");
+        check(h.find("embLoadReg(k)") != std::string::npos && h.find("embrLoadReg(k)") != std::string::npos, "the arms load the table in both flavours");
+        check(h.find("embFragmentEnd(a, v,") != std::string::npos && h.find("embPost(s, v, l, gEmbFx)") != std::string::npos, "the arms map the context onto the AverAuthored and run the post step");
+        check(h.find("#define EMB_NS_CUR " + s.ns + "R_") != std::string::npos && h.find("#define EMB_NS_CUR " + s.ns + "T_") != std::string::npos, "the converted source is included once per flavour under its own name space");
         const std::string var = pbr::materialGraphs().vsOutMembersDefine();
         check(var.find("TEXCOORD4") != std::string::npos, "the varyings start at TEXCOORD4, after the engine's own interpolants");
     }

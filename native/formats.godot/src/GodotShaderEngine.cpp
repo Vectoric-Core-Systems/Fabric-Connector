@@ -10,7 +10,7 @@
 namespace aver::fmt::godot {
 namespace {
 
-// Mirrors aver::fmt::gdfx (OcGraphGodot.hpp), which this module cannot include; GodotShaderMaterialTest compares the two.
+// Mirrors aver::fmt::hlslfx (OcGraphHlsl.hpp), which this module cannot include; GodotShaderMaterialTest compares the two.
 constexpr unsigned kFxUnshaded = 1u << 0, kFxAmbientDisabled = 1u << 1, kFxSpecularDisabled = 1u << 2, kFxDiffuseWrap = 1u << 3, kFxWorldVertexCoords = 1u << 4,
                    kFxSkipVertexTransform = 1u << 5, kFxUsesNormalWrite = 1u << 6;
 
@@ -228,7 +228,7 @@ bool gdShaderForEngine(std::string_view source, std::string_view fileName, const
     GdHlslOptions ho;
     ho.entryPrefix = "main";
     ho.namePrefix = r.ns;
-    ho.nameMacro = "GDN";
+    ho.nameMacro = "EMBN";
     ho.slotSamplers = true;
     ho.samplerSlots = samplerSlots;
     ho.defaultFilter = opt.defaultFilter;
@@ -333,15 +333,15 @@ bool gdShaderForEngine(std::string_view source, std::string_view fileName, const
     }
 
     // ---- what the fragment writes ----
-    r.writesAlpha = written.count("AVER_GD_ALPHA") != 0;
-    r.writesAlphaScissor = written.count("AVER_GD_ALPHA_SCISSOR_THRESHOLD") != 0;
-    if (written.count("AVER_GD_NORMAL") && r.hasFragment) r.fxBits |= kFxUsesNormalWrite;
+    r.writesAlpha = written.count("AVER_CUSTOM_ALPHA") != 0;
+    r.writesAlphaScissor = written.count("AVER_CUSTOM_ALPHA_SCISSOR_THRESHOLD") != 0;
+    if (written.count("AVER_CUSTOM_NORMAL") && r.hasFragment) r.fxBits |= kFxUsesNormalWrite;
     if (const GdFunction* f = m.processor(GdProcessor::Fragment)) r.usesDiscard = f->usesDiscard;
     // discard inside a custom function the fragment calls also counts.
     for (const GdFunction& f : m.functions) if (f.usesDiscard) r.usesDiscard = true;
 
     for (const HookRule& h : kHookRules) {
-        const std::string macro = std::string("AVER_GD_") + h.name;
+        const std::string macro = std::string("AVER_CUSTOM_") + h.name;
         const bool hit = h.onlyWritten ? written.count(macro) != 0 : read.count(macro) != 0;
         if (hit) addNote(r, h.severity, h.name, h.reason);
     }

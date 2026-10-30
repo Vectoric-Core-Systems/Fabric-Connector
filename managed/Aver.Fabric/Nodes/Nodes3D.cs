@@ -211,7 +211,7 @@ internal readonly struct LightFields
 /// returns E; Aver's BRDF carries 1/pi too and its lights are irradiance in engine units (the 100000 lux sun is 3.0, so one unit is
 /// 100000/3 lux or candela), hence <see cref="LuxPerEnergy"/> = pi * 100000 / 3 for the sun and <see cref="CandelaPerEnergy"/> (the
 /// irradiance at 1 m, which Godot's attenuation is relative to) the same number for an omni or spot light. Colours are sRGB in Godot and
-/// linear in Aver. The local-light shaders read Godot's curves through <c>CLight.kLightGodot</c>.</summary>
+/// linear in Aver. The local-light shaders read Godot's curves through <c>CLight.kLightParametric</c>.</summary>
 public class Light3D : VisualInstance3D
 {
     /// <summary>Aver lux of the sun for a Godot energy of 1: pi engine radiance units of 100000/3 lux.</summary>
@@ -506,7 +506,7 @@ public class Camera3D : Node3D
         if (CurrentCamera is { } old && old != this) old._current = false;
         CurrentCamera = this;
         _current = true;
-        if (Self.IsValid && NodeHost.Current.IsEngine) Aver.Framework.Fw.aver_fw_set_view_entity(Self.Handle);
+        if (Self.IsValid && NodeHost.Current.IsEngine) Aver.Framework.Hosting.ExtensionHost.SetViewEntity(Self);
     }
 
     public void ClearCurrent(bool enableNext = true)

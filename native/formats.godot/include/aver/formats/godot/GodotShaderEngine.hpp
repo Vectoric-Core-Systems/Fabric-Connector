@@ -65,7 +65,7 @@ struct GdEngineShader {
     std::vector<GdEngineSampler> samplers;
     std::vector<GdEngineUniform> params;     // every non-sampler uniform, normal block first, then instance, then global
     std::vector<float> defaultRegisters; // the table at the shader's defaults: normal block, then instance, then global; 4 floats a register
-    // Render-mode bits for the generated material function (aver::fmt::gdfx).
+    // Render-mode bits for the generated material function (aver::fmt::hlslfx).
     unsigned fxBits = 0;
     // Material state read from render_mode and the fragment's writes (the converter turns these into the FX record and the blend mode).
     int cull = 1;                        // 0 default, 1 back (Godot's default), 2 front, 3 none

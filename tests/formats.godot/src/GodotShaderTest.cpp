@@ -667,14 +667,14 @@ enum class Stage { Vertex, Pixel, Compute };
 // The stub hook prelude: constant buffers for the three uniform blocks, a static IO struct for the varyings, and a static variable per hook.
 static std::string hookPrelude(const GdHlslResult& r) {
     std::string s;
-    s += "cbuffer GdU : register(b0) { float4 gdUbuf[" + std::to_string(std::max(1, r.uniforms.registerCount)) + "]; }\n#define AVER_GD_UBUF gdUbuf\n";
-    s += "cbuffer GdI : register(b1) { float4 gdIbuf[" + std::to_string(std::max(1, r.instanceUniforms.registerCount)) + "]; }\n#define AVER_GD_IBUF gdIbuf\n";
-    s += "cbuffer GdG : register(b2) { float4 gdGbuf[" + std::to_string(std::max(1, r.globalUniforms.registerCount)) + "]; }\n#define AVER_GD_GBUF gdGbuf\n";
-    s += "struct VsOut {\n    float4 pos : SV_Position;\n" + r.varyingIo + "};\nstatic VsOut gdVary;\n#define AVER_GD_VARYINGS gdVary\n";
+    s += "cbuffer GdU : register(b0) { float4 gdUbuf[" + std::to_string(std::max(1, r.uniforms.registerCount)) + "]; }\n#define AVER_CUSTOM_UBUF gdUbuf\n";
+    s += "cbuffer GdI : register(b1) { float4 gdIbuf[" + std::to_string(std::max(1, r.instanceUniforms.registerCount)) + "]; }\n#define AVER_CUSTOM_IBUF gdIbuf\n";
+    s += "cbuffer GdG : register(b2) { float4 gdGbuf[" + std::to_string(std::max(1, r.globalUniforms.registerCount)) + "]; }\n#define AVER_CUSTOM_GBUF gdGbuf\n";
+    s += "struct VsOut {\n    float4 pos : SV_Position;\n" + r.varyingIo + "};\nstatic VsOut gdVary;\n#define AVER_CUSTOM_VARYINGS gdVary\n";
     for (const GdHookUse& h : r.hooks) {
         if (h.type == GdBase::SamplerCube) {
             s += "TextureCube<float4> gdhtex_" + h.macro + " : register(t40);\nSamplerState gdhsmp_" + h.macro + " : register(s14);\n";
-            s += "GdSamplerCube gdhsm_" + h.macro + "() { GdSamplerCube r; r.t = gdhtex_" + h.macro + "; r.s = gdhsmp_" + h.macro + "; return r; }\n";
+            s += "EmbSamplerCube gdhsm_" + h.macro + "() { EmbSamplerCube r; r.t = gdhtex_" + h.macro + "; r.s = gdhsmp_" + h.macro + "; return r; }\n";
             s += "#define " + h.macro + " gdhsm_" + h.macro + "()\n";
         } else {
             s += std::string("static ") + hlslType(h.type) + " gdh_" + h.macro + ";\n#define " + h.macro + " gdh_" + h.macro + "\n";
@@ -699,8 +699,8 @@ static std::string entrySource(const GdShaderModule& m, const GdHlslResult& r, S
         if (has("light")) s += "    AverGd_light();\n";
         if (has("sky")) s += "    AverGd_sky();\n";
         s += "    return float4(0.0, 0.0, 0.0, 1.0)";
-        if (hasHook(r, "AVER_GD_ALBEDO")) s += " + float4(AVER_GD_ALBEDO, 0.0)";
-        if (hasHook(r, "AVER_GD_COLOR") && m.shaderType == GdShaderType::Sky) s += " + float4(AVER_GD_COLOR, 0.0)";
+        if (hasHook(r, "AVER_CUSTOM_ALBEDO")) s += " + float4(AVER_CUSTOM_ALBEDO, 0.0)";
+        if (hasHook(r, "AVER_CUSTOM_COLOR") && m.shaderType == GdShaderType::Sky) s += " + float4(AVER_CUSTOM_COLOR, 0.0)";
         s += ";\n}\n";
     } else {
         s += "[numthreads(1, 1, 1)] void CSMain() {\n";
@@ -720,7 +720,7 @@ static std::vector<StageBuild> buildStages(const GdShaderModule& m, std::string&
         StageBuild b;
         b.hlsl = gdShaderEmitHlsl(m, opt);
         if (!b.hlsl.ok) { why += "emit failed: " + b.hlsl.error + "\n" + diagText(b.hlsl.diags); return; }
-        b.source = std::string(noDeriv ? "#define AVER_GD_NO_DERIVATIVES\n" : "") + gdShaderHlslLibrary() + hookPrelude(b.hlsl) + b.hlsl.source + entrySource(m, b.hlsl, st);
+        b.source = std::string(noDeriv ? "#define AVER_CUSTOM_NO_DERIVATIVES\n" : "") + gdShaderHlslLibrary() + hookPrelude(b.hlsl) + b.hlsl.source + entrySource(m, b.hlsl, st);
         b.entry = entry;
         b.target = target;
         b.valid = true;
@@ -1210,7 +1210,7 @@ static void testHlsl() {
         check(!stages.empty() && why.empty(), std::string(sh.name) + ": HLSL emitted" + (why.empty() ? "" : " -- " + why));
         for (const StageBuild& b : stages) {
             std::string err;
-            if (std::getenv("AVER_GD_DUMP")) writeDump(std::string(sh.name) + "_" + b.target, b.source);   // inspect what was compiled
+            if (std::getenv("AVER_CUSTOM_DUMP")) writeDump(std::string(sh.name) + "_" + b.target, b.source);   // inspect what was compiled
             if (haveDxil) {
                 const bool ok = dxil.compile(b.source, b.entry, b.target, "", err);
                 if (!ok) AVER_ERROR("{}\n--- dump: {}", err, writeDump(std::string(sh.name) + "_" + b.target + "_dxil", b.source));
@@ -1230,7 +1230,7 @@ static void testRobustness() {
     AVER_INFO("=== robustness ===");
     int ran = 0, okCount = 0, silentFails = 0;
     auto run = [&](const std::string& src) {
-        if (std::getenv("AVER_GD_TRACE")) { std::fprintf(stderr, "TRACE run %d len %zu head '%.60s'\n", ran, src.size(), src.c_str()); std::fflush(stderr); }
+        if (std::getenv("AVER_CUSTOM_TRACE")) { std::fprintf(stderr, "TRACE run %d len %zu head '%.60s'\n", ran, src.size(), src.c_str()); std::fflush(stderr); }
         GdShaderModule m = compile(src);
         ++ran;
         if (m.ok) {
@@ -1381,9 +1381,9 @@ static void testHostileAndMacros() {
     // asinh must stay finite and odd for large negative arguments
     {
         const std::string lib = gdShaderHlslLibrary();
-        const usize at = lib.find("float gd_asinh(float x)");
+        const usize at = lib.find("float emb_asinh(float x)");
         const std::string body = at == std::string::npos ? std::string() : lib.substr(at, lib.find('}', at) - at);
-        check(body.find("abs(x)") != std::string::npos && body.find("sign(x)") != std::string::npos, "gd_asinh works on |x| and restores the sign: " + body);
+        check(body.find("abs(x)") != std::string::npos && body.find("sign(x)") != std::string::npos, "emb_asinh works on |x| and restores the sign: " + body);
     }
 
     // the same include bomb at the default depth (2^25 expansions without a budget); last because it is the slow one when the budget is missing
@@ -1416,7 +1416,7 @@ static void testEmittedText() {
         check(r.ok && has(r, "mul(l_a, l_a)"), "mat * mat is mul(rhs, lhs)");
         check(has(r, "mul(((float3)(1.0)), l_a)"), "mat * vec is mul(vec, mat)");
         check(has(r, "mul(l_a, ((float3)(1.0)))"), "vec * mat is mul(mat, vec)");
-        check(has(r, "gd_mat3_diag("), "mat3(float) is the diagonal helper");
+        check(has(r, "emb_mat3_diag("), "mat3(float) is the diagonal helper");
     }
     {
         const GdHlslResult r = emit("vec3 a = vec3(1.0); bool e = a == vec3(0.0); bool n = a != vec3(0.0); float f = 1.0; bool z = f == 1.0;");
@@ -1427,15 +1427,15 @@ static void testEmittedText() {
         const GdHlslResult r = emit("ALBEDO = vec3(1.0); float t = TIME + PI;");
         bool albedoWritten = false, timeRead = false;
         for (const GdHookUse& h : r.hooks) {
-            if (h.macro == "AVER_GD_ALBEDO" && h.written && !h.read) albedoWritten = true;
-            if (h.macro == "AVER_GD_TIME" && h.read && !h.written) timeRead = true;
+            if (h.macro == "AVER_CUSTOM_ALBEDO" && h.written && !h.read) albedoWritten = true;
+            if (h.macro == "AVER_CUSTOM_TIME" && h.read && !h.written) timeRead = true;
         }
         check(albedoWritten && timeRead, "hooks are listed with read / write use");
-        check(!hasHook(r, "AVER_GD_PI") && has(r, "3.14159265358979"), "PI is a literal, not a hook");
+        check(!hasHook(r, "AVER_CUSTOM_PI") && has(r, "3.14159265358979"), "PI is a literal, not a hook");
     }
     {
         const GdHlslResult r = emit("float x = fract(inversesqrt(mod(1.5, 1.0))) + sign(0.3) + mix(0.0, 1.0, 0.5) + float(atan(1.0, 2.0) > 0.0);");
-        check(has(r, "frac(rsqrt(gd_mod(") && has(r, "gd_sign(") && has(r, "gd_mix(") && has(r, "atan2("), "GLSL names map to HLSL intrinsics and helpers");
+        check(has(r, "frac(rsqrt(emb_mod(") && has(r, "emb_sign(") && has(r, "emb_mix(") && has(r, "atan2("), "GLSL names map to HLSL intrinsics and helpers");
     }
     {
         const GdHlslResult r = emit("float f = 0.0; int i = 2; uint u = 3u; bool b = true; f = max(f, 1.0); vec2 v = max(vec2(1.0), 0.5);");
@@ -1477,10 +1477,10 @@ static void testEmittedText() {
         vOnly.processorMask = gdStageBit(GdProcessor::Vertex);
         const GdHlslResult rv = gdShaderEmitHlsl(m, vOnly);
         bool anyAlbedo = false;
-        for (const GdHookUse& h : rv.hooks) anyAlbedo = anyAlbedo || h.macro == "AVER_GD_ALBEDO";
+        for (const GdHookUse& h : rv.hooks) anyAlbedo = anyAlbedo || h.macro == "AVER_CUSTOM_ALBEDO";
         check(rv.ok && rv.entries.size() == 1 && !anyAlbedo, "a vertex-only emit has no fragment hooks");
     }
-    check(std::string(gdShaderHlslLibrary()).find("gd_inverse") != std::string::npos, "the helper library is available");
+    check(std::string(gdShaderHlslLibrary()).find("emb_inverse") != std::string::npos, "the helper library is available");
 }
 
 // `GodotShaderTest <file.gdshader>` compiles one file, prints its diagnostics and the HLSL (a debugging aid; the test itself takes no arguments).
@@ -1517,7 +1517,7 @@ static int printHooks() {
             const std::string name = v[i].name;
             const bool lit = name == "PI" || name == "TAU" || name == "E";
             std::printf("| `%s` | %s | %s | %s | %s |\n", v[i].name, gdBaseName(v[i].type), v[i].access == GdAccess::In ? "in" : v[i].access == GdAccess::Out ? "out" : "inout",
-                        where.c_str(), lit ? "(literal)" : ("`AVER_GD_" + name + "`").c_str());
+                        where.c_str(), lit ? "(literal)" : ("`AVER_CUSTOM_" + name + "`").c_str());
         }
     }
     return 0;
@@ -1547,7 +1547,7 @@ static int printFunctions() {
 int main(int argc, char** argv) {
     if (argc > 1 && std::string(argv[1]) == "--hooks") return printHooks();
     if (argc > 1 && std::string(argv[1]) == "--functions") return printFunctions();
-    // SH2: the engine ships the helper library as modules/render.pbr/shaders/material_godot_lib.hlsl (GodotShaderMaterialTest compares the two).
+    // SH2: the engine ships the helper library as modules/render.pbr/shaders/material_embedded_lib.hlsl (GodotShaderMaterialTest compares the two).
     if (argc > 1 && std::string(argv[1]) == "--library") { std::fputs(gdShaderHlslLibrary(), stdout); return 0; }
     if (argc > 1) return compileOne(argv[1]);
     testPreprocessor();

@@ -1,6 +1,6 @@
 // GodotShaderEnvTest -- Fabric G6 SH3: Godot sky, fog and particles shaders, checked headless.
 //
-// Part 1 is plain logic: the front-end's preparation (uniform registers, unbound samplers, the report), the GodotEnvShader graph node round trip, the library
+// Part 1 is plain logic: the front-end's preparation (uniform registers, unbound samplers, the report), the EmbeddedHlslEnv graph node round trip, the library
 // rename, the sky splice marker, and the fog-volume shape word.
 // Part 2 compiles the engine's real translation units with DXC, to DXIL and SPIR-V: Voxi (shared prelude + the sky spliced in + material prelude + voxi.hlsl) for
 // the background pass, the scene pixel shader, ray-driven mode and the compute stages; the froxel fog compute passes with fog shaders; and the GPU particle
@@ -12,7 +12,7 @@
 #include "aver/core/FogVolume.hpp"
 #include "aver/core/Log.hpp"
 #include "aver/formats/OcGraph.hpp"
-#include "aver/formats/OcGraphGodot.hpp"
+#include "aver/formats/OcGraphHlsl.hpp"
 #include "aver/formats/godot/GodotScene.hpp"
 #include "aver/formats/godot/GodotShaderEnv.hpp"
 #include "aver/formats/godot/GodotVisualShader.hpp"
@@ -21,7 +21,7 @@
 #include "aver/platform/FileSystem.hpp"
 #include "aver/rhi/DxcApi.hpp"
 #include "aver/rhi/DxcShaderInclude.hpp"
-#include "aver/rhi/GodotEnvPrograms.hpp"
+#include "aver/rhi/CustomEnvPrograms.hpp"
 #include "aver/rhi/ShaderFiles.hpp"
 
 #include <algorithm>
@@ -144,8 +144,8 @@ static GdEnvShader prepare(const char* src, const char* name) {
     return s;
 }
 
-static rhi::GodotEnvProgram programOf(const GdEnvShader& s) {
-    rhi::GodotEnvProgram p;
+static rhi::CustomEnvProgram programOf(const GdEnvShader& s) {
+    rhi::CustomEnvProgram p;
     p.name = s.name;
     p.ns = s.ns;
     p.source = s.source;
@@ -231,11 +231,11 @@ struct Row {
 // The Voxi translation unit as VoxiRenderer's voxiShaderPrelude composes it, then voxi.hlsl. skyProgram empty = no Godot sky.
 std::string voxiTu(const std::string& skyProgram) {
     auto& reg = pbr::materialGraphs();
-    std::string s = skyProgram.empty() ? std::string() : std::string("#define AVER_GD_SKY 1\n");
-    if (reg.hasGodotVaryings()) s += reg.vsOutMembersDefine();
-    s += skyProgram.empty() ? std::string(rhi::sharedShaderPrelude()) : rhi::spliceGodotSky(rhi::sharedShaderPrelude(), skyProgram);
+    std::string s = skyProgram.empty() ? std::string() : std::string("#define AVER_CUSTOM_SKY 1\n");
+    if (reg.hasEmbeddedVaryings()) s += reg.vsOutMembersDefine();
+    s += skyProgram.empty() ? std::string(rhi::sharedShaderPrelude()) : rhi::spliceCustomSky(rhi::sharedShaderPrelude(), skyProgram);
     if (!reg.hlsl().empty()) s += "\n#define AVER_MATERIAL_GRAPH 1\n";
-    if (reg.hasGodotShaders()) s += "#define AVER_GD_FX_STOCK 1\n";
+    if (reg.hasEmbeddedShaders()) s += "#define AVER_CUSTOM_FX_STOCK 1\n";
     s += pbr::materialShaderPrelude();
     s += reg.hlsl();
     s += rhi::shaderFile("voxi.hlsl");
@@ -315,7 +315,7 @@ int main() {
 
     // the graph node
     {
-        fmt::GodotEnvPart p;
+        fmt::EmbeddedHlslEnvPart p;
         p.kind = "particles";
         p.name = "Rain #1 100%";
         p.ns = par.ns;
@@ -329,16 +329,16 @@ int main() {
         p.source = par.source + "\n// tail # with % and \t tab and CR\r\n";
         for (int i = 0; i < 300; ++i) p.source += "float4 x" + std::to_string(i) + " = float4(1.0, 2.0, 3.0, 4.0); // a # comment, 100%\n";
         fmt::OcGraphData g;
-        fmt::packGodotEnvShader(p, g);
+        fmt::packEmbeddedHlslEnv(p, g);
         const std::string text = fmt::writeOcgraph(g);
-        check(text.find("DOMAIN godotenv") != std::string::npos && text.find("GodotEnvShader") != std::string::npos, "the packed graph names its domain and node");
-        check(fmt::ocGraphDomainOf(g) == fmt::OcGraphDomain::Unknown, "the godotenv domain is one the gameplay and material sweeps skip");
+        check(text.find("DOMAIN customenv") != std::string::npos && text.find("EmbeddedHlslEnv") != std::string::npos && text.find("GodotEnvShader") == std::string::npos, "the packed graph names its domain and node");
+        check(fmt::ocGraphDomainOf(g) == fmt::OcGraphDomain::Unknown, "the customenv domain is one the gameplay and material sweeps skip");
         fmt::OcGraphData back;
         std::string err;
         const bool parsed = fmt::parseOcgraph(text, back, &err);
         check(parsed, "the packed graph parses (" + err + ")");
-        fmt::GodotEnvPart q;
-        const bool un = parsed && fmt::unpackGodotEnvShader(back, q, &err);
+        fmt::EmbeddedHlslEnvPart q;
+        const bool un = parsed && fmt::unpackEmbeddedHlslEnv(back, q, &err);
         check(un, "the node unpacks (" + err + ")");
         check(un && q.kind == "particles" && q.name == p.name && q.ns == p.ns && q.regs == p.regs && q.hasStart && q.hasProcess, "kind, name, ns, registers and entries survive");
         check(un && q.source == p.source, "a source with spaces, '#', '%', tabs and CRs survives byte for byte");
@@ -349,33 +349,33 @@ int main() {
         g2.nodes[0].extraTokens.push_back("kind=bogus");
         fmt::OcGraphData bad = g;
         for (std::string& t : bad.nodes[0].extraTokens) if (t.rfind("kind=", 0) == 0) t = "kind=bogus";
-        check(!fmt::unpackGodotEnvShader(bad, q, &err), "an unknown kind is refused");
+        check(!fmt::unpackEmbeddedHlslEnv(bad, q, &err), "an unknown kind is refused");
         fmt::OcGraphData mat;
-        check(!fmt::ocGraphHasGodotEnvShader(mat) && fmt::ocGraphHasGodotEnvShader(g), "ocGraphHasGodotEnvShader tells the node from none");
+        check(!fmt::ocGraphHasEmbeddedHlslEnv(mat) && fmt::ocGraphHasEmbeddedHlslEnv(g), "ocGraphHasEmbeddedHlslEnv tells the node from none");
     }
 
     // the rename
     {
-        const std::string r = rhi::godotEnvRename("float4 gd_texture(GdSampler2D s) { return gdSlotSample(s.slot, s.m, uv, 0.0) + gdr_x + gdrSlotSize(1, 2) + ge1_gdf_mix + AVER_GD_TIME + GD_SMP(a,b,c) + GdS_Foo; }\n#ifndef AVER_GD_LIBRARY\n");
-        check(r.find("gde_texture") != std::string::npos && r.find("GdESampler2D") != std::string::npos && r.find("gdeSlotSample") != std::string::npos &&
-              r.find("gder_x") != std::string::npos && r.find("gderSlotSize") != std::string::npos && r.find("GDE_SMP") != std::string::npos && r.find("GdES_Foo") != std::string::npos &&
-              r.find("AVER_GDE_LIBRARY") != std::string::npos, "the library names are renamed (gd_ gdr_ Gd gdSlot gdrSlot GD_SMP, the guard)");
-        check(r.find("ge1_gdf_mix") != std::string::npos && r.find("AVER_GD_TIME") != std::string::npos, "prefixed user names and the hook macros are left alone");
+        const std::string r = rhi::customEnvRename("float4 emb_texture(EmbSampler2D s) { return embSlotSample(s.slot, s.m, uv, 0.0) + embr_x + embrSlotSize(1, 2) + ge1_gdf_mix + AVER_CUSTOM_TIME + EMB_SMP(a,b,c) + EmbS_Foo; }\n#ifndef AVER_CUSTOM_LIBRARY\n");
+        check(r.find("cenv_texture") != std::string::npos && r.find("CEnvSampler2D") != std::string::npos && r.find("cenvSlotSample") != std::string::npos &&
+              r.find("cenvr_x") != std::string::npos && r.find("cenvrSlotSize") != std::string::npos && r.find("CENV_SMP") != std::string::npos && r.find("CEnvS_Foo") != std::string::npos &&
+              r.find("AVER_CENV_LIBRARY") != std::string::npos, "the library names are renamed (emb_ embr_ Emb embSlot embrSlot EMB_SMP, the guard)");
+        check(r.find("ge1_gdf_mix") != std::string::npos && r.find("AVER_CUSTOM_TIME") != std::string::npos, "prefixed user names and the hook macros are left alone");
     }
 
     // the sky splice
     {
         const std::string prelude = rhi::sharedShaderPrelude();
         usize count = 0;
-        for (usize at = prelude.find(rhi::kGodotSkyMarker); at != std::string::npos; at = prelude.find(rhi::kGodotSkyMarker, at + 1)) ++count;
+        for (usize at = prelude.find(rhi::kCustomSkyMarker); at != std::string::npos; at = prelude.find(rhi::kCustomSkyMarker, at + 1)) ++count;
         check(count == 1, "the shared prelude carries the sky splice marker exactly once");
-        check(rhi::spliceGodotSky(prelude, std::string()) == prelude, "splicing an empty program leaves the prelude untouched");
-        const std::string prog = rhi::godotSkyProgram(programOf(sky));
-        check(!prog.empty() && prog.find("averGdSky") != std::string::npos && prog.find("gde_mix") != std::string::npos && prog.find(sky.ns + "main_sky") != std::string::npos,
+        check(rhi::spliceCustomSky(prelude, std::string()) == prelude, "splicing an empty program leaves the prelude untouched");
+        const std::string prog = rhi::customSkyProgram(programOf(sky));
+        check(!prog.empty() && prog.find("averCustomSky") != std::string::npos && prog.find("cenv_mix") != std::string::npos && prog.find(sky.ns + "main_sky") != std::string::npos,
               "the sky program is composed (hooks, renamed library, the converted source, the entry)");
-        const std::string spliced = rhi::spliceGodotSky(prelude, prog);
-        check(spliced.find(rhi::kGodotSkyMarker) == std::string::npos && spliced.size() > prelude.size() + prog.size() / 2, "the splice replaces the marker line with the program");
-        check(prog.find("#undef AVER_GD_EYEDIR") != std::string::npos && prog.find("#undef ddx") != std::string::npos, "the program lifts its macros again");
+        const std::string spliced = rhi::spliceCustomSky(prelude, prog);
+        check(spliced.find(rhi::kCustomSkyMarker) == std::string::npos && spliced.size() > prelude.size() + prog.size() / 2, "the splice replaces the marker line with the program");
+        check(prog.find("#undef AVER_CUSTOM_EYEDIR") != std::string::npos && prog.find("#undef ddx") != std::string::npos, "the program lifts its macros again");
     }
 
     // the fog-volume shape word
@@ -399,7 +399,7 @@ int main() {
 
     // ---------------------------------------------------------------------------------------------------------------- part 1b: VisualShader
     {
-        const fs::path dir = fs::path(AVER_REPO_ROOT) / "tests" / "fabric" / "data" / "EnvShaderGame" / "visual";
+        const fs::path dir = fs::path(AVER_FABRIC_DATA) / "EnvShaderGame" / "visual";
         const auto load = [&](const char* name, GdVisualShaderResult& out) {
             GodotResource res;
             GodotDiagnostics diag;
@@ -537,30 +537,30 @@ int main() {
     }
     // The register-count bound must not wrap.
     {
-        fmt::GodotEnvPart p;
+        fmt::EmbeddedHlslEnvPart p;
         p.kind = "sky";
         p.name = "wrap";
         p.ns = "ge0_";
         p.source = "void ge0_main() {}\n";
         fmt::OcGraphData g;
-        fmt::packGodotEnvShader(p, g);
+        fmt::packEmbeddedHlslEnv(p, g);
         for (std::string& t : g.nodes[0].extraTokens) {
             if (t.rfind("regs=", 0) == 0) t = "regs=4294967295";
             if (t.rfind("gregs=", 0) == 0) t = "gregs=1";
         }
-        fmt::GodotEnvPart q;
+        fmt::EmbeddedHlslEnvPart q;
         std::string err;
-        check(!fmt::unpackGodotEnvShader(g, q, &err), "a register count that wraps the u32 sum is refused");
+        check(!fmt::unpackEmbeddedHlslEnv(g, q, &err), "a register count that wraps the u32 sum is refused");
         for (std::string& t : g.nodes[0].extraTokens) {
             if (t.rfind("regs=", 0) == 0) t = "regs=-1";
             if (t.rfind("gregs=", 0) == 0) t = "gregs=0";
         }
-        check(!fmt::unpackGodotEnvShader(g, q, &err), "a negative register count is refused");
+        check(!fmt::unpackEmbeddedHlslEnv(g, q, &err), "a negative register count is refused");
         for (std::string& t : g.nodes[0].extraTokens) {
             if (t.rfind("regs=", 0) == 0) t = "regs=10";
             if (t.rfind("gregs=", 0) == 0) t = "gregs=6";
         }
-        check(fmt::unpackGodotEnvShader(g, q, &err) && q.defaults.size() == 64, "sixteen registers in all still unpack");
+        check(fmt::unpackEmbeddedHlslEnv(g, q, &err) && q.defaults.size() == 64, "sixteen registers in all still unpack");
     }
 
     // ---------------------------------------------------------------------------------------------------------------- part 2: DXC
@@ -580,10 +580,10 @@ int main() {
     if (!dxil.ok() && !spirv.ok()) {
         AVER_WARN("  SKIP  no DXC compiler found next to the test or in third_party/dxc-spirv: the translation-unit compiles are skipped");
     } else {
-        const std::string skyProg = rhi::godotSkyProgram(programOf(sky));
-        const rhi::GodotEnvProgram fogProg = programOf(fog), parProg = programOf(par);
-        const std::string fogText = rhi::godotFogProgram({&fogProg});
-        const std::string parText = rhi::godotParticlesProgram(parProg);
+        const std::string skyProg = rhi::customSkyProgram(programOf(sky));
+        const rhi::CustomEnvProgram fogProg = programOf(fog), parProg = programOf(par);
+        const std::string fogText = rhi::customFogProgram({&fogProg});
+        const std::string parText = rhi::customParticlesProgram(parProg);
         check(!fogText.empty() && !parText.empty() && !skyProg.empty(), "the three programs compose");
 
         constexpr u32 kVoxiSrvCount = 25, kMaterialSamplerSlot = 2, kRtTextureCapacity = 4096;
@@ -594,7 +594,7 @@ int main() {
 
         std::vector<Row> rows;
         const std::string voxiSky = voxiTu(skyProg);
-        rows.push_back({"Voxi PSGodotSky (the background pass)", voxiSky, "PSGodotSky", 'p', 65, vx("")});
+        rows.push_back({"Voxi PSCustomSky (the background pass)", voxiSky, "PSCustomSky", 'p', 65, vx("")});
         rows.push_back({"Voxi PSMainVoxi raster, sky ambient + reflections", voxiSky, "PSMainVoxi", 'p', 65, vx("AVER_HAIR_SHADING=1")});
         rows.push_back({"Voxi PSMainVoxi RT, sky", voxiSky, "PSMainVoxi", 'p', 65, vx("AVER_RT=1")});
         rows.push_back({"Voxi PSRayDriven single pass, sky", voxiSky, "PSRayDriven", 'p', 65, vx(bindless + singlePass)});
@@ -636,8 +636,8 @@ void fragment() { vec4 a = texture(albedo_tex, UV); ALBEDO = a.rgb * tint.rgb; A
         // Two shaders in one table.
         {
             const GdEnvShader fog2 = prepare("shader_type fog;\nuniform float k = 3.0;\nvoid fog() { DENSITY = k * UVW.z; ALBEDO = vec3(1.0, 0.0, 0.0); }\n", "SecondFog");
-            const rhi::GodotEnvProgram fp2 = programOf(fog2);
-            const std::string two = std::string(rhi::sharedShaderPrelude()) + rhi::godotFogProgram({&fogProg, &fp2}) + rhi::shaderFile("voxi_froxel.hlsl");
+            const rhi::CustomEnvProgram fp2 = programOf(fog2);
+            const std::string two = std::string(rhi::sharedShaderPrelude()) + rhi::customFogProgram({&fogProg, &fp2}) + rhi::shaderFile("voxi_froxel.hlsl");
             check(fog2.ok && !two.empty(), "two fog shaders compose into one table");
             rows.push_back({"Froxel CSFroxelScatter two fog shaders", two, "CSFroxelScatter", 'c', 60, "AVER_RT=0;AVER_FOG_VOLUMES=1;AVER_FOG_SHADERS=1"});
         }
@@ -646,8 +646,8 @@ void fragment() { vec4 a = texture(albedo_tex, UV); ALBEDO = a.rgb * tint.rgb; A
         const std::string sim = rhi::shaderFile("particles_sim.hlsl");
         check(!sim.empty(), "particles_sim.hlsl is staged");
         const std::string simGd = parText + sim;
-        rows.push_back({"Particles CSSpawn godot", simGd, "CSSpawn", 'c', 60, "AVER_GD_PARTICLES=1"});
-        rows.push_back({"Particles CSUpdate godot", simGd, "CSUpdate", 'c', 60, "AVER_GD_PARTICLES=1"});
+        rows.push_back({"Particles CSSpawn godot", simGd, "CSSpawn", 'c', 60, "AVER_CUSTOM_PARTICLES=1"});
+        rows.push_back({"Particles CSUpdate godot", simGd, "CSUpdate", 'c', 60, "AVER_CUSTOM_PARTICLES=1"});
         rows.push_back({"Particles CSSpawn (default twin)", sim, "CSSpawn", 'c', 60, ""});
         rows.push_back({"Particles CSUpdate (default twin)", sim, "CSUpdate", 'c', 60, ""});
         rows.push_back({"Particles CSBegin (default twin)", sim, "CSBegin", 'c', 60, ""});
@@ -655,10 +655,10 @@ void fragment() { vec4 a = texture(albedo_tex, UV); ALBEDO = a.rgb * tint.rgb; A
             const GdEnvShader startOnly = prepare("shader_type particles;\nvoid start() { VELOCITY = vec3(0.0, 1.0, 0.0); COLOR = vec4(1.0); }\n", "StartOnly");
             const GdEnvShader procOnly = prepare("shader_type particles;\nuniform float s = 1.0;\nvoid process() { TRANSFORM[3].y += s * DELTA; }\n", "ProcOnly");
             check(startOnly.ok && procOnly.ok, "start()-only and process()-only particles shaders prepare");
-            rows.push_back({"Particles CSSpawn godot, start() only", rhi::godotParticlesProgram(programOf(startOnly)) + sim, "CSSpawn", 'c', 60, "AVER_GD_PARTICLES=1"});
-            rows.push_back({"Particles CSUpdate godot, start() only", rhi::godotParticlesProgram(programOf(startOnly)) + sim, "CSUpdate", 'c', 60, "AVER_GD_PARTICLES=1"});
-            rows.push_back({"Particles CSSpawn godot, process() only", rhi::godotParticlesProgram(programOf(procOnly)) + sim, "CSSpawn", 'c', 60, "AVER_GD_PARTICLES=1"});
-            rows.push_back({"Particles CSUpdate godot, process() only", rhi::godotParticlesProgram(programOf(procOnly)) + sim, "CSUpdate", 'c', 60, "AVER_GD_PARTICLES=1"});
+            rows.push_back({"Particles CSSpawn godot, start() only", rhi::customParticlesProgram(programOf(startOnly)) + sim, "CSSpawn", 'c', 60, "AVER_CUSTOM_PARTICLES=1"});
+            rows.push_back({"Particles CSUpdate godot, start() only", rhi::customParticlesProgram(programOf(startOnly)) + sim, "CSUpdate", 'c', 60, "AVER_CUSTOM_PARTICLES=1"});
+            rows.push_back({"Particles CSSpawn godot, process() only", rhi::customParticlesProgram(programOf(procOnly)) + sim, "CSSpawn", 'c', 60, "AVER_CUSTOM_PARTICLES=1"});
+            rows.push_back({"Particles CSUpdate godot, process() only", rhi::customParticlesProgram(programOf(procOnly)) + sim, "CSUpdate", 'c', 60, "AVER_CUSTOM_PARTICLES=1"});
         }
 
         int compiled = 0;

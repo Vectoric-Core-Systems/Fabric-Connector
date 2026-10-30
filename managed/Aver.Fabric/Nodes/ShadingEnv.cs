@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // Sky, fog and particles shaders (docs/plans/fabric/G6_SHADERS.md, SH3), VisualShader, and GPUParticles3D.
 //
-// The converter wrote each sky / fog / particles ShaderMaterial as Shaders/<name>.<kind>.ocgraph (DOMAIN godotenv) with the material's shader_parameter values baked
-// into its register table. Loading that path gives a ShaderMaterial in "environment" form: registering it hands the engine the HLSL (framework_godotenv_abi.h) and
+// The converter wrote each sky / fog / particles ShaderMaterial as Shaders/<name>.<kind>.ocgraph (DOMAIN customenv) with the material's shader_parameter values baked
+// into its register table. Loading that path gives a ShaderMaterial in "environment" form: registering it hands the engine the HLSL (framework_customenv_abi.h) and
 // set_shader_parameter repacks the register table the way the converter did. The engine side: a sky shader is baked into Voxi's scene shaders (a changed value
 // recompiles them), a fog shader is read by every FogVolume that names it (registers ride the froxel constants), a particles shader's uniforms are the effect's
 // user parameters (reg0, reg1, ...: colour-kind, four floats each).
@@ -16,17 +16,17 @@ namespace Aver.Fabric;
 /// <summary>Where converted environment shaders are registered. The default talks to the engine; tests install a recording one.</summary>
 internal interface IEnvShaderBackend
 {
-    bool Register(GodotEnvKind kind, string name, string graphText);
-    bool SetRegisters(GodotEnvKind kind, string name, float[] registers);
+    bool Register(CustomEnvKind kind, string name, string graphText);
+    bool SetRegisters(CustomEnvKind kind, string name, float[] registers);
     bool UseSky(string? name);
 }
 
 internal sealed class NativeEnvShaderBackend : IEnvShaderBackend
 {
     // A host without the engine's Aver.Framework library (a headless run) simply has nothing to register with.
-    public bool Register(GodotEnvKind kind, string name, string graphText) { try { return GodotEnv.Register(kind, name, graphText); } catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; } }
-    public bool SetRegisters(GodotEnvKind kind, string name, float[] registers) { try { return GodotEnv.SetRegisters(kind, name, registers); } catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; } }
-    public bool UseSky(string? name) { try { return GodotEnv.UseSky(name); } catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; } }
+    public bool Register(CustomEnvKind kind, string name, string graphText) { try { return CustomEnv.Register(kind, name, graphText); } catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; } }
+    public bool SetRegisters(CustomEnvKind kind, string name, float[] registers) { try { return CustomEnv.SetRegisters(kind, name, registers); } catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; } }
+    public bool UseSky(string? name) { try { return CustomEnv.UseSky(name); } catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; } }
 }
 
 internal static class EnvShaderBackend
@@ -36,13 +36,13 @@ internal static class EnvShaderBackend
 
 public partial class ShaderMaterial
 {
-    private GodotEnvKind? _envKind;
+    private CustomEnvKind? _envKind;
     private string _envName = "";
     private string _envGraphText = "";
     private bool _envRegistered;
 
     /// <summary>"sky", "fog" or "particles" for a converted environment shader, else empty.</summary>
-    public string EnvironmentKind => _envKind switch { GodotEnvKind.Sky => "sky", GodotEnvKind.Fog => "fog", GodotEnvKind.Particles => "particles", _ => "" };
+    public string EnvironmentKind => _envKind switch { CustomEnvKind.Sky => "sky", CustomEnvKind.Fog => "fog", CustomEnvKind.Particles => "particles", _ => "" };
 
     /// <summary>The shader's name in the engine's registry (the graph's name).</summary>
     internal string EnvName => _envName;
@@ -83,16 +83,17 @@ public partial class ShaderMaterial
     {
         string text;
         try { text = File.ReadAllText(file); } catch (IOException) { return null; }
-        if (!text.Contains("DOMAIN godotenv", StringComparison.Ordinal)) return null;
+        // "DOMAIN godotenv" is the spelling graphs written before the rename carry.
+        if (!text.Contains("DOMAIN customenv", StringComparison.Ordinal) && !text.Contains("DOMAIN godotenv", StringComparison.Ordinal)) return null;
         string? kind = ReadAttribute(text, "kind");
-        GodotEnvKind? k = kind switch { "sky" => GodotEnvKind.Sky, "fog" => GodotEnvKind.Fog, "particles" => GodotEnvKind.Particles, _ => null };
+        CustomEnvKind? k = kind switch { "sky" => CustomEnvKind.Sky, "fog" => CustomEnvKind.Fog, "particles" => CustomEnvKind.Particles, _ => null };
         if (k is null) return null;
         string name = System.IO.Path.GetFileNameWithoutExtension(System.IO.Path.GetFileNameWithoutExtension(file));
         var m = new ShaderMaterial { _envKind = k, _envName = name, _envGraphText = text, _engineName = name };
         m._regs = ReadRegisterWords(text).ToArray();
         string graphKey = resPath.StartsWith("res://", StringComparison.Ordinal) ? resPath["res://".Length..] : resPath;
         if (Layouts().TryGetValue(graphKey, out ShaderLayout? layout) || Layouts().TryGetValue("Shaders/" + System.IO.Path.GetFileName(file), out layout))
-            m.Shader = new Shader { Layout = layout, SourcePath = layout.Source, ResourcePath = layout.Graph, ModeValue = k == GodotEnvKind.Sky ? Shader.Mode.Sky : k == GodotEnvKind.Fog ? Shader.Mode.Fog : Shader.Mode.Particles };
+            m.Shader = new Shader { Layout = layout, SourcePath = layout.Source, ResourcePath = layout.Graph, ModeValue = k == CustomEnvKind.Sky ? Shader.Mode.Sky : k == CustomEnvKind.Fog ? Shader.Mode.Fog : Shader.Mode.Particles };
         else
             Aver.Scripting.Log.Warn($"[Fabric] the shader graph '{resPath}' is not in Fabric/shaders.json; set_shader_parameter will have no effect");
         lock (s_live) s_live.Add(new WeakReference<ShaderMaterial>(m));
@@ -115,7 +116,7 @@ public partial class ShaderMaterial
     /// <summary>Makes this sky shader the sky (Sky.sky_material set on the current Environment). False for another kind.</summary>
     internal bool UseAsSky()
     {
-        if (_envKind != GodotEnvKind.Sky || !RegisterWithEngine()) return false;
+        if (_envKind != CustomEnvKind.Sky || !RegisterWithEngine()) return false;
         return EnvShaderBackend.Current.UseSky(_envName);
     }
 

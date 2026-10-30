@@ -7,6 +7,18 @@
 
 #include <algorithm>
 
+#if defined(_WIN32)
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
+#else
+#  include <dlfcn.h>
+#endif
+
 using namespace aver::gdext;
 
 namespace {
@@ -74,13 +86,43 @@ void listenTrampoline(void* user, HostObject* from, const char* signal, const Va
     c->fn(c->user, from->handle, signal, buf.data(), int32_t(buf.size()));
 }
 
+// The directory of the library this code is in (the executable's, when it is linked statically).
+std::string moduleDir() {
+#if defined(_WIN32)
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(&moduleDir), &module))
+        return {};
+    wchar_t buf[MAX_PATH * 4];
+    const DWORD n = GetModuleFileNameW(module, buf, DWORD(sizeof(buf) / sizeof(buf[0])));
+    if (n == 0 || n >= sizeof(buf) / sizeof(buf[0])) return {};
+    const std::wstring w(buf, n);
+    const size_t slash = w.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return {};
+    const int len = WideCharToMultiByte(CP_UTF8, 0, w.data(), int(slash), nullptr, 0, nullptr, nullptr);
+    std::string out(size_t(len > 0 ? len : 0), '\0');
+    if (len > 0) WideCharToMultiByte(CP_UTF8, 0, w.data(), int(slash), out.data(), len, nullptr, nullptr);
+    return out;
+#else
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void*>(&moduleDir), &info) || !info.dli_fname) return {};
+    const std::string file = info.dli_fname;
+    const size_t slash = file.find_last_of('/');
+    return slash == std::string::npos ? std::string(".") : file.substr(0, slash);
+#endif
+}
+
+// extension_api.json: the extension's data/ folder (this library sits in <extension>/native/<platform>/), else beside the executable.
 void defaultApi() {
     if (g_apiTried || host().api.loaded) return;
     g_apiTried = true;
-    std::string path = aver::executableDir() + "/extension_api.json";
+    std::string path;
+    const std::string dir = moduleDir();
+    if (!dir.empty() && aver::fileExists(dir + "/../../data/extension_api.json")) path = dir + "/../../data/extension_api.json";
+    else path = aver::executableDir() + "/extension_api.json";
     std::string err;
     if (aver::fileExists(path)) loadApiDump(path, &err);
-    else logOnce("api-missing", "extension_api.json was not found beside the executable; method hashes are not checked");
+    else logOnce("api-missing", "extension_api.json was not found in the extension's data folder or beside the executable; method hashes are not checked");
 }
 
 } // namespace

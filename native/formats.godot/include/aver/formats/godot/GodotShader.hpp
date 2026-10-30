@@ -300,7 +300,7 @@ struct GdBuiltinSig {
     GdType ret;
     std::vector<GdBase> params;
     std::vector<bool> outParam;
-    const char* hlsl;       // how the HLSL emitter spells it: "" = same name, "gd_x" = library helper, "@x" = inline rewrite, "!" = unsupported
+    const char* hlsl;       // how the HLSL emitter spells it: "" = same name, "emb_x" = library helper, "@x" = inline rewrite, "!" = unsupported
 };
 // All overloads of `name` (empty when it is not a built-in function).
 std::vector<GdBuiltinSig> gdBuiltinOverloads(std::string_view name);
@@ -321,12 +321,12 @@ struct GdHlslOptions {
     // SH2. Prepended to every global name the emitter writes (functions, structs, constants, sampler constructors, varying members), so several
     // shaders can share one translation unit. Empty = the SH1 names.
     std::string namePrefix;
-    // SH2. When set, every global name (but not a varying member, which keeps `namePrefix`) is written NAMEMACRO(base) instead, e.g. `GDN(gdf_foo)`, and the
-    // entry functions `GDN(<entryPrefix>_fragment)`: the consumer defines GDN to paste a name space on, then includes the one source under several (raster
+    // SH2. When set, every global name (but not a varying member, which keeps `namePrefix`) is written NAMEMACRO(base) instead, e.g. `EMBN(gdf_foo)`, and the
+    // entry functions `EMBN(<entryPrefix>_fragment)`: the consumer defines EMBN to paste a name space on, then includes the one source under several (raster
     // and ray flavour of the engine's material shader).
     std::string nameMacro;
-    // SH2. Sampler uniforms become engine texture slots: `gdsm_<name>()` returns a slot-sampler value (`GdSampler2D { slot, m }` under
-    // AVER_GD_SLOT_SAMPLERS in the library) and no Texture / SamplerState global is declared. Only sampler2D is allowed. `samplerSlots` is one engine
+    // SH2. Sampler uniforms become engine texture slots: `gdsm_<name>()` returns a slot-sampler value (`EmbSampler2D { slot, m }` under
+    // AVER_CUSTOM_SLOT_SAMPLERS in the library) and no Texture / SamplerState global is declared. Only sampler2D is allowed. `samplerSlots` is one engine
     // slot per sampler uniform in declaration order. The mode word m: bit 0 nearest, bit 1 repeat, bit 2 mipmaps, bits 8-9 the colour
     // of an unbound texture (0 white, 1 black, 2 transparent, 3 flat normal: the hint_default_* / hint_normal hints).
     bool slotSamplers = false;
@@ -386,7 +386,7 @@ struct GdHlslResult {
     GdUniformBlock uniforms, instanceUniforms, globalUniforms;
     std::vector<GdTextureSlot> textures;
     std::vector<GdSamplerStateDesc> samplers;
-    std::vector<GdHookUse> hooks;               // every AVER_GD_* macro the source uses, deduplicated
+    std::vector<GdHookUse> hooks;               // every AVER_CUSTOM_* macro the source uses, deduplicated
     std::vector<std::string> entries;           // emitted processor function names ("AverGd_fragment", ...)
     std::vector<GdShaderDiag> diags;
 };

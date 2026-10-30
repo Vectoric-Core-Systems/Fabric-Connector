@@ -1,9 +1,11 @@
-# FormatsGodotTest -- the Godot text-format reader (modules/formats.godot) over the hand-written
+# FormatsGodotTest -- the Godot text-format reader (native/formats.godot) over the hand-written
 # fixtures in tests/fabric/data/. Core and Platform only: no device, no .NET, no engine.
 # Registered with ctest by the root aver_register_ctest_in walk (it ends in Test).
+set(AVER_FABRIC_TEST_DATA ${AVER_FABRIC_DIR}/tests/fabric/data)
+
 add_executable(FormatsGodotTest src/FormatsGodotTest.cpp)
 target_link_libraries(FormatsGodotTest PRIVATE Aver.Formats.Godot Aver.Platform Aver.Core)
-target_compile_definitions(FormatsGodotTest PRIVATE AVER_FABRIC_DATA="${CMAKE_SOURCE_DIR}/tests/fabric/data")
+target_compile_definitions(FormatsGodotTest PRIVATE AVER_FABRIC_DATA="${AVER_FABRIC_TEST_DATA}")
 set_target_properties(FormatsGodotTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -31,7 +33,7 @@ endif()
 
 # GodotShaderMaterialTest -- G6 SH2: a Godot spatial shader on an Aver material. The engine's own translation unit (shared prelude + material prelude + the
 # registry's generated code) is compiled with DXC to DXIL and SPIR-V, and the converter-side preparation (uniform table, sampler slots, render modes, the
-# report) and the GodotShader graph node are checked. No device, no window.
+# report) and the EmbeddedHlsl graph node are checked. No device, no window.
 if(TARGET Aver.Render.PBR.Materials)
   add_executable(GodotShaderMaterialTest src/GodotShaderMaterialTest.cpp)
   target_link_libraries(GodotShaderMaterialTest PRIVATE Aver.Formats.Godot Aver.Render.PBR.Materials Aver.Formats Aver.RHI Aver.Platform Aver.Core)
@@ -39,12 +41,12 @@ if(TARGET Aver.Render.PBR.Materials)
   set_target_properties(GodotShaderMaterialTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
-# GodotShaderEnvTest -- G6 SH3: Godot sky, fog and particles shaders. The front-end's preparation, the GodotEnvShader graph node, and the engine's real translation units
+# GodotShaderEnvTest -- G6 SH3: Godot sky, fog and particles shaders. The front-end's preparation, the EmbeddedHlslEnv graph node, and the engine's real translation units
 # (Voxi with the sky spliced into the shared prelude, the froxel fog passes with fog shaders, the GPU particle simulation with a particles shader) compiled with DXC to
 # DXIL and SPIR-V. No device, no window.
 if(TARGET Aver.Render.PBR.Materials)
   add_executable(GodotShaderEnvTest src/GodotShaderEnvTest.cpp)
   target_link_libraries(GodotShaderEnvTest PRIVATE Aver.Formats.Godot Aver.Render.PBR.Materials Aver.Formats Aver.RHI Aver.Platform Aver.Core)
-  target_compile_definitions(GodotShaderEnvTest PRIVATE AVER_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(GodotShaderEnvTest PRIVATE AVER_REPO_ROOT="${CMAKE_SOURCE_DIR}" AVER_FABRIC_DATA="${AVER_FABRIC_TEST_DATA}")
   set_target_properties(GodotShaderEnvTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()

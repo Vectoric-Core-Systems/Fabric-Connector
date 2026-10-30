@@ -47,8 +47,7 @@ public static class InputMap
     {
         var names = new List<string>();
         if (NodeHost.Current.IsEngine)
-            for (int i = 1, n = FwIn.aver_fw_action_count(); i <= n; i++)
-                if (InputAction.FromHandle(i) is { } a) names.Add(a.Name);
+            names.AddRange(Aver.Framework.Hosting.ExtensionHost.RegisteredActionNames());
         foreach (string k in s_actions.Keys) if (!names.Contains(k)) names.Add(k);
         return new Collections.Array<StringName>(names.Select(s => new StringName(s)));
     }

@@ -294,17 +294,10 @@ public partial class Node
     {
         if (_propsApplied) return;
         _propsApplied = true;
-        int n = Fw.aver_fw_props_count(Self.Handle);
-        var values = new List<(string Key, string Text)>();
-        for (int i = 0; i < n; i++)
-        {
-            string key = System.Runtime.InteropServices.Marshal.PtrToStringUTF8(Fw.aver_fw_props_name(Self.Handle, i)) ?? "";
-            string text = System.Runtime.InteropServices.Marshal.PtrToStringUTF8(Fw.aver_fw_props_value(Self.Handle, i)) ?? "";
-            values.Add((key, text));
-        }
+        var values = Aver.Framework.Hosting.ExtensionHost.ReadProperties(Self);
         ApplyValues(values);
         // The bridge writes [Editable] fields before OnBeginPlay; these values are already in, and the keys are not [Editable] names.
-        EditablesApplied = true;
+        Aver.Framework.Hosting.ExtensionHost.MarkEditablesApplied(this);
     }
 
     // The converter writes every Props value as Godot's text, so a string is quoted ("Crate"); a hand-written level may leave it bare.
@@ -446,7 +439,7 @@ public partial class Node
         {
             if (s_wrappers.TryGetValue(entity.Handle, out var wr) && wr.TryGetTarget(out Node? hit) && hit.IsAlive && hit.Self.Equals(entity)) return hit;
             Node3D w = NewWrapper(entity);
-            w.Self = entity;
+            Aver.Framework.Hosting.ExtensionHost.SetSelf(w, entity);
             w._name = entity.Name;
             w._insideTree = true;
             w._readyDone = true;
@@ -460,13 +453,7 @@ public partial class Node
     private static Node3D NewWrapper(Entity entity)
     {
         var values = new List<(string Key, string Text)>();
-        try
-        {
-            int n = Fw.aver_fw_props_count(entity.Handle);
-            for (int i = 0; i < n; i++)
-                values.Add((System.Runtime.InteropServices.Marshal.PtrToStringUTF8(Fw.aver_fw_props_name(entity.Handle, i)) ?? "",
-                            System.Runtime.InteropServices.Marshal.PtrToStringUTF8(Fw.aver_fw_props_value(entity.Handle, i)) ?? ""));
-        }
+        try { values = Aver.Framework.Hosting.ExtensionHost.ReadProperties(entity); }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
         return WrapperFor(values);
     }

@@ -1,12 +1,12 @@
 // FabricEnvShaderTest -- G6 SH3 through the Godot converter: `AverAssetC fabric` on tests/fabric/data/EnvShaderGame (a ShaderMaterial over a sky shader on the
 // environment's Sky, one over a fog shader on a FogVolume, one over a particles shader on a GPUParticles3D, a ParticleProcessMaterial emitter, a VisualShader on a
-// box, and a particles shader wrongly put on a mesh), then what it wrote read back with the engine's own loaders: the godotenv graphs (kind, registers at the
+// box, and a particles shader wrongly put on a mesh), then what it wrote read back with the engine's own loaders: the customenv graphs (kind, registers at the
 // material's values), the .ocparticle (parsed back into a ParticleSystemDef with its shader name), the ParticleEmitter component, Fabric/shaders.json, the generated
 // VisualShader text and the per-item report.
 #include "aver/core/ErrorCodes.hpp"
 #include "aver/core/Log.hpp"
 #include "aver/formats/OcGraph.hpp"
-#include "aver/formats/OcGraphGodot.hpp"
+#include "aver/formats/OcGraphHlsl.hpp"
 #include "aver/formats/OcMat.hpp"
 #include "aver/formats/OcParticle.hpp"
 #include "aver/formats/OcWorld.hpp"
@@ -100,8 +100,8 @@ int main() {
         check(!f.empty(), "a sky graph was written");
         fmt::OcGraphData g;
         std::string err;
-        fmt::GodotEnvPart p;
-        const bool loaded = !f.empty() && fmt::loadOcgraph(f, g, &err) && fmt::unpackGodotEnvShader(g, p, &err);
+        fmt::EmbeddedHlslEnvPart p;
+        const bool loaded = !f.empty() && fmt::loadOcgraph(f, g, &err) && fmt::unpackEmbeddedHlslEnv(g, p, &err);
         check(loaded, "it loads and unpacks (" + err + ")");
         check(loaded && p.kind == "sky" && p.source.find(p.ns + "main_sky") != std::string::npos, "it is a sky graph with the sky entry");
         // top_color vec3 reg 0, horizon vec3 reg 1, sun_size reg 1.w, star_density 2.x, show_stars 2.y, global wind_strength reg 3 (3 normal registers)
@@ -120,8 +120,8 @@ int main() {
         const std::string f = findFile(shaders, ".fog.ocgraph");
         check(!f.empty(), "a fog graph was written");
         fmt::OcGraphData g;
-        fmt::GodotEnvPart p;
-        const bool loaded = !f.empty() && fmt::loadOcgraph(f, g, nullptr) && fmt::unpackGodotEnvShader(g, p, nullptr);
+        fmt::EmbeddedHlslEnvPart p;
+        const bool loaded = !f.empty() && fmt::loadOcgraph(f, g, nullptr) && fmt::unpackEmbeddedHlslEnv(g, p, nullptr);
         check(loaded && p.kind == "fog" && p.source.find(p.ns + "main_fog") != std::string::npos, "it is a fog graph with the fog entry");
         check(loaded && p.defaults.size() >= 4 && near(p.defaults[0], 2.5f), "density: the material's 2.5 in register 0");
         check(loaded && p.defaults.size() >= 12 && near(p.defaults[8], 1.0f) && near(p.defaults[11], 2.0f), "glow keeps the shader's default");
@@ -132,8 +132,8 @@ int main() {
         const std::string f = findFile(shaders, ".particles.ocgraph");
         check(!f.empty(), "a particles graph was written");
         fmt::OcGraphData g;
-        fmt::GodotEnvPart p;
-        const bool loaded = !f.empty() && fmt::loadOcgraph(f, g, nullptr) && fmt::unpackGodotEnvShader(g, p, nullptr);
+        fmt::EmbeddedHlslEnvPart p;
+        const bool loaded = !f.empty() && fmt::loadOcgraph(f, g, nullptr) && fmt::unpackEmbeddedHlslEnv(g, p, nullptr);
         check(loaded && p.kind == "particles" && p.hasStart && p.hasProcess, "it is a particles graph with start() and process()");
         // gravity_and_drag vec4 reg 0, emit_dir vec3 reg 1, spin reg 1.w
         check(loaded && p.defaults.size() >= 8 && near(p.defaults[0], 0.0f) && near(p.defaults[1], -9.8f) && near(p.defaults[5], 2.0f) && near(p.defaults[7], 4.0f),
@@ -146,7 +146,7 @@ int main() {
         check(parsed, "the effect parses (" + err + ")");
         if (parsed && !def.emitters.empty()) {
             const particles::ParticleEffect& e = def.emitters[0];
-            check(e.godotShader.size() > 0 && fs::exists(content + "/Shaders/" + e.godotShader + ".particles.ocgraph", ec), "it names the shader whose graph exists");
+            check(e.customShader.size() > 0 && fs::exists(content + "/Shaders/" + e.customShader + ".particles.ocgraph", ec), "it names the shader whose graph exists");
             check(e.simTier == particles::SimTier::Gpu && e.maxParticles == 64 && std::fabs(e.lifetimeMin - 2.0f) < 1e-5f, "SIM gpu, amount 64, lifetime 2");
             check(std::fabs(e.emissionRate - 32.0f) < 1e-3f && e.burstCount == 0, "the rate is amount / lifetime");
             check(std::fabs(e.sizeStart - 50.0f) < 1e-3f, "the QuadMesh's 0.5 m is the sprite size (50 cm)");
@@ -171,7 +171,7 @@ int main() {
         const std::string m = findFile(content + "/Materials", ".ocmat");
         pbr::MaterialDesc d;
         fmt::OcMatExtras ex;
-        check(!m.empty() && fmt::loadOcmat(m, d, &ex, nullptr) && !ex.graphRef.empty() && d.gd.registerCount() >= 1 && near(d.gd.regs[0], 5.0f), "rim_power 5 is in its register table");
+        check(!m.empty() && fmt::loadOcmat(m, d, &ex, nullptr) && !ex.graphRef.empty() && d.embedded.registerCount() >= 1 && near(d.embedded.regs[0], 5.0f), "rim_power 5 is in its register table");
     }
 
     AVER_INFO("-- the manifest and the report --");

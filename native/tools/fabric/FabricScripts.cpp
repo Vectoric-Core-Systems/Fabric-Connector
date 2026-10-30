@@ -1,5 +1,5 @@
-// The script step of `AverAssetC fabric`: launches Aver.Fabric.Convert (the Roslyn / GDScript converter, a .NET tool staged to
-// <exe dir>/Tools) on the manifest the scene step wrote, then reads the merged report back. Contract: docs/plans/fabric/G3_SCRIPTS.md.
+// The script step of `AverAssetC fabric`: launches Aver.Fabric.Convert (the Roslyn / GDScript converter, a .NET tool in the extension's
+// tools folder) on the manifest the scene step wrote, then reads the merged report back. Contract: docs/plans/fabric/G3_SCRIPTS.md.
 #include "FabricInternal.hpp"
 #include "FabricProcess.hpp"
 
@@ -16,11 +16,18 @@ namespace {
 
 namespace fsys = std::filesystem;
 
+// Separates the folders of a --refs list, as the tool's Path.PathSeparator does.
+#if defined(_WIN32)
+constexpr char kPathListSeparator = ';';
+#else
+constexpr char kPathListSeparator = ':';
+#endif
+
 // The engine checkout above the executable (a build tree inside a checkout), where Scripts.csproj's project references point.
 std::string engineCheckout() {
     std::error_code ec;
     for (fsys::path p = fsys::path(executableDir()); !p.empty(); p = p.parent_path()) {
-        if (fsys::exists(p / "scripting" / "csharp" / "Aver.Fabric" / "Aver.Fabric.csproj", ec)) return p.string();
+        if (fsys::exists(p / "scripting" / "csharp" / "Aver.Framework" / "Aver.Framework.csproj", ec)) return p.string();
         if (p == p.parent_path()) break;
     }
     return {};
@@ -36,18 +43,24 @@ long jsonNumber(const std::string& line, const char* key, long def) {
 
 }  // namespace
 
+std::string Converter::extensionDir() const {
+    return host_.extensionDir.empty() ? executableDir() + "/Extensions/FabricConnector" : host_.extensionDir;
+}
+
 bool Converter::convertScripts() {
     scriptsRan_ = false;
     if (scripts_.empty()) return true;
 
-    const std::string exeDir = executableDir();
-    const std::string tool = exeDir + "/Tools/Aver.Fabric.Convert.dll";
-    const std::string refs = exeDir + "/Scripting";
+    // The tool and the managed runtime are this extension's (<ext>/tools, <ext>/managed); the engine's own assemblies are the executable's.
+    const std::string extDir = extensionDir();
+    const std::string tool = extDir + "/tools/Aver.Fabric.Convert.dll";
+    const std::string managed = extDir + "/managed";
+    const std::string refs = managed + kPathListSeparator + executableDir() + "/Scripting";
     const std::string dotnet = findDotnet();
     std::string why;
     if (dotnet.empty()) why = "dotnet was not found (install the .NET SDK or set DOTNET_ROOT)";
-    else if (!fileExists(tool)) why = "Aver.Fabric.Convert.dll is not beside AverAssetC (" + tool + "): build the Aver.Fabric.Convert target";
-    else if (!fileExists(refs + "/Aver.Fabric.dll")) why = "Aver.Fabric.dll is not in " + refs + ": build the Aver.Scripting.Bridge target";
+    else if (!fileExists(tool)) why = "Aver.Fabric.Convert.dll is not in the extension's tools folder (" + tool + "): build the Aver.Fabric.Convert target";
+    else if (!fileExists(managed + "/Aver.Fabric.dll")) why = "Aver.Fabric.dll is not in " + managed + ": build the Aver.Fabric.Managed target";
     if (!why.empty()) {
         AVER_ERROR("fabric: scripts not converted: {}", why);
         for (const auto& [path, si] : scripts_)

@@ -219,6 +219,8 @@ public:
     // Runs Aver.Fabric.Convert on the manifest and folds its report into ours. Returns false on a hard failure.
     bool convertScripts();
     bool scriptsRan_ = false;
+    // This extension's installed folder: the host's extensionDir, else <executable dir>/Extensions/FabricConnector.
+    std::string extensionDir() const;
 
     // ---- state -----------------------------------------------------------------------------------------------------
     std::string godotDir_, outDir_;
@@ -263,12 +265,12 @@ public:
                               const gd::GodotDocBase& doc, const std::string& nameHint, const Where& w);
     // ---- FabricShader.cpp (G6 SH2) ----
     // A ShaderMaterial (its shader prepared once for the engine and written as Shaders/<name>.ocgraph) written as Materials/<name>.ocmat: GRAPHREF, the FX record
-    // the render modes ask for, GDREGS at the material's shader_parameter/* values and a TEX per texture parameter. The asset path or "".
+    // the render modes ask for, EMBREGS at the material's shader_parameter/* values and a TEX per texture parameter. The asset path or "".
     std::string shaderMaterialAsset(const std::string& key, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const std::string& nameHint,
                                     const Where& w);
     bool writeShadersManifest();   // Fabric/shaders.json: every shader's uniform layout, samplers and materials (Aver.Fabric's ShaderMaterial reads it)
     // G6 SH3. A ShaderMaterial whose shader is a sky, fog or particles shader (used by the environment, a FogVolume or a GPUParticles3D) becomes
-    // Shaders/<name>.<kind>.ocgraph (a `DOMAIN godotenv` graph, OcGraphGodot.hpp) with the material's shader_parameter/* baked into its register table; the asset path or "".
+    // Shaders/<name>.<kind>.ocgraph (a `DOMAIN customenv` graph, OcGraphHlsl.hpp) with the material's shader_parameter/* baked into its register table; the asset path or "".
     std::string envShaderAsset(const std::string& materialKey, int kindIndex, const std::string& source, const std::string& shaderKey, const std::string& srcFile,
                                const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const std::string& nameHint, const Where& w);
     // GPUParticles3D with a particles ShaderMaterial: the .ocparticle it plays and the ParticleEmitter component on its placement.

@@ -613,7 +613,7 @@ public partial class SceneTree : GodotObject
 
     private void RunManagedPass(double dt, bool physics)
     {
-        Aver.Framework.GameThread.BeginPass(physics);
+        Aver.Framework.Hosting.ExtensionHost.BeginPass(physics);
         Input.InPhysicsFrame = physics;
         BeginPass(dt, physics, dt);
         var ticking = AllNodes().Where(n => physics ? n.PhysicsTickEnabled : n.TickEnabled).ToList();
@@ -630,7 +630,7 @@ public partial class SceneTree : GodotObject
         }
         EndPass(dt, dt, physics);
         Input.InPhysicsFrame = false;
-        Aver.Framework.GameThread.EndFrame();
+        Aver.Framework.Hosting.ExtensionHost.EndFrame();
     }
 
     /// <summary>Sends an event down the tree the way the engine's chain does: _Input to every node, deepest and last first, then

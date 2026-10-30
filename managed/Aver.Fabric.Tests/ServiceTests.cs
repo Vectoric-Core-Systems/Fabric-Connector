@@ -383,8 +383,8 @@ static class ServiceTests
         T.Check("that is remembered", tree.QuitRequested);
     }
 
-    // Level and mesh files live under test-content/ (SeparationTest allows game content nowhere else); tests/fabric/data sits beside it.
-    private static string Content() => Path.Combine(T.DataDir(), "..", "..", "..", "test-content", "FabricRuntime", "Content");
+    // Level and mesh files live under the engine repository's test-content/ (SeparationTest allows game content nowhere else): five levels up from tests/fabric/data.
+    private static string Content() => Path.Combine(T.DataDir(), "..", "..", "..", "..", "..", "test-content", "FabricRuntime", "Content");
 
     private static void Loader()
     {
