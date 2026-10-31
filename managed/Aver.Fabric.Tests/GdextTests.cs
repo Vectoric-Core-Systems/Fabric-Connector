@@ -113,15 +113,28 @@ static class GdextTests
     {
         string? bin = FindBin();
         if (bin == null) return;
-        string beside = Path.Combine(AppContext.BaseDirectory, HostFile());
-        try { if (!File.Exists(beside) || File.GetLastWriteTimeUtc(beside) < File.GetLastWriteTimeUtc(HostPath(bin))) File.Copy(HostPath(bin), beside, true); }
-        catch (IOException) { /* a copy from an earlier run is in use */ }
+        Stage(HostPath(bin), Path.Combine(AppContext.BaseDirectory, HostFile()));
         // The library also links the material system's DLL (the converter cooks materials); a game or the editor has it beside the executable.
         string pbr = OperatingSystem.IsWindows() ? "Aver.Render.PBR.dll" : OperatingSystem.IsMacOS() ? "libAver.Render.PBR.dylib" : "libAver.Render.PBR.so";
-        try { if (File.Exists(Path.Combine(bin, pbr))) File.Copy(Path.Combine(bin, pbr), Path.Combine(AppContext.BaseDirectory, pbr), true); }
-        catch (IOException) { /* in use by an earlier run */ }
+        Stage(Path.Combine(bin, pbr), Path.Combine(AppContext.BaseDirectory, pbr));
         // A dependency is searched for beside the process's executable (dotnet), not beside this assembly: load it first so the loader finds it by name.
         System.Runtime.InteropServices.NativeLibrary.TryLoad(Path.Combine(AppContext.BaseDirectory, pbr), out _);
+    }
+
+    // Copies a library only when the staged copy is missing or older, and never over the file itself: on Linux an in-place overwrite of a library this
+    // process has loaded rewrites its mapped pages (the PBR library's fini table read back unrelocated and the process crashed at exit). The copy goes
+    // to a temporary name and replaces the old file by rename, so a loaded copy keeps its own file.
+    private static void Stage(string from, string to)
+    {
+        if (!File.Exists(from)) return;
+        if (File.Exists(to) && File.GetLastWriteTimeUtc(to) >= File.GetLastWriteTimeUtc(from)) return;
+        string tmp = to + ".staging";
+        try { File.Copy(from, tmp, true); File.Move(tmp, to, true); }
+        catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+        {
+            // in use by an earlier run (Windows refuses to replace a loaded DLL); the copy already there is used
+            try { File.Delete(tmp); } catch (Exception d) when (d is IOException || d is UnauthorizedAccessException) { }
+        }
     }
 
     private static void Host()
