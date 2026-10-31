@@ -605,13 +605,25 @@ public class Camera3D : Node3D
     public bool Current
     {
         get => _current;
-        set { if (value) MakeCurrent(); else _current = false; }
+        set { if (value) MakeCurrent(); else ClearCurrent(); }
     }
 
-    /// <summary>The camera that is drawn: the one made current last.</summary>
+    /// <summary>The camera that is drawn: the one made current last; when none was, the first camera to enter the tree.</summary>
     internal static Camera3D? CurrentCamera { get; private set; }
 
-    internal static void ResetCurrent() => CurrentCamera = null;
+    // The window's cameras in the order they entered the tree (Godot's camera list; a SubViewport's cameras are not in it). The next camera made
+    // current when the current one leaves is the first of these, and the first to enter a tree with none becomes current.
+    private static readonly List<Camera3D> s_inTree = new();
+
+    // Set when the current camera left the tree: it takes the view again if it comes back (Godot keeps `current` on a camera that exits).
+    private bool _wasCurrent;
+
+    internal static void ResetCurrent()
+    {
+        CurrentCamera = null;
+        s_inTree.Clear();
+        FabricView.Restore();
+    }
 
     /// <summary>The <see cref="SubViewport"/> this camera is inside (its nearest viewport above), or null for the window's own view. A camera inside one
     /// is that viewport's camera and never takes over the engine's view (G4_RENDER.md R5).</summary>
@@ -640,14 +652,20 @@ public class Camera3D : Node3D
         if (CurrentCamera is { } old && old != this) old._current = false;
         CurrentCamera = this;
         _current = true;
-        if (Self.IsValid && NodeHost.Current.IsEngine) Aver.Framework.Hosting.ExtensionHost.SetViewEntity(Self);
+        _wasCurrent = false;
+        FabricView.Follow(this);
     }
 
+    /// <summary>Stops being the current camera. With <paramref name="enableNext"/> the first other camera in the tree takes over (Godot's clear_current).</summary>
     public void ClearCurrent(bool enableNext = true)
     {
         _current = false;
+        _wasCurrent = false;
         if (IsInsideTree() && OwningSubViewport() is { } sv) { sv.ReleaseCamera(this); return; }
-        if (CurrentCamera == this) CurrentCamera = null;
+        if (CurrentCamera != this) return;
+        CurrentCamera = null;
+        FabricView.Follow(null);
+        if (enableNext) s_inTree.FirstOrDefault(c => c != this && c.IsInsideTree())?.MakeCurrent();
     }
 
     public bool IsCurrent() => _current;
@@ -779,6 +797,10 @@ public class Camera3D : Node3D
     {
         base.OnEnteringTree();
         ApplyCamera();
+        if (OwningSubViewport() != null || s_inTree.Contains(this)) return;
+        s_inTree.Add(this);
+        // Godot: a camera that enters becomes current when it asks to be, or when it is the only camera in the tree.
+        if (_current || _wasCurrent || s_inTree.Count == 1) MakeCurrent();
     }
 
     // CCamera::flags bits (Components.hpp).
@@ -828,6 +850,18 @@ public class Camera3D : Node3D
     internal override void OnExitingTree()
     {
         if (OwningSubViewport() is { } sv) sv.ReleaseCamera(this);
+        else
+        {
+            s_inTree.Remove(this);
+            if (CurrentCamera == this)
+            {
+                _wasCurrent = true;
+                _current = false;
+                CurrentCamera = null;
+                FabricView.Follow(null);
+                s_inTree.FirstOrDefault(c => c.IsInsideTree())?.MakeCurrent();
+            }
+        }
         base.OnExitingTree();
     }
 }

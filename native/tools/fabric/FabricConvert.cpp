@@ -324,6 +324,8 @@ int Converter::run() {
     }
 
     createDirectories(contentDir_);
+    // The folders the editor's project upgrade expects (ProjectScaffold inspectProject), so a converted project opens without the upgrade prompt.
+    for (const char* standard : {"Maps", "Meshes", "Materials", "Textures", "Sounds", "Scripts"}) createDirectories(contentDir_ + "/" + standard);
     createDirectories(fabricDir_);
     AVER_INFO("fabric: {} -> {}", godotDir_, options_.dryRun ? requestedOut + " (report only)" : projectDir_);
 

@@ -452,7 +452,8 @@ applies ranges from its own camera as well.
 
 `Camera3D.MakeCurrent` / `Current` set the engine's view node; `ApplyCamera` pushes the lens and the cull mask. Godot makes the first camera current when none is marked, so the converter
 adds `current = true` to the first `Camera3D` of a level in which no camera is marked (reported converted). The level's `CAMERA` record still comes from the current (else first) camera.
-The runtime class does not promote a camera by itself.
+The runtime class now follows Godot's rule too (`FabricView`, G3_RUNTIME.md "The game mode"): the first camera to enter a tree that has none becomes current, a current camera that leaves
+hands the view to the first other camera in the tree, and `ClearCurrent(enableNext)` does the same.
 
 ### Converter and runtime
 

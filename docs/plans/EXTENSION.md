@@ -149,7 +149,7 @@ What was asked for as "one massive DLL" works out like this:
   "license": "LGPL-2.1",
   "source": "https://github.com/Vectoric-Core-Systems/Fabric-Connector",
   "native": "Aver.Fabric.Native",
-  "managed": { "runtime": ["Aver.Fabric.dll"], "actorBase": "Aver.Fabric.Node" },
+  "managed": { "runtime": ["Aver.Fabric.dll"], "entry": "Aver.Fabric.FabricExtension", "actorBase": "Aver.Fabric.Node" },
   "commands": [ { "name": "fabric", "summary": "convert a Godot 4 project", "usage": "<godot-project-dir> <out-dir> [--dry-run] [--scenes-only] [--scripts-only] [--overwrite]" } ],
   "importers": [ { "id": "godot-project", "menu": "Import Godot Project...", "command": "fabric",
                    "input": { "kind": "folder", "detect": "project.godot" }, "outputDefault": "{input}_Aver" } ],

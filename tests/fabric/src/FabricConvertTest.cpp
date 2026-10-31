@@ -188,6 +188,10 @@ int main() {
     const std::string projText = slurp(proj + "/ConvertGame.ocproject");
     check(projText.find("FABRIC.LAYER 3d_physics 2 player") != std::string::npos, "layer names are kept as FABRIC.LAYER comments");
     check(fileExists(content + "/Localization/fr/fr.po"), "the .po translation was copied under its culture");
+    check(pd.gameMode == "FabricGameMode" && projText.find("\nGAME.MODE FabricGameMode\n") != std::string::npos,
+          "GAME.MODE is FabricGameMode: no default pawn and no drone, the view follows Godot's current Camera3D");
+    for (const char* folder : {"Maps", "Meshes", "Materials", "Textures", "Sounds", "Scripts"})
+        check(std::filesystem::is_directory(content + "/" + folder, ec), std::string("Content/") + folder + " exists (the editor's project upgrade creates it otherwise)");
 
     // ---- the input map ----------------------------------------------------------------------------------------------------------
     AVER_INFO("-- [input] -> ConvertGame.ocinput --");

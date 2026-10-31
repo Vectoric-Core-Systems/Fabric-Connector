@@ -218,6 +218,8 @@ public:
     // ---- the script step (FabricScripts.cpp) -----------------------------------------------------------------------
     // Runs Aver.Fabric.Convert on the manifest and folds its report into ours. Returns false on a hard failure.
     bool convertScripts();
+    // Builds Content/Scripts/Scripts.csproj into <project>/Binaries/Scripts as Tools > Compile Scripts does; a failure is a report entry.
+    void buildScripts(const std::string& dotnet);
     bool scriptsRan_ = false;
     // This extension's installed folder: the host's extensionDir, else <executable dir>/Extensions/FabricConnector.
     std::string extensionDir() const;

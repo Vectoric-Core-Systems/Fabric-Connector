@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-700 public types and 7632 public members, read from `managed/Aver.Fabric/` (134 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+704 public types and 7637 public members, read from `managed/Aver.Fabric/` (136 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -2026,7 +2026,7 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 - `public float VOffset { get; set; }` - The camera slides this far along its own up axis (metres).
 - `public bool Current { get; set; }` - Whether this is the camera that is drawn.
 - `public void MakeCurrent()`
-- `public void ClearCurrent(bool enableNext = true)`
+- `public void ClearCurrent(bool enableNext = true)` - Stops being the current camera.
 - `public bool IsCurrent()`
 - `public Vector3 ProjectRayOrigin(Vector2 screenPoint)` - Where the ray through a screen point starts, in world space (the camera's position, or on the view plane when orthogonal).
 - `public Vector3 ProjectRayNormal(Vector2 screenPoint)` - The direction of the ray through a screen point, in world space, normalised.
@@ -3337,6 +3337,25 @@ Values: `Xyz = 0`, `Xzy = 1`, `Yxz = 2`, `Yzx = 3`, `Zxy = 4`, `Zyx = 5`
 - `public bool HasExecuteFailed()`
 - `public string GetErrorText()`
 
+### FabricExtension
+
+`public sealed class FabricExtension : IAverExtension` - Declares the actor classes that are not nodes.
+
+- `public void Load(ExtensionContext context)`
+
+### FabricGameMode
+
+`public sealed class FabricGameMode : AverGameMode` - The rules of a converted Godot project while it plays.
+
+- `public const string ClassName = "FabricGameMode"` - The registry name the converter writes as the project's GAME.MODE.
+- `public override void OnBeginPlay(BeginReason reason)`
+- `public override void OnPostLogin(Entity controller)`
+- `public override void OnEndPlay(EndReason reason)`
+
+### FabricPlayerController
+
+`public sealed class FabricPlayerController : AverPlayerController` - The controller of a converted project's player.
+
 ### FabricSpace
 
 `public static class FabricSpace` - Godot space (metres, +Y up, -Z forward, right-handed) to Aver space (centimetres, +Z up, +X forward, left-handed).
@@ -3358,6 +3377,10 @@ Values: `Xyz = 0`, `Xzy = 1`, `Yxz = 2`, `Yzx = 3`, `Zxy = 4`, `Zyx = 5`
 - `public static void ToAverMatrix12(Transform3D t, float[] dest, int offset = 0)` - A Godot affine transform as the engine's instance matrix: 12 floats, the row-vector world matrix with its 4th column dropped (three basis rows, then the translation in centimetres), written at offset.
 - `public static void ToAverTangent(Vector3 normal, Vector3 tangent, float handedness, float[] dest, int offset)` - The tangent the engine stores for a vertex whose Godot normal and tangent (xyz and handedness) are given (G4 R1's contract): the unit tangent made orthogonal to the normal, and w = +1/-1 so that cross(N, T) * w points along increasing v.
 - `public static Transform3D FromAver(Vec3 position, Quat rotation, Vec3 scale)` - An Aver entity's position, rotation and scale as a Godot transform.
+
+### FabricViewPawn
+
+`public sealed class FabricViewPawn : AverPawn` - What the engine's camera follows while a controller possesses it.
 
 ### FileAccess
 

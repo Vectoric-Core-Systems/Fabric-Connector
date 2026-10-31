@@ -398,6 +398,8 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
     d.startMap = startLevelAsset;
     // The project's scripts and nodes run on this extension's managed runtime; opening it without the extension installed says so by name.
     d.extensions.push_back({"FabricConnector", manifestVersion(extensionDir())});
+    // Godot's rules: no default pawn and no drone, the view follows the current Camera3D (Aver.Fabric's FabricGameMode, declared by the extension).
+    d.gameMode = "FabricGameMode";
     if (!project_.inputActions.empty()) d.inputScheme = "Input/" + name_ + ".ocinput";
     d.localeDefault = settingString("internationalization/locale/fallback", "en");
     d.audioBusLayout = audioBusLayout_;   // G5 S1: the default AudioBusLayout converted by convertStandaloneResources, "" when the project has none
@@ -525,7 +527,7 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
         report_.add("project", kProject, "", "", "", Rating::Unsupported, "the written .ocproject did not read back: " + err, 0);
         return false;
     }
-    report_.add("project", kProject, "", "", "", Rating::Converted, "written as " + name_ + ".ocproject (start level " + (startLevelAsset.empty() ? "none" : startLevelAsset) + ")", 0);
+    report_.add("project", kProject, "", "", "", Rating::Converted, "written as " + name_ + ".ocproject (start level " + (startLevelAsset.empty() ? "none" : startLevelAsset) + ", GAME.MODE " + d.gameMode + ")", 0);
 
     // Settings nobody converted, each named.
     static const char* handled[] = {"application/config/name", "application/config/description", "application/config/features",
