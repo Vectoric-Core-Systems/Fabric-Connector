@@ -103,6 +103,23 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build --output-on-failure -C ${{ matrix.config }}
 
+      # Diagnostic: on Linux the managed suite has passed every check and still failed (a non-zero status after "All tests passed"). This
+      # reruns it on its own and prints its exit status and, under gdb, a native backtrace if it aborts.
+      - name: Managed suite exit status (Linux diagnostic)
+        if: failure() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get install -y --no-install-recommends gdb > /dev/null
+          cd build/engine/bin
+          export AVER_ENGINE_DIR="$GITHUB_WORKSPACE/build/_deps/averengine-src" AVER_BIN_DIR="$PWD"
+          dll="$(find "$GITHUB_WORKSPACE/managed/Aver.Fabric.Tests/bin" -path '*Release*' -name Aver.Fabric.Tests.dll | head -n 1)"
+          echo "suite: $dll"
+          set +e
+          dotnet "$dll" > /tmp/managed.txt 2>&1; echo "exit status: $?"; tail -n 3 /tmp/managed.txt
+          gdb -q -batch -ex 'handle SIGSEGV SIGUSR1 SIGUSR2 SIGPIPE SIG34 SIG35 SIG36 nostop noprint pass' -ex 'catch signal SIGABRT' \
+            -ex run -ex 'thread apply all bt 25' --args dotnet "$dll" 2>&1 | grep -vE '^\[(New|Thread)' | tail -n 120
+          exit 0
+
       - name: Upload CTest output on failure
         if: failure()
         uses: actions/upload-artifact@v4
