@@ -139,7 +139,8 @@ internal static class GeneratedMembers
             string name = SignalOf(s);
             IMethodSymbol? invoke = s.DelegateInvokeMethod;
             string ps = invoke == null ? "" : string.Join(", ", invoke.Parameters.Select(p => p.Type.ToDisplayString(s_full) + " " + Id(p.Name)));
-            string args = invoke == null || invoke.Parameters.Length == 0 ? "" : ", " + string.Join(", ", invoke.Parameters.Select(p => Id(p.Name)));
+            // An enum has no conversion to Variant: it travels as the integer GDScript calls it.
+            string args = invoke == null || invoke.Parameters.Length == 0 ? "" : ", " + string.Join(", ", invoke.Parameters.Select(p => p.Type.TypeKind == TypeKind.Enum ? "(long)" + Id(p.Name) : Id(p.Name)));
             if (!firstBlock) sb.Append(nl);
             firstBlock = false;
             sb.Append(i1).Append("public event ").Append(Id(s.Name)).Append(' ').Append(Id(name)).Append(" { add => ConnectEvent(SignalName.").Append(Id(name))

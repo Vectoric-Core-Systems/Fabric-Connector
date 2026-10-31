@@ -151,7 +151,7 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
         srcFile = res;
         if (ext == ".gdshader") {
             if (!fs_.readText(res, source, diag_)) return fail("the shader file " + res + " could not be read");
-        } else if (ext == ".tres" || ext == ".res") {
+        } else if (ext == ".tres" || ext == ".res" || fs_.isBinaryResource(res)) {
             const gd::GodotResource* r = resourceDoc(res);
             if (r && r->header.type == "VisualShader") {   // G6 SH3
                 if (!visualShaderSource(*r, res, source)) return fail("the VisualShader " + res + " did not convert");

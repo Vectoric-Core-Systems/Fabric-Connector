@@ -908,4 +908,10 @@ public class AnimationPlayer : AnimationMixer
     public void SetProcessCallback(AnimationProcessCallback mode) => CallbackModeProcess = (AnimationCallbackModeProcess)(int)mode;
     public NodePath GetRoot() => RootNode;
     public void SetRoot(NodePath path) => RootNode = path;
+
+    /// <summary>Godot 4.0's name for <see cref="AnimationMixer.CallbackModeProcess"/>, in the enum the player declares (a compatibility alias).</summary>
+    public AnimationProcessCallback PlaybackProcessMode { get => GetProcessCallback(); set => SetProcessCallback(value); }
+
+    /// <summary>Godot 4.0's name for <see cref="AnimationMixer.CallbackModeMethod"/> (a compatibility alias).</summary>
+    public AnimationMethodCallMode MethodCallMode { get => GetMethodCallMode(); set => SetMethodCallMode(value); }
 }

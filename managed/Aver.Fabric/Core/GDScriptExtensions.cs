@@ -11,7 +11,7 @@ using Aver.Fabric.Collections;
 namespace Aver.Fabric;
 
 /// <summary>The String methods of GDScript (and GodotSharp's StringExtensions) on <see cref="string"/>.</summary>
-public static class StringExtensions
+public static partial class StringExtensions
 {
     public static string Substr(this string s, long from, long len = -1)
     {
@@ -88,11 +88,14 @@ public static class StringExtensions
     }
 
     public static string PadZeros(this string s, long digits) => s.PadLeft((int)digits, '0');
+    /// <summary>The number text with exactly <paramref name="digits"/> digits after the point: zeros are added, and digits past that are cut off (not rounded).</summary>
     public static string PadDecimals(this string s, long digits)
     {
         int dot = s.IndexOf('.');
         if (dot < 0) return digits > 0 ? s + "." + new string('0', (int)digits) : s;
-        return s.PadRight(dot + 1 + (int)digits, '0');
+        if (digits <= 0) return s[..dot];
+        int have = s.Length - (dot + 1);
+        return have > digits ? s[..(dot + 1 + (int)digits)] : s.PadRight(dot + 1 + (int)digits, '0');
     }
 
     public static string Repeat(this string s, long count) => count <= 0 ? "" : string.Concat(Enumerable.Repeat(s, (int)count));
@@ -235,6 +238,70 @@ public static class ArrayExtensions
     public static Variant Min(this Collections.Array a) => a.Count == 0 ? default : a.Aggregate((x, y) => GDScript.Lt(y, x) ? y : x);
     public static Variant Max(this Collections.Array a) => a.Count == 0 ? default : a.Aggregate((x, y) => GDScript.Gt(y, x) ? y : x);
     public static Collections.Array Slice(this Collections.Array a, long begin, long end = int.MaxValue) => a.Slice((int)begin, (int)Math.Min(end, int.MaxValue));
+
+    // ---- more of GDScript's Array methods ----
+
+    /// <summary>Removes and gives the element at <paramref name="index"/> (negative counts from the end); the type's default, with an error in the log, past either end.</summary>
+    public static T PopAt<T>(this IList<T> a, long index)
+    {
+        if (index < 0) index += a.Count;
+        if (index < 0 || index >= a.Count)
+        {
+            Aver.Scripting.Log.Error($"[Fabric] Array.PopAt: the index {index} is out of range for {a.Count} element(s)");
+            return default!;
+        }
+        T v = a[(int)index];
+        a.RemoveAt((int)index);
+        return v;
+    }
+
+    /// <summary>The index of the first element, from <paramref name="from"/> on, for which <paramref name="match"/> is true; -1 if none is.</summary>
+    public static long FindCustom<T>(this IList<T> a, Func<T, bool> match, long from = 0)
+    {
+        for (int i = (int)Math.Max(from, 0); i < a.Count; i++)
+            if (match(a[i])) return i;
+        return -1;
+    }
+
+    /// <summary>The index of the last element, from <paramref name="from"/> back (-1: from the end), for which <paramref name="match"/> is true; -1 if none is.</summary>
+    public static long RfindCustom<T>(this IList<T> a, Func<T, bool> match, long from = -1)
+    {
+        int start = from < 0 ? a.Count - 1 : (int)Math.Min(from, a.Count - 1);
+        for (int i = start; i >= 0; i--)
+            if (match(a[i])) return i;
+        return -1;
+    }
+
+    public static long FindCustom(this Collections.Array a, Callable method, long from = 0) => a.FindCustom(v => method.Call(v).AsBool(), from);
+
+    public static long RfindCustom(this Collections.Array a, Callable method, long from = -1) => a.RfindCustom(v => method.Call(v).AsBool(), from);
+
+    /// <summary>The position at which <paramref name="value"/> belongs in a sorted array: before the equal elements, or after them with <paramref name="before"/> off.</summary>
+    public static long Bsearch<T>(this IList<T> a, T value, bool before = true) => a.BsearchCustom(value, (x, y) => GDScript.Lt(Variant.From(x), Variant.From(y)), before);
+
+    /// <summary>Like Bsearch, with <paramref name="less"/>(a, b) deciding the order.</summary>
+    public static long BsearchCustom<T>(this IList<T> a, T value, Func<T, T, bool> less, bool before = true)
+    {
+        int lo = 0, hi = a.Count;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) / 2;
+            bool goRight = before ? less(a[mid], value) : !less(value, a[mid]);
+            if (goRight) lo = mid + 1; else hi = mid;
+        }
+        return lo;
+    }
+
+    public static long BsearchCustom(this Collections.Array a, Variant value, Callable less, bool before = true) =>
+        a.BsearchCustom(value, (x, y) => less.Call(x, y).AsBool(), before);
+
+    /// <summary>A number that is the same for equal arrays.</summary>
+    public static uint Hash(this Collections.Array a)
+    {
+        var h = new HashCode();
+        foreach (Variant v in a) h.Add(v);
+        return unchecked((uint)h.ToHashCode());
+    }
 }
 
 /// <summary>GDScript's Dictionary methods for the typed Dictionary.</summary>
@@ -252,4 +319,47 @@ public static class DictionaryExtensions
 
     public static Collections.Array<TKey> KeysArray<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d) where TKey : notnull => new(d.Keys.ToList());
     public static Collections.Array<TValue> ValuesArray<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d) where TKey : notnull => new(d.Values.ToList());
+
+    // ---- more of GDScript's Dictionary methods (untyped and typed) ----
+
+    /// <summary>A new dictionary with the entries of this one and then those of <paramref name="other"/>; with <paramref name="overwrite"/> the other's win.</summary>
+    public static Collections.Dictionary Merged(this Collections.Dictionary d, Collections.Dictionary other, bool overwrite = false)
+    {
+        Collections.Dictionary copy = d.Duplicate();
+        copy.Merge(other, overwrite);
+        return copy;
+    }
+
+    public static Collections.Dictionary<TKey, TValue> Merged<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d, Collections.Dictionary<TKey, TValue> other, bool overwrite = false) where TKey : notnull
+    {
+        var copy = new Collections.Dictionary<TKey, TValue>();
+        foreach (var kv in d.ToList()) copy[kv.Key] = kv.Value;
+        foreach (var kv in other.ToList()) if (overwrite || !copy.ContainsKey(kv.Key)) copy[kv.Key] = kv.Value;
+        return copy;
+    }
+
+    /// <summary>Whether every key of <paramref name="keys"/> is in the dictionary.</summary>
+    public static bool HasAll(this Collections.Dictionary d, Collections.Array keys) => keys.All(k => d.ContainsKey(k));
+
+    /// <summary>The first key whose value equals <paramref name="value"/>, or nil.</summary>
+    public static Variant FindKey(this Collections.Dictionary d, Variant value)
+    {
+        foreach (var kv in d.ToList()) if (kv.Value == value) return kv.Key;
+        return default;
+    }
+
+    /// <summary>The value of the key, adding it with <paramref name="default"/> first if it was not there.</summary>
+    public static Variant GetOrAdd(this Collections.Dictionary d, Variant key, Variant @default = default)
+    {
+        if (!d.ContainsKey(key)) d[key] = @default;
+        return d[key];
+    }
+
+    /// <summary>A number that is the same for equal dictionaries.</summary>
+    public static uint Hash(this Collections.Dictionary d)
+    {
+        int sum = 0;
+        foreach (var kv in d.ToList()) sum += HashCode.Combine(kv.Key, kv.Value);   // the sum does not depend on the order the entries are in
+        return unchecked((uint)sum);
+    }
 }

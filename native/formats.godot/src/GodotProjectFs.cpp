@@ -4,6 +4,7 @@
 #include "aver/platform/FileSystem.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 
@@ -80,6 +81,32 @@ bool prefixEqual(const std::string& s, const std::string& prefix) {
 #else
     return s.compare(0, prefix.size(), prefix) == 0;
 #endif
+}
+
+// Files with these extensions are text, media, code or archives: the scan does not open them to look for a Godot binary resource's "RSRC".
+bool neverBinaryResource(const std::string& rel) {
+    const usize dot = rel.find_last_of('.');
+    const usize slash = rel.find_last_of('/');
+    if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return false;
+    std::string e = rel.substr(dot);
+    for (char& c : e)
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    static const char* const skip[] = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".bmp", ".tga", ".exr", ".hdr", ".dds", ".ktx", ".wav", ".ogg", ".mp3", ".ogv", ".webm",
+                                       ".glb", ".gltf", ".fbx", ".obj", ".mtl", ".bin", ".ttf", ".otf", ".woff", ".woff2", ".gd", ".gdc", ".cs", ".csproj", ".sln",
+                                       ".json", ".cfg", ".md", ".txt", ".po", ".csv", ".godot", ".gdshader", ".gdshaderinc", ".gdextension", ".dll", ".so", ".dylib",
+                                       ".exe", ".pck", ".zip", ".uid", ".import", ".tscn", ".tres", ".scn", ".res", ".gitignore", ".gitattributes", ".blend", ".mp4"};
+    for (const char* s : skip)
+        if (e == s) return true;
+    return false;
+}
+
+// True when the file starts with the magic of a Godot binary resource (RSRC, or RSCC for a compressed one): whatever its extension, it reads like a .res.
+bool hasBinaryResourceMagic(const std::string& full) {
+    aver::File f;
+    if (!f.open(full, aver::File::Mode::Read) || f.size() < 4) return false;
+    u8 m[4] = {};
+    if (!f.readAt(0, m, 4)) return false;
+    return std::memcmp(m, "RSRC", 4) == 0 || std::memcmp(m, "RSCC", 4) == 0;
 }
 
 // The uid="..." of a .tscn/.tres header (first line only).
@@ -253,7 +280,8 @@ bool GodotProjectFs::scan(GodotDiagnostics& diag) {
         } else if (endsWith(rel, ".tscn") || endsWith(rel, ".tres")) {
             const std::string uid = headerUid(de.path());
             if (isUid(uid)) found.push_back({uid, res});
-        } else if (endsWith(rel, ".scn") || endsWith(rel, ".res")) {
+        } else if (endsWith(rel, ".scn") || endsWith(rel, ".res") || (!neverBinaryResource(rel) && hasBinaryResourceMagic(full))) {
+            // A .mesh, .occ, .lmbake, .material ... is the binary format of a .res: the magic says so, the extension does not have to.
             binary_.push_back(res);
             std::string why;
             const std::string uid = binaryUid(full, why);

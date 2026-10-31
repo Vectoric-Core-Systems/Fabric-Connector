@@ -29,6 +29,161 @@ public static class VariantText
         catch (FormatException) { value = default; return false; }
     }
 
+    // ---- writing ----
+
+    /// <summary>The text form of a value that <see cref="Parse"/> reads back (Godot's var_to_str): "Vector3(1, 2, 3)", "[1, 2]", a quoted string, "null". An object
+    /// that is a resource with a path is written as Resource("path"); any other object is written as null.</summary>
+    public static string Write(Variant value)
+    {
+        var sb = new StringBuilder();
+        WriteValue(sb, value);
+        return sb.ToString();
+    }
+
+    private static string Num(double v, bool standalone)
+    {
+        if (double.IsNaN(v)) return "nan";
+        if (double.IsPositiveInfinity(v)) return "inf";
+        if (double.IsNegativeInfinity(v)) return "inf_neg";
+        string t = v.ToString("R", CultureInfo.InvariantCulture);
+        if (standalone && t.IndexOfAny(new[] { '.', 'E', 'e' }) < 0) t += ".0";
+        return t;
+    }
+
+    private static string F(float v) => Num(v, false);
+
+    private static void WriteQuoted(StringBuilder sb, string s)
+    {
+        sb.Append('"');
+        foreach (char c in s)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '\r': sb.Append("\\r"); break;
+                default:
+                    if (c < 32) sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                    else sb.Append(c);
+                    break;
+            }
+        }
+        sb.Append('"');
+    }
+
+    private static void WriteList<T>(StringBuilder sb, string name, IEnumerable<T> items, Func<T, string> text) =>
+        sb.Append(name).Append('(').Append(string.Join(", ", items.Select(text))).Append(')');
+
+    private static void WriteValue(StringBuilder sb, Variant v)
+    {
+        switch (v.VariantType)
+        {
+            case Variant.Type.Nil: sb.Append("null"); return;
+            case Variant.Type.Bool: sb.Append(v.AsBool() ? "true" : "false"); return;
+            case Variant.Type.Int: sb.Append(v.AsInt64().ToString(CultureInfo.InvariantCulture)); return;
+            case Variant.Type.Float: sb.Append(Num(v.AsDouble(), true)); return;
+            case Variant.Type.String: WriteQuoted(sb, v.AsString()); return;
+            case Variant.Type.StringName: sb.Append('&'); WriteQuoted(sb, v.AsString()); return;
+            case Variant.Type.NodePath: sb.Append("NodePath("); WriteQuoted(sb, v.AsString()); sb.Append(')'); return;
+            case Variant.Type.Vector2: { Vector2 x = v.AsVector2(); sb.Append("Vector2(").Append(F(x.X)).Append(", ").Append(F(x.Y)).Append(')'); return; }
+            case Variant.Type.Vector2I: { Vector2I x = v.AsVector2I(); sb.Append($"Vector2i({x.X}, {x.Y})"); return; }
+            case Variant.Type.Vector3: { Vector3 x = v.AsVector3(); sb.Append("Vector3(").Append(F(x.X)).Append(", ").Append(F(x.Y)).Append(", ").Append(F(x.Z)).Append(')'); return; }
+            case Variant.Type.Vector3I: { Vector3I x = v.AsVector3I(); sb.Append($"Vector3i({x.X}, {x.Y}, {x.Z})"); return; }
+            case Variant.Type.Vector4: { Vector4 x = v.AsVector4(); sb.Append("Vector4(").Append(F(x.X)).Append(", ").Append(F(x.Y)).Append(", ").Append(F(x.Z)).Append(", ").Append(F(x.W)).Append(')'); return; }
+            case Variant.Type.Vector4I: { Vector4I x = v.AsVector4I(); sb.Append($"Vector4i({x.X}, {x.Y}, {x.Z}, {x.W})"); return; }
+            case Variant.Type.Rect2: { Rect2 x = v.AsRect2(); sb.Append("Rect2(").Append(F(x.Position.X)).Append(", ").Append(F(x.Position.Y)).Append(", ").Append(F(x.Size.X)).Append(", ").Append(F(x.Size.Y)).Append(')'); return; }
+            case Variant.Type.Rect2I: { Rect2I x = v.AsRect2I(); sb.Append($"Rect2i({x.Position.X}, {x.Position.Y}, {x.Size.X}, {x.Size.Y})"); return; }
+            case Variant.Type.Color: { Color x = v.AsColor(); sb.Append("Color(").Append(F(x.R)).Append(", ").Append(F(x.G)).Append(", ").Append(F(x.B)).Append(", ").Append(F(x.A)).Append(')'); return; }
+            case Variant.Type.Quaternion: { Quaternion x = v.AsQuaternion(); sb.Append("Quaternion(").Append(F(x.X)).Append(", ").Append(F(x.Y)).Append(", ").Append(F(x.Z)).Append(", ").Append(F(x.W)).Append(')'); return; }
+            case Variant.Type.Plane: { Plane x = v.AsPlane(); sb.Append("Plane(").Append(F(x.Normal.X)).Append(", ").Append(F(x.Normal.Y)).Append(", ").Append(F(x.Normal.Z)).Append(", ").Append(F(x.D)).Append(')'); return; }
+            case Variant.Type.Aabb:
+            {
+                Aabb x = v.AsAabb();
+                sb.Append("AABB(").Append(F(x.Position.X)).Append(", ").Append(F(x.Position.Y)).Append(", ").Append(F(x.Position.Z)).Append(", ")
+                  .Append(F(x.Size.X)).Append(", ").Append(F(x.Size.Y)).Append(", ").Append(F(x.Size.Z)).Append(')');
+                return;
+            }
+            case Variant.Type.Basis:
+            {
+                Basis b = v.AsBasis();
+                sb.Append("Basis(").Append(string.Join(", ", new[] { b.Row0.X, b.Row0.Y, b.Row0.Z, b.Row1.X, b.Row1.Y, b.Row1.Z, b.Row2.X, b.Row2.Y, b.Row2.Z }.Select(F))).Append(')');
+                return;
+            }
+            case Variant.Type.Transform3D:
+            {
+                Transform3D t = v.AsTransform3D();
+                Basis b = t.Basis;
+                sb.Append("Transform3D(").Append(string.Join(", ", new[] { b.Row0.X, b.Row0.Y, b.Row0.Z, b.Row1.X, b.Row1.Y, b.Row1.Z, b.Row2.X, b.Row2.Y, b.Row2.Z, t.Origin.X, t.Origin.Y, t.Origin.Z }.Select(F))).Append(')');
+                return;
+            }
+            case Variant.Type.Transform2D:
+            {
+                Transform2D t = v.AsTransform2D();
+                sb.Append("Transform2D(").Append(string.Join(", ", new[] { t.X.X, t.X.Y, t.Y.X, t.Y.Y, t.Origin.X, t.Origin.Y }.Select(F))).Append(')');
+                return;
+            }
+            case Variant.Type.Rid: sb.Append($"RID({v.AsRid().Id})"); return;
+            case Variant.Type.Object:
+                if (v.AsGodotObject() is Resource { ResourcePath.Length: > 0 } r) { sb.Append("Resource("); WriteQuoted(sb, r.ResourcePath); sb.Append(')'); }
+                else sb.Append("null");
+                return;
+            case Variant.Type.Array:
+            {
+                sb.Append('[');
+                bool first = true;
+                foreach (Variant item in v.AsGodotArray())
+                {
+                    if (!first) sb.Append(", ");
+                    first = false;
+                    WriteValue(sb, item);
+                }
+                sb.Append(']');
+                return;
+            }
+            case Variant.Type.Dictionary:
+            {
+                Collections.Dictionary d = v.AsGodotDictionary();
+                if (d.Count == 0) { sb.Append("{}"); return; }
+                sb.Append("{\n");
+                bool first = true;
+                foreach (KeyValuePair<Variant, Variant> kv in d)
+                {
+                    if (!first) sb.Append(",\n");
+                    first = false;
+                    WriteValue(sb, kv.Key);
+                    sb.Append(": ");
+                    WriteValue(sb, kv.Value);
+                }
+                sb.Append("\n}");
+                return;
+            }
+            case Variant.Type.PackedByteArray: sb.Append("PackedByteArray(\"").Append(Convert.ToBase64String(v.AsByteArray())).Append("\")"); return;
+            case Variant.Type.PackedInt32Array: WriteList(sb, "PackedInt32Array", v.AsInt32Array(), i => i.ToString(CultureInfo.InvariantCulture)); return;
+            case Variant.Type.PackedInt64Array: WriteList(sb, "PackedInt64Array", v.AsInt64Array(), i => i.ToString(CultureInfo.InvariantCulture)); return;
+            case Variant.Type.PackedFloat32Array: WriteList(sb, "PackedFloat32Array", v.AsFloat32Array(), F); return;
+            case Variant.Type.PackedFloat64Array: WriteList(sb, "PackedFloat64Array", v.AsFloat64Array(), d => Num(d, false)); return;
+            case Variant.Type.PackedStringArray:
+                sb.Append("PackedStringArray(");
+                {
+                    bool first = true;
+                    foreach (string s in v.AsStringArray())
+                    {
+                        if (!first) sb.Append(", ");
+                        first = false;
+                        WriteQuoted(sb, s);
+                    }
+                }
+                sb.Append(')');
+                return;
+            case Variant.Type.PackedVector2Array: WriteList(sb, "PackedVector2Array", v.AsVector2Array().SelectMany(p => new[] { p.X, p.Y }), F); return;
+            case Variant.Type.PackedVector3Array: WriteList(sb, "PackedVector3Array", v.AsVector3Array().SelectMany(p => new[] { p.X, p.Y, p.Z }), F); return;
+            case Variant.Type.PackedColorArray: WriteList(sb, "PackedColorArray", v.AsColorArray().SelectMany(p => new[] { p.R, p.G, p.B, p.A }), F); return;
+            default: sb.Append("null"); return;
+        }
+    }
+
     private sealed class Parser
     {
         private readonly string _s;

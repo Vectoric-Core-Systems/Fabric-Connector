@@ -9,6 +9,7 @@ using System.Reflection;
 using Aver.Fabric;
 using Aver.Fabric.Convert;
 using GArray = Aver.Fabric.Collections.Array;
+using Thread = System.Threading.Thread;
 
 /// <summary>A player: its name is its owner's peer id, and it takes that authority when it enters the tree (the usual Godot pattern).</summary>
 class NetPlayer : NetNode

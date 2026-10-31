@@ -12,6 +12,7 @@
 #include "aver/formats/godot/GodotProject.hpp"
 #include "aver/formats/godot/GodotScene.hpp"
 
+#include <algorithm>
 #include <map>
 #include <string>
 #include <string_view>
@@ -64,7 +65,12 @@ public:
     // lists every file and builds the uid map. Warns once per duplicate uid and per binary resource whose header cannot be read.
     bool scan(GodotDiagnostics& diag);
     const std::vector<std::string>& files() const { return files_; }          // res:// paths, sorted
-    const std::vector<std::string>& binaryResources() const { return binary_; }  // .scn / .res
+    const std::vector<std::string>& binaryResources() const { return binary_; }  // .scn / .res, and any file that starts with the binary resource magic (.mesh, .occ, .lmbake ...)
+    // True for a binary resource that is not a scene (res:// path): a .res, and a .mesh or .occ with the same magic, which are routed like a .res.
+    bool isBinaryResource(const std::string& res) const {
+        const bool scene = res.size() >= 4 && res.compare(res.size() - 4, 4, ".scn") == 0;
+        return !scene && std::binary_search(binary_.begin(), binary_.end(), res);
+    }
     const GodotUidMap& uids() const { return uids_; }
     GodotUidMap& uids() { return uids_; }
 

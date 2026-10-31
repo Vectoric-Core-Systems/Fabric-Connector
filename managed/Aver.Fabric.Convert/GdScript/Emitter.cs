@@ -299,6 +299,8 @@ internal sealed partial class GdEmitter
             if (cur == null && o.Decl.Name == parts[0] && !o.IsInner) cur = o;
         }
         if (cur == null && _m.ByClassName.TryGetValue(parts[0], out ScriptInfo? g)) cur = g;
+        // An autoload is a global name for its script: Log.LogType is an enum of the script that is the autoload Log.
+        if (cur == null && _m.FindAutoload(parts[0]) is { } auto && _m.ByPath.TryGetValue(auto.Path, out ScriptInfo? autoScript)) cur = autoScript;
         if (cur == null) return null;
         for (i = 1; i < parts.Count; i++)
         {
@@ -404,7 +406,12 @@ internal sealed partial class GdEmitter
             if (to.Accepts(from)) return e.Code;
             return "(" + to.Cs + ")" + Wrap(e, P.Unary);
         }
+        if (to.IsNumeric && from.Kind == GK.Bool)
+            return to.Kind == GK.Float ? (to.Number == Num.Float ? $"({Wrap(e, P.OrOr)} ? 1f : 0f)" : $"({Wrap(e, P.OrOr)} ? 1.0 : 0.0)") : $"({Wrap(e, P.OrOr)} ? 1 : 0)";
         if (to.Kind == GK.Enum && from.Kind == GK.Int) return e.Const is long ? "(" + to.Cs + ")" + e.Code : "(" + to.Cs + ")" + Wrap(e, P.Unary);
+        // Vector3 to Vector3i and back: the conversion operators the math types declare.
+        if (to.Kind == GK.Struct && from.Kind == GK.Struct && to.Sym != null && from.Sym != null && Api != null && to.Cs != from.Cs && Api.HasConversion(from.Sym, to.Sym))
+            return "(" + to.Cs + ")" + Wrap(e, P.Unary);
         if (to.Kind == GK.Bool && from.Kind != GK.Bool) return Truth(e);
         if (to.Kind == GK.String && from.Kind == GK.NodePath) return e.Code;
         if (to.Kind == GK.StringName && from.Kind == GK.NodePath) return "(string)" + Wrap(e, P.Unary);

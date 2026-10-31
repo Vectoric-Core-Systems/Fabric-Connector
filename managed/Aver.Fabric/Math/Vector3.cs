@@ -138,6 +138,34 @@ public struct Vector3 : IEquatable<Vector3>, IComparable<Vector3>
     public readonly Vector3 Snapped(Vector3 step) => new(Mathf.Snapped(X, step.X), Mathf.Snapped(Y, step.Y), Mathf.Snapped(Z, step.Z));
     public readonly Vector3 Snapped(float step) => new(Mathf.Snapped(X, step), Mathf.Snapped(Y, step), Mathf.Snapped(Z, step));
 
+    // GDScript's scalar-argument forms, which GodotSharp spells as overloads.
+    public readonly Vector3 Clampf(float min, float max) => new(Math.Clamp(X, min, max), Math.Clamp(Y, min, max), Math.Clamp(Z, min, max));
+    public readonly Vector3 Minf(float with) => new(Math.Min(X, with), Math.Min(Y, with), Math.Min(Z, with));
+    public readonly Vector3 Maxf(float with) => new(Math.Max(X, with), Math.Max(Y, with), Math.Max(Z, with));
+    public readonly Vector3 Snappedf(float step) => Snapped(step);
+    public readonly Vector3 Posmodv(Vector3 modv) => PosMod(modv);
+    public readonly Vector3 CubicInterpolateInTime(Vector3 b, Vector3 preA, Vector3 postB, float weight, float bT, float preAT, float postBT) => new(
+        Mathf.CubicInterpolateInTime(X, b.X, preA.X, postB.X, weight, bT, preAT, postBT), Mathf.CubicInterpolateInTime(Y, b.Y, preA.Y, postB.Y, weight, bT, preAT, postBT),
+        Mathf.CubicInterpolateInTime(Z, b.Z, preA.Z, postB.Z, weight, bT, preAT, postBT));
+
+    /// <summary>A unit vector packed into two numbers between 0 and 1 (octahedral encoding), undone by <see cref="OctahedronDecode"/>.</summary>
+    public readonly Vector2 OctahedronEncode()
+    {
+        Vector3 n = this / (Math.Abs(X) + Math.Abs(Y) + Math.Abs(Z));
+        Vector2 o = n.Z >= 0f ? new Vector2(n.X, n.Y) : new Vector2((1f - Math.Abs(n.Y)) * (n.X >= 0f ? 1f : -1f), (1f - Math.Abs(n.X)) * (n.Y >= 0f ? 1f : -1f));
+        return new Vector2(o.X * 0.5f + 0.5f, o.Y * 0.5f + 0.5f);
+    }
+
+    public static Vector3 OctahedronDecode(Vector2 oct)
+    {
+        var f = new Vector2(oct.X * 2f - 1f, oct.Y * 2f - 1f);
+        var n = new Vector3(f.X, f.Y, 1f - Math.Abs(f.X) - Math.Abs(f.Y));
+        float t = Math.Clamp(-n.Z, 0f, 1f);
+        n.X += n.X >= 0f ? -t : t;
+        n.Y += n.Y >= 0f ? -t : t;
+        return n.Normalized();
+    }
+
     public static Vector3 operator +(Vector3 l, Vector3 r) => new(l.X + r.X, l.Y + r.Y, l.Z + r.Z);
     public static Vector3 operator -(Vector3 l, Vector3 r) => new(l.X - r.X, l.Y - r.Y, l.Z - r.Z);
     public static Vector3 operator -(Vector3 v) => new(-v.X, -v.Y, -v.Z);
@@ -211,6 +239,10 @@ public struct Vector3I : IEquatable<Vector3I>
     public readonly Axis MinAxisIndex() => X < Y ? (X < Z ? Axis.X : Axis.Z) : (Y < Z ? Axis.Y : Axis.Z);
     public readonly Vector3I Sign() => new(Mathf.Sign(X), Mathf.Sign(Y), Mathf.Sign(Z));
     public readonly Vector3I Snapped(Vector3I step) => new(Mathf.Snapped(X, step.X), Mathf.Snapped(Y, step.Y), Mathf.Snapped(Z, step.Z));
+    public readonly Vector3I Clampi(int min, int max) => new(Math.Clamp(X, min, max), Math.Clamp(Y, min, max), Math.Clamp(Z, min, max));
+    public readonly Vector3I Mini(int with) => new(Math.Min(X, with), Math.Min(Y, with), Math.Min(Z, with));
+    public readonly Vector3I Maxi(int with) => new(Math.Max(X, with), Math.Max(Y, with), Math.Max(Z, with));
+    public readonly Vector3I Snappedi(int step) => new(Mathf.Snapped(X, step), Mathf.Snapped(Y, step), Mathf.Snapped(Z, step));
 
     public static Vector3I operator +(Vector3I l, Vector3I r) => new(l.X + r.X, l.Y + r.Y, l.Z + r.Z);
     public static Vector3I operator -(Vector3I l, Vector3I r) => new(l.X - r.X, l.Y - r.Y, l.Z - r.Z);

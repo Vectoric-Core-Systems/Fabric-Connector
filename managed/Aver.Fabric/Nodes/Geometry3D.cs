@@ -575,7 +575,8 @@ public class Sprite3D : SpriteBase3D
 public class Label3D : GeometryInstance3D
 {
     public string Text { get; set; } = "";
-    public Resource? Font { get; set; }
+    /// <summary>The font; null draws with the project's default. Kept for measuring (<see cref="Font.GetStringSize"/>): nothing is drawn here.</summary>
+    public Font? Font { get; set; }
     public int FontSize { get; set; } = 32;
     public int OutlineSize { get; set; } = 12;
     public float PixelSize { get; set; } = 0.005f;

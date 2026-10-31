@@ -88,6 +88,12 @@ public struct Transform2D : IEquatable<Transform2D>
         return new Transform2D(new Vector2(v.X * scale.X, v.Y * scale.X), new Vector2(-v.Y * scale.Y, v.X * scale.Y), origin);
     }
 
+    public readonly Vector2 GetOrigin() => Origin;
+
+    /// <summary>Whether the transform keeps angles: a rotation, possibly flipped and uniformly scaled, with no skew.</summary>
+    public readonly bool IsConformal() =>
+        (Mathf.IsEqualApprox(X.X, Y.Y) && Mathf.IsEqualApprox(X.Y, -Y.X)) || (Mathf.IsEqualApprox(X.X, -Y.Y) && Mathf.IsEqualApprox(X.Y, Y.X));
+
     public readonly bool IsEqualApprox(Transform2D other) => X.IsEqualApprox(other.X) && Y.IsEqualApprox(other.Y) && Origin.IsEqualApprox(other.Origin);
     public readonly bool IsFinite() => X.IsFinite() && Y.IsFinite() && Origin.IsFinite();
 
@@ -160,6 +166,11 @@ public struct Rect2 : IEquatable<Rect2>
     public readonly Rect2 Grow(float by) => new(Position.X - by, Position.Y - by, Size.X + by * 2, Size.Y + by * 2);
     public readonly Rect2 GrowIndividual(float left, float top, float right, float bottom) =>
         new(Position.X - left, Position.Y - top, Size.X + left + right, Size.Y + top + bottom);
+    /// <summary>The rectangle grown by <paramref name="amount"/> on one side.</summary>
+    public readonly Rect2 GrowSide(Side side, float amount) =>
+        GrowIndividual(side == Side.Left ? amount : 0f, side == Side.Top ? amount : 0f, side == Side.Right ? amount : 0f, side == Side.Bottom ? amount : 0f);
+    /// <summary>The corner furthest in the direction: the position, plus the size along each axis the direction points up.</summary>
+    public readonly Vector2 GetSupport(Vector2 direction) => new(direction.X > 0f ? Position.X + Size.X : Position.X, direction.Y > 0f ? Position.Y + Size.Y : Position.Y);
     public readonly bool HasArea() => Size.X > 0f && Size.Y > 0f;
     public readonly bool HasPoint(Vector2 point) =>
         point.X >= Position.X && point.Y >= Position.Y && point.X < Position.X + Size.X && point.Y < Position.Y + Size.Y;
@@ -226,6 +237,27 @@ public struct Rect2I : IEquatable<Rect2I>
     public readonly int GetArea() => Size.X * Size.Y;
     public readonly Vector2I GetCenter() => Position + Size / 2;
     public readonly Rect2I Grow(int by) => new(Position.X - by, Position.Y - by, Size.X + by * 2, Size.Y + by * 2);
+    public readonly Rect2I GrowIndividual(int left, int top, int right, int bottom) =>
+        new(Position.X - left, Position.Y - top, Size.X + left + right, Size.Y + top + bottom);
+    /// <summary>The rectangle grown by <paramref name="amount"/> on one side.</summary>
+    public readonly Rect2I GrowSide(Side side, int amount) =>
+        GrowIndividual(side == Side.Left ? amount : 0, side == Side.Top ? amount : 0, side == Side.Right ? amount : 0, side == Side.Bottom ? amount : 0);
+    public readonly Rect2I Expand(Vector2I to)
+    {
+        Vector2I begin = Position, end = Position + Size;
+        if (to.X < begin.X) begin.X = to.X;
+        if (to.Y < begin.Y) begin.Y = to.Y;
+        if (to.X > end.X) end.X = to.X;
+        if (to.Y > end.Y) end.Y = to.Y;
+        return new Rect2I(begin, end - begin);
+    }
+    public readonly Rect2I Intersection(Rect2I b)
+    {
+        if (!Intersects(b)) return default;
+        var position = new Vector2I(Math.Max(b.Position.X, Position.X), Math.Max(b.Position.Y, Position.Y));
+        Vector2I bEnd = b.Position + b.Size, end = Position + Size;
+        return new Rect2I(position, new Vector2I(Math.Min(bEnd.X, end.X), Math.Min(bEnd.Y, end.Y)) - position);
+    }
     public readonly bool HasArea() => Size.X > 0 && Size.Y > 0;
     public readonly bool HasPoint(Vector2I point) =>
         point.X >= Position.X && point.Y >= Position.Y && point.X < Position.X + Size.X && point.Y < Position.Y + Size.Y;

@@ -40,6 +40,8 @@ const std::set<std::string>& supportedClasses() {
                                             "CSGCylinder3D", "CSGTorus3D", "CSGPolygon3D", "CSGMesh3D",
                                             // G4 R8: environment volumes
                                             "FogVolume", "ReflectionProbe", "LightmapGI", "LightmapProbe", "VoxelGI",
+                                            // an occluder shape is kept and unused: the renderer's occlusion culling is automatic
+                                            "OccluderInstance3D",
                                             // G6 SH3: a particle emitter whose process material is a particles shader
                                             "GPUParticles3D",
                                             // G5 A1: property-track animation
@@ -140,6 +142,12 @@ ClassChoice chooseClass(const std::string& t) {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
         c.reason = "solved with FABRIK on the script-level skeleton, not with Godot's solver";
+        return c;
+    }
+    if (t == "OccluderInstance3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "kept with its occluder shape and not used: the renderer's occlusion culling is automatic, so an authored occluder changes nothing that is drawn";
         return c;
     }
     if (t == "CanvasLayer") {
@@ -881,9 +889,9 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
         setProp("collision_layer", makeInt(1), true);
         setProp("collision_mask", makeInt(1), true);
         const Where bw{fn.reportFile, fn.reportPath, fn.type};
-        if (Var* pm = findProp("physics_material_override"); pm && pm->type == VType::Dictionary)
-            report_.add("property", bw.file, bw.node, fn.type, "physics_material_override", Rating::Approximated,
-                        "friction, bounce, rough and absorbent are written as a dictionary; the body node does not read them yet", 0);
+        if (Var* pm = findProp("physics_material_override"); pm && pm->type == VType::Object && pm->s == "PhysicsMaterial")
+            report_.add("property", bw.file, bw.node, fn.type, "physics_material_override", Rating::Converted,
+                        "written as Object(PhysicsMaterial): the body applies its friction, bounce, rough and absorbent to its surface when the engine body is built", 0);
     }
     if (fn.type == "RigidBody3D") {
         setProp("mass", makeFloat(1.0), true);
@@ -902,7 +910,8 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                     "written as the effective damping: the project default plus the body's own, as Godot's Combine mode does", 0);
         for (const char* axis : {"axis_lock_linear_x", "axis_lock_linear_y", "axis_lock_linear_z", "axis_lock_angular_x", "axis_lock_angular_y", "axis_lock_angular_z"})
             if (findProp(axis))
-                report_.add("property", fn.reportFile, fn.reportPath, fn.type, axis, Rating::Approximated, "axis locks are kept as properties; the body node does not apply them yet", 0);
+                report_.add("property", fn.reportFile, fn.reportPath, fn.type, axis, Rating::Converted,
+                            "the rigid body zeroes the locked velocity component every physics step (a lock is a rule on the body's motion, not a joint)", 0);
     }
 
     // ---- lights: what each stored property becomes (docs/plans/fabric/G4_RENDER.md R2) ----
@@ -984,6 +993,31 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                 else note(pr, Rating::Approximated, "no dithered fade: the instance appears and disappears with a hard cut at its range");
             } else if (k == "visibility_parent") {
                 note(pr, Rating::Unsupported, "fading a visibility dependency in or out is not modelled; the dependency keeps its own range");
+            }
+        }
+    }
+
+    // ---- per-instance rendering flags the engine has no switch for (parity plan P5, C20) ----
+    // Godot stores only values that differ from its defaults, so every key found here was authored; the node class keeps some of them as properties,
+    // but the engine's mesh renderer reads none, and the report has to say that instead of staying silent.
+    if (!scan.prefabPass && (fn.type == "MeshInstance3D" || fn.type == "MultiMeshInstance3D" || fn.type == "GeometryInstance3D" || fn.type == "Label3D" || fn.type == "Sprite3D" ||
+                             fn.type == "AnimatedSprite3D" || fn.type == "GPUParticles3D" || fn.type == "CPUParticles3D" || fn.type.rfind("CSG", 0) == 0)) {
+        for (const Prop& pr : fn.props) {
+            const std::string& k = pr.key;
+            const int value = static_cast<int>(numOf(&pr.value, 0));
+            const auto note = [&](Rating r, const char* why) { report_.add("property", fn.reportFile, fn.reportPath, fn.type, k, r, why, pr.line); };
+            if (k == "cast_shadow") {
+                if (value == 1) note(Rating::Converted, "shadows on is what every instance does");
+                else if (value == 0) note(Rating::Unsupported, "off: the engine has no per-instance shadow switch, so the instance still casts a shadow");
+                else if (value == 2) note(Rating::Approximated, "double sided: the instance casts the shadow every instance casts; the engine has no per-instance switch for the double-sided variant");
+                else note(Rating::Unsupported, "shadows only: the engine cannot draw an instance for its shadow alone, so the instance is drawn too");
+            } else if (k == "gi_mode") {
+                if (value == 0) note(Rating::Unsupported, "disabled: Aver's global illumination takes every mesh instance into account, this one included");
+                else note(Rating::Converted, value == 1 ? "static: Aver's global illumination is real time, so the instance is lit and bounces light as any other" : "dynamic: Aver's global illumination is real time and follows moving instances");
+            } else if (k == "extra_cull_margin") {
+                note(Rating::Unsupported, "no per-instance margin for culling: the instance is culled by its mesh bounds");
+            } else if (k == "ignore_occlusion_culling") {
+                note(Rating::Unsupported, "no per-instance opt-out of occlusion culling: the instance is culled when something hides its bounds");
             }
         }
     }
@@ -1219,10 +1253,13 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
     const double bgEnergy = numOf(rprop(*e, "background_energy_multiplier"), 1.0);
     double skyLightMul = 1.0;   // sky energies that cannot scale a colour (physical sky) scale the sky light instead
     static const double clearGrey[3] = {0.3, 0.3, 0.3};
+    // Clear Color shows the project's default clear colour (Godot's own default is this grey).
+    double projectClear[3];
+    colorOf(c.project_.setting("rendering/environment/defaults/default_clear_color"), projectClear, clearGrey);
     if (bg == 0 || bg == 1) {
         // A flat colour: both ends of the authored dome.
         double col[3];
-        colorOf(bg == 1 ? rprop(*e, "background_color") : nullptr, col, clearGrey);
+        colorOf(bg == 1 ? rprop(*e, "background_color") : nullptr, col, bg == 1 ? clearGrey : projectClear);
         env.hasSky = true;
         env.skyPhysical = false;
         for (int i = 0; i < 3; ++i) env.zenith[i] = env.horizon[i] = env.ground[i] = ge::scaleAuthoredColour(col[i], bgEnergy);

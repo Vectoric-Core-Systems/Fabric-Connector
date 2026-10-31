@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-668 public types and 7060 public members, read from `extensions/FabricConnector/managed/Aver.Fabric/` (119 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+700 public types and 7632 public members, read from `managed/Aver.Fabric/` (134 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -655,6 +655,8 @@ Values: `Immediate = 0`, `Sync = 1`, `AtEnd = 2`
 - `public void SetProcessCallback(AnimationProcessCallback mode)`
 - `public NodePath GetRoot()`
 - `public void SetRoot(NodePath path)`
+- `public AnimationProcessCallback PlaybackProcessMode { get; set; }` - Godot 4.0's name for CallbackModeProcess, in the enum the player declares (a compatibility alias).
+- `public AnimationMethodCallMode MethodCallMode { get; set; }` - Godot 4.0's name for CallbackModeMethod (a compatibility alias).
 
 ### AnimationPlayer.AnimationMethodCallMode
 
@@ -767,6 +769,15 @@ Values: `Disabled = 0`, `Combine = 1`, `CombineReplace = 2`, `Replace = 3`, `Rep
 - `public static Variant Min(this Collections.Array a)`
 - `public static Variant Max(this Collections.Array a)`
 - `public static Collections.Array Slice(this Collections.Array a, long begin, long end = int.MaxValue)`
+- `public static T PopAt<T>(this IList<T> a, long index)` - Removes and gives the element at index (negative counts from the end); the type's default, with an error in the log, past either end.
+- `public static long FindCustom<T>(this IList<T> a, Func<T, bool> match, long from = 0)` - The index of the first element, from from on, for which match is true; -1 if none is.
+- `public static long RfindCustom<T>(this IList<T> a, Func<T, bool> match, long from = -1)` - The index of the last element, from from back (-1: from the end), for which match is true; -1 if none is.
+- `public static long FindCustom(this Collections.Array a, Callable method, long from = 0)`
+- `public static long RfindCustom(this Collections.Array a, Callable method, long from = -1)`
+- `public static long Bsearch<T>(this IList<T> a, T value, bool before = true)` - The position at which value belongs in a sorted array: before the equal elements, or after them with before off.
+- `public static long BsearchCustom<T>(this IList<T> a, T value, Func<T, T, bool> less, bool before = true)` - Like Bsearch, with less(a, b) deciding the order.
+- `public static long BsearchCustom(this Collections.Array a, Variant value, Callable less, bool before = true)`
+- `public static uint Hash(this Collections.Array a)` - A number that is the same for equal arrays.
 
 ### ArrayMesh
 
@@ -788,6 +799,16 @@ Values: `Disabled = 0`, `Combine = 1`, `CombineReplace = 2`, `Replace = 3`, `Rep
 - `public override Material? SurfaceGetMaterial(int surfIdx)`
 - `public override void SurfaceSetMaterial(int surfIdx, Material? material)`
 - `public override Aabb GetAabb()`
+
+### ArrayOccluder3D
+
+`public class ArrayOccluder3D : Occluder3D` - An occluder given as triangles (Godot's ArrayOccluder3D).
+
+- `public Vector3[] Vertices { get; set; }` - The corners; setting them keeps the indices.
+- `public int[] Indices { get; set; }` - Three indices per triangle.
+- `public void SetArrays(Vector3[] vertices, int[] indices)` - Sets the corners and the triangles together (Godot's set_arrays).
+- `public override Vector3[] GetVertices()`
+- `public override int[] GetIndices()`
 
 ### AspectRatioContainer
 
@@ -1888,6 +1909,14 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 
 - `public Vector3 Size { get; set; }`
 
+### BoxOccluder3D
+
+`public class BoxOccluder3D : Occluder3D` - A box occluder (Godot's BoxOccluder3D), centred on the origin.
+
+- `public Vector3 Size { get; set; }`
+- `public override Vector3[] GetVertices()`
+- `public override int[] GetIndices()`
+
 ### BoxShape3D
 
 `public class BoxShape3D : Shape3D`
@@ -1956,6 +1985,17 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 - `public Error RpcId(long peerId, params Variant[] args)` - Calls the node method this callable names as an RPC on one peer (GDScript's func.rpc_id(peer, args)).
 - `public Callable Bind(params Variant[] args)` - A callable that passes args after whatever it is called with.
 - `public Callable Unbind(int argCount)` - A callable that drops the last argCount arguments it is called with.
+- `public Callable Bindv(Collections.Array arguments)` - Like Bind with the arguments in an array.
+- `public static Callable Create(Variant variant, StringName method)` - A callable for a method of an object given as a value (GDScript's Callable.create); null if the value is not an object.
+- `public GodotObject? GetObject()` - The object the method is called on; null for a callable of a delegate that has none.
+- `public ulong GetObjectId()`
+- `public StringName GetMethod()` - The method's name; empty for a delegate (a lambda has no name to give).
+- `public bool IsStandard()` - A callable of an object and a method name (not a delegate, not a lambda).
+- `public int GetArgumentCount()` - How many arguments the callable expects when it is called (bound arguments are not counted; unbound ones are).
+- `public Collections.Array GetBoundArguments()` - The arguments bound by Bind, in the order they are passed.
+- `public int GetBoundArgumentsCount()`
+- `public int GetUnboundArgumentsCount()` - How many trailing arguments Unbind drops in all.
+- `public uint Hash()` - A number that is the same for equal callables.
 - `public bool Equals(Callable other)`
 - `public override bool Equals(object? obj)`
 - `public override int GetHashCode()`
@@ -2293,6 +2333,14 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public readonly uint ToArgb32()`
 - `public readonly uint ToAbgr32()`
 - `public readonly ulong ToRgba64()`
+- `public readonly ulong ToArgb64()`
+- `public readonly ulong ToAbgr64()`
+- `public readonly float GetLuminance()` - The same as Luminance: GDScript's get_luminance.
+- `public static Color Hex(uint hex)` - From a 32-bit 0xRRGGBBAA value (GDScript's Color.hex).
+- `public static Color Hex64(ulong hex)` - From a 64-bit 0xRRRRGGGGBBBBAAAA value.
+- `public static Color FromRgba8(long r8, long g8, long b8, long a8 = 255)` - From 0..255 channels (GDScript's Color.from_rgba8).
+- `public static Color FromString(string str, Color @default)` - From a name or an HTML hex code, or default when it is neither.
+- `public static Color FromRgbe9995(uint rgbe)` - From a shared-exponent value (RGB9E5: 9 bits for each of r, g, b and 5 for the exponent), as the engine stores HDR textures.
 - `public readonly string ToHtml(bool includeAlpha = true)` - The colour as lowercase hex, "rrggbbaa" or "rrggbb".
 - `public static Color operator +(Color l, Color r)`
 - `public static Color operator -(Color l, Color r)`
@@ -2461,6 +2509,28 @@ Values: `HsvRectangle = 0`, `HsvWheel = 1`, `VhsCircle = 2`, `OkhslCircle = 3`, 
 `public class ConcavePolygonShape3D : Shape3D`
 
 - `public Vector3[] Data { get; set; }`
+
+### ConfigFile
+
+`public class ConfigFile : RefCounted` - A settings file of sections and keys (Godot's ConfigFile).
+
+- `public void SetValue(string section, string key, Variant value)`
+- `public Variant GetValue(string section, string key, Variant @default = default)`
+- `public bool HasSection(string section)`
+- `public bool HasSectionKey(string section, string key)`
+- `public string[] GetSections()`
+- `public string[] GetSectionKeys(string section)`
+- `public void EraseSection(string section)`
+- `public void EraseSectionKey(string section, string key)`
+- `public void Clear()`
+- `public string EncodeToText()` - The file's text: values with no section first, then each section as "[name]" and its "key=value" lines, a blank line after each.
+- `public Error Parse(string data)` - Reads settings from text, adding to what is held.
+- `public Error Load(string path)` - Reads a file.
+- `public Error Save(string path)` - Writes the settings to a file, replacing it.
+- `public Error LoadEncrypted(string path, byte[] key)` - Not supported: Godot's encrypted file format is not read here.
+- `public Error LoadEncryptedPass(string path, string password)` - Not supported (see LoadEncrypted).
+- `public Error SaveEncrypted(string path, byte[] key)` - Not supported: Godot's encrypted file format is not written here.
+- `public Error SaveEncryptedPass(string path, string password)` - Not supported (see SaveEncrypted).
 
 ### ConfirmationDialog
 
@@ -2916,6 +2986,53 @@ Values: `Free = 0`, `Linear = 1`
 - `public static void Merge<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d, Collections.Dictionary<TKey, TValue> other, bool overwrite = false) where TKey : notnull`
 - `public static Collections.Array<TKey> KeysArray<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d) where TKey : notnull`
 - `public static Collections.Array<TValue> ValuesArray<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d) where TKey : notnull`
+- `public static Collections.Dictionary Merged(this Collections.Dictionary d, Collections.Dictionary other, bool overwrite = false)` - A new dictionary with the entries of this one and then those of other; with overwrite the other's win.
+- `public static Collections.Dictionary<TKey, TValue> Merged<TKey, TValue>(this Collections.Dictionary<TKey, TValue> d, Collections.Dictionary<TKey, TValue> other, bool overwrite = false) where TKey : notnull`
+- `public static bool HasAll(this Collections.Dictionary d, Collections.Array keys)` - Whether every key of keys is in the dictionary.
+- `public static Variant FindKey(this Collections.Dictionary d, Variant value)` - The first key whose value equals value, or nil.
+- `public static Variant GetOrAdd(this Collections.Dictionary d, Variant key, Variant @default = default)` - The value of the key, adding it with default first if it was not there.
+- `public static uint Hash(this Collections.Dictionary d)` - A number that is the same for equal dictionaries.
+
+### DirAccess
+
+`public class DirAccess : RefCounted` - A folder opened for listing and file management (Godot's DirAccess).
+
+- `public bool IncludeNavigational { get; set; }`
+- `public bool IncludeHidden { get; set; }`
+- `public static DirAccess? Open(string path)` - Opens a folder; null when it does not exist (GetOpenError says why).
+- `public static Error GetOpenError()`
+- `public Error ListDirBegin()` - Starts a listing; GetNext then gives the names one by one.
+- `public string GetNext()` - The next name of the listing, or an empty string at the end.
+- `public bool CurrentIsDir()` - Whether the name GetNext gave last is a folder.
+- `public void ListDirEnd()`
+- `public string[] GetFiles()` - The files of the folder, by name.
+- `public string[] GetDirectories()` - The folders in the folder, by name.
+- `public static string[] GetFilesAt(string path)`
+- `public static string[] GetDirectoriesAt(string path)`
+- `public static int GetDriveCount()`
+- `public static string GetDriveName(int idx)`
+- `public int GetCurrentDrive()` - The index of the drive the folder is on; 0 where there is only one root.
+- `public Error ChangeDir(string toDir)` - Moves into a folder, given relative to the current one, or absolute ("res://", "user://" or a system path).
+- `public string GetCurrentDir(bool includeDrive = true)` - The folder this handle is in, in Godot's spelling.
+- `public Error MakeDir(string path)`
+- `public Error MakeDirRecursive(string path)`
+- `public static Error MakeDirAbsolute(string path)`
+- `public static Error MakeDirRecursiveAbsolute(string path)`
+- `public bool FileExists(string path)`
+- `public bool DirExists(string path)`
+- `public static bool DirExistsAbsolute(string path)`
+- `public Error Copy(string from, string to, int chmodFlags = -1)` - Copies a file.
+- `public static Error CopyAbsolute(string from, string to, int chmodFlags = -1)`
+- `public Error Rename(string from, string to)` - Renames a file or a folder; to must not exist.
+- `public static Error RenameAbsolute(string from, string to)`
+- `public Error Remove(string path)` - Removes a file or an empty folder.
+- `public static Error RemoveAbsolute(string path)`
+- `public bool IsLink(string path)`
+- `public string ReadLink(string path)`
+- `public long GetSpaceLeft()` - The bytes free on the drive this folder is on; 0 when unknown.
+- `public string GetFilesystemType()` - The file system's type ("NTFS", "ext4" ...), or "Unknown".
+- `public bool IsCaseSensitive(string path)` - Whether the file system tells "A" from "a": no on Windows and macOS, yes elsewhere.
+- `public bool IsEquivalent(string pathA, string pathB)` - Whether two paths name the same file or folder.
 
 ### DirectionalLight3D
 
@@ -3071,7 +3188,15 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 - `public static long GetProcessFrames()`
 - `public static long GetPhysicsFrames()`
 - `public static double TimeScale { get; set; }`
-- `public static int PhysicsTicksPerSecond { get; }` - The physics step rate: 1 / the project's fixed step, 60 when it states none.
+- `public static int PhysicsTicksPerSecond { get; set; }` - The physics step rate: 1 / the engine's fixed step (the project's PHYSICS.FIXEDSTEP, 60 when it states none).
+- `public static int MaxPhysicsStepsPerFrame { get; set; }` - The most physics steps one frame runs to catch up.
+- `public static int MaxFps { get; set; }` - The frame rate cap, 0 for none.
+- `public static double PhysicsJitterFix { get; set; }` - Godot's jitter fix for fixed steps.
+- `public static bool PrintErrorMessages { get; set; }` - Whether the engine prints errors from scripts.
+- `public static long GetFramesDrawn()` - The frames drawn so far: the engine draws once per process frame, so this is the process frame count.
+- `public static double GetPhysicsInterpolationFraction()` - How far the physics clock is into the current step, 0 to 1: what a renderer blends the last two physics states by (Godot's get_physics_interpolation_fraction).
+- `public static Collections.Dictionary GetVersionInfo()` - The Godot version whose API this runtime follows, as Godot's get_version_info gives it: major, minor, patch, hex, status, build, hash, timestamp and string.
+- `public static string GetArchitectureName()` - The processor architecture in Godot's spelling ("x86_64", "arm64" ...).
 
 ### Environment
 
@@ -3091,6 +3216,10 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 - `public float TonemapExposure { get; set; }`
 - `public float TonemapWhite { get; set; }`
 - `public bool SsrEnabled { get; set; }`
+- `public int SsrMaxSteps { get; set; }` - The most steps a screen-space reflection ray takes.
+- `public float SsrFadeIn { get; set; }` - Stored, not applied (see SsrMaxSteps).
+- `public float SsrFadeOut { get; set; }` - Stored, not applied (see SsrMaxSteps).
+- `public float SsrDepthTolerance { get; set; }` - Stored, not applied (see SsrMaxSteps).
 - `public bool SsaoEnabled { get; set; }`
 - `public bool SsilEnabled { get; set; }`
 - `public bool SdfgiEnabled { get; set; }`
@@ -3230,6 +3359,90 @@ Values: `Xyz = 0`, `Xzy = 1`, `Yxz = 2`, `Yzx = 3`, `Zxy = 4`, `Zyx = 5`
 - `public static void ToAverTangent(Vector3 normal, Vector3 tangent, float handedness, float[] dest, int offset)` - The tangent the engine stores for a vertex whose Godot normal and tangent (xyz and handedness) are given (G4 R1's contract): the unit tangent made orthogonal to the normal, and w = +1/-1 so that cross(N, T) * w points along increasing v.
 - `public static Transform3D FromAver(Vec3 position, Quat rotation, Vec3 scale)` - An Aver entity's position, rotation and scale as a Godot transform.
 
+### FileAccess
+
+`public class FileAccess : RefCounted` - A file open for reading, writing or both (Godot's FileAccess).
+
+- `public bool BigEndian { get; set; }` - Whether multi-byte numbers are read and written most significant byte first.
+- `public static FileAccess? Open(string path, ModeFlags flags)` - Opens a file.
+- `public static FileAccess? OpenEncrypted(string path, ModeFlags modeFlags, byte[] key, byte[]? iv = null)` - Not supported: Godot's encrypted file format is not read or written here.
+- `public static FileAccess? OpenEncryptedWithPass(string path, ModeFlags modeFlags, string pass)` - Not supported (see OpenEncrypted).
+- `public static FileAccess? OpenCompressed(string path, ModeFlags modeFlags, CompressionMode compressionMode = CompressionMode.Fastlz)` - Not supported: Godot's compressed file format is not read or written here.
+- `public static Error GetOpenError()` - The error of the last Open: Ok when it worked.
+- `public string GetPath()`
+- `public string GetPathAbsolute()`
+- `public bool IsOpen()`
+- `public Error GetError()` - The error of the last read or write: FileEof after a read ran off the end.
+- `public bool EofReached()` - True once a read has gone past the end of the file.
+- `public long GetPosition()`
+- `public long GetLength()`
+- `public void Seek(long position)`
+- `public void SeekEnd(long position = 0)` - Moves to position bytes before the end (0, the default, is the end itself).
+- `public Error Resize(long length)`
+- `public void Flush()`
+- `public void Close()`
+- `public override void Free()`
+- `public long Get8()`
+- `public long Get16()`
+- `public long Get32()`
+- `public long Get64()`
+- `public float GetHalf()`
+- `public float GetFloat()`
+- `public double GetDouble()`
+- `public float GetReal()` - A real number as the engine stores it: a 32-bit float (Godot's default build).
+- `public byte[] GetBuffer(long length)` - The next length bytes; fewer when the file ends first.
+- `public string GetLine()` - One line without its line break (a "\r" before the "\n" is dropped).
+- `public string[] GetCsvLine(string delim = ",")` - One line of comma-separated values (or another delim): a value in quotes may hold the delimiter and line breaks, and "" in quotes is a quote.
+- `public string GetAsText(bool skipCr = false)` - The whole file as text (UTF-8), from the start; the position is left where it was.
+- `public string GetPascalString()` - A string written by StorePascalString: a 32-bit length, then that many UTF-8 bytes.
+- `public Variant GetVar(bool allowObjects = false)` - A value written by StoreVar.
+- `public bool Store8(long value)`
+- `public bool Store16(long value)`
+- `public bool Store32(long value)`
+- `public bool Store64(long value)`
+- `public bool StoreHalf(float value)`
+- `public bool StoreFloat(float value)`
+- `public bool StoreDouble(double value)`
+- `public bool StoreReal(float value)`
+- `public bool StoreBuffer(byte[] buffer)`
+- `public bool StoreString(string @string)` - The text as UTF-8, with no length and no line break.
+- `public bool StoreLine(string line)` - The text and a "\n".
+- `public bool StoreCsvLine(string[] values, string delim = ",")` - A line of values separated by delim; a value with the delimiter, a quote or a line break is put in quotes.
+- `public bool StorePascalString(string @string)`
+- `public bool StoreVar(Variant value, bool fullObjects = false)` - A value in Godot's binary form, with its length in front so GetVar can read it back.
+- `public static bool FileExists(string path)`
+- `public static byte[] GetFileAsBytes(string path)`
+- `public static string GetFileAsString(string path)`
+- `public static string GetMd5(string path)` - The MD5 hash of the file as 32 lower-case hex digits; empty if it cannot be read.
+- `public static string GetSha256(string path)` - The SHA-256 hash of the file as 64 lower-case hex digits; empty if it cannot be read.
+- `public static long GetModifiedTime(string file)` - When the file was last changed, in unix seconds; 0 if there is no such file.
+- `public static long GetAccessTime(string file)` - When the file was last read, in unix seconds; 0 if there is no such file.
+- `public static long GetSize(string file)` - The file's size in bytes; -1 if there is no such file.
+- `public static bool GetHiddenAttribute(string file)`
+- `public static Error SetHiddenAttribute(string file, bool hidden)`
+- `public static bool GetReadOnlyAttribute(string file)`
+- `public static Error SetReadOnlyAttribute(string file, bool ro)`
+- `public static UnixPermissionFlags GetUnixPermissions(string file)` - The Unix permission bits of the file; 0 where the platform has none (Windows) or the file is missing.
+- `public static Error SetUnixPermissions(string file, UnixPermissionFlags permissions)`
+
+### FileAccess.CompressionMode
+
+`public enum CompressionMode` - Godot's FileAccess.CompressionMode.
+
+Values: `Fastlz = 0`, `Deflate = 1`, `Zstd = 2`, `Gzip = 3`, `Brotli = 4`
+
+### FileAccess.ModeFlags
+
+`public enum ModeFlags` - Godot's FileAccess.ModeFlags.
+
+Values: `Read = 1`, `Write = 2`, `ReadWrite = 3`, `WriteRead = 7`
+
+### FileAccess.UnixPermissionFlags
+
+`public enum UnixPermissionFlags` - Godot's FileAccess.UnixPermissionFlags.
+
+Values: `ExecuteOther = 1`, `WriteOther = 2`, `ReadOther = 4`, `ExecuteGroup = 8`, `WriteGroup = 16`, `ReadGroup = 32`, `ExecuteOwner = 64`, `WriteOwner = 128`, `ReadOwner = 256`, `RestrictedDelete = 512`, `SetGroupId = 1024`, `SetUserId = 2048`
+
 ### FlowContainer
 
 `public class FlowContainer : Container` - Children laid out in lines that wrap (Godot's FlowContainer).
@@ -3359,7 +3572,8 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 - `public static void PushError(params object?[] what)`
 - `public static void PushWarning(params object?[] what)`
 - `public static string Str(params object?[] what)` - The text of any value the way Godot's str() makes it (Variants print their Godot form).
-- `public static string VarToStr(Variant var)`
+- `public static string VarToStr(Variant var)` - The text form of a value, which StrToVar reads back (Godot's var_to_str).
+- `public static Variant StrToVar(string @string)` - Reads the text form of a value (Godot's str_to_var); nil for text that is not one.
 - `public static float Randf()`
 - `public static uint Randi()`
 - `public static double RandRange(double from, double to)`
@@ -3449,6 +3663,8 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 
 `public static class GDScript` - GDScript's operators, conversions, dynamic access and built-in functions, over Variant.
 
+- `public static double RotateToward(double from, double to, double delta)` - GDScript's rotate_toward(from, to, delta): moves the angle from toward to by delta radians along the shorter way round, without passing to.
+- `public static Variant TypeConvert(Variant value, long type)` - GDScript's type_convert(value, type): the value as the Variant type (TYPE_INT and so on) by the rules of that type's constructor.
 - `public static Variant Add(Variant a, Variant b)`
 - `public static Variant Sub(Variant a, Variant b)`
 - `public static Variant Mul(Variant a, Variant b)`
@@ -3516,6 +3732,7 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 - `public static Variant Index(Variant target, Variant key)`
 - `public static void SetIndex(Variant target, Variant key, Variant value)`
 - `public static Variant GetMember(Variant target, string name)` - A member of a value whose type is not known: a property by name; x/y/z/w/r/g/b/a of vectors and colours; a key of a dictionary.
+- `public static Variant WithMember(Variant target, string name, Variant value)` - The value after one of its members was set: v.origin = p on a value of a type that is not known is written v = WithMember(v, "origin", p).
 - `public static void SetMember(Variant target, string name, Variant value)`
 - `public static Variant CallMethod(Variant target, string method, params Variant[] args)` - A method call on a value whose type is not known: objects by name (Godot's or C#'s), and the common methods of the built-in types.
 
@@ -3534,6 +3751,24 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 - `public ShadowCastingSetting CastShadow { get; set; }`
 - `public float Transparency { get; set; }`
 - `public float LodBias { get; set; }`
+- `public GIModeEnum GIMode { get; set; }` - Stored, not applied (approximated): Aver has no baked lightmaps and global illumination follows the whole level, so every instance counts as dynamic whatever this says.
+- `public float GILightmapTexelScale { get; set; }` - Stored, not applied: there is no lightmap to size.
+- `public LightmapScaleEnum GILightmapScale { get; set; }` - Stored, not applied: there is no lightmap to size.
+- `public float ExtraCullMargin { get; set; }` - Stored, not applied: the engine culls with its own bounds, so a wider margin changes nothing.
+- `public bool IgnoreOcclusionCulling { get; set; }` - Stored, not applied: occlusion culling is automatic, so an instance cannot opt out.
+- `public Aabb CustomAabb { get; set; }` - Stored, not applied: the engine uses the mesh's own bounds.
+
+### GeometryInstance3D.GIModeEnum
+
+`public enum GIModeEnum` - How an instance takes part in global illumination (Godot's GeometryInstance3D.GIMode).
+
+Values: `Disabled = 0`, `Static = 1`, `Dynamic = 2`
+
+### GeometryInstance3D.LightmapScaleEnum
+
+`public enum LightmapScaleEnum` - The resolution of an instance's lightmap relative to the scene's (Godot's GeometryInstance3D.LightmapScale).
+
+Values: `Scale1X = 0`, `Scale2X = 1`, `Scale4X = 2`, `Scale8X = 3`, `Max = 4`
 
 ### GeometryInstance3D.ShadowCastingSetting
 
@@ -3650,6 +3885,8 @@ Values: `Disabled = 0`, `Self = 1`, `Dependencies = 2`
 
 `public abstract class GodotObject : AverActor, IDisposable` - The root of Godot's class tree (GodotObject).
 
+- `public Variant GetScript()` - The script given to SetScript; nil for an object that was never given one.
+- `public void SetScript(Variant script)` - Approximated, kept as set: Godot swaps the object's behaviour for the script's.
 - `public const int NotificationPostinitialize = 0` - The notification numbers scripts compare what against in _Notification.
 - `public const int NotificationPredelete = 1`
 - `public const int NotificationExtensionReloaded = 2`
@@ -4087,15 +4324,15 @@ Values: `Visible = 0`, `Hidden = 1`, `Captured = 2`, `Confined = 3`, `ConfinedHi
 
 - `public static bool HasAction(StringName action)`
 - `public static void AddAction(StringName action, float deadzone = 0.5f)` - Adds an action with no events.
-- `public static void EraseAction(StringName action)`
-- `public static Collections.Array<StringName> GetActions()` - Every action, the project's and the ones added by script.
+- `public static void EraseAction(StringName action)` - Removes an action: one script added, or one of Godot's built-in ui_* actions.
+- `public static Collections.Array<StringName> GetActions()` - Every action: the project's, Godot's built-in ui_* ones, and the ones script added.
 - `public static void ActionSetDeadzone(StringName action, float deadzone)`
 - `public static float ActionGetDeadzone(StringName action)`
 - `public static void ActionAddEvent(StringName action, InputEvent @event)`
 - `public static bool ActionHasEvent(StringName action, InputEvent @event)`
 - `public static void ActionEraseEvent(StringName action, InputEvent @event)`
 - `public static void ActionEraseEvents(StringName action)`
-- `public static Collections.Array<InputEvent> ActionGetEvents(StringName action)` - The events that trigger the action: the ones script added, then the project's bindings (the engine's).
+- `public static Collections.Array<InputEvent> ActionGetEvents(StringName action)` - The events that trigger the action: the ones script added (or, for a built-in ui_* action no script has changed, Godot's defaults), then the project's bindings (the engine's).
 - `public static bool EventIsAction(InputEvent @event, StringName action, bool exactMatch = false)` - Whether event triggers the action.
 
 ### IntervalTweener
@@ -4231,6 +4468,18 @@ Values: `Invalid = -1`, `LeftX = 0`, `LeftY = 1`, `RightX = 2`, `RightY = 3`, `T
 
 Values: `Invalid = -1`, `A = 0`, `B = 1`, `X = 2`, `Y = 3`, `Back = 4`, `Guide = 5`, `Start = 6`, `LeftStick = 7`, `RightStick = 8`, `LeftShoulder = 9`, `RightShoulder = 10`, `DpadUp = 11`, `DpadDown = 12`, `DpadLeft = 13`, `DpadRight = 14`, `Misc1 = 15`
 
+### JSON
+
+`public class JSON : Resource` - Reads and writes JSON (Godot's JSON).
+
+- `public Variant Data { get; set; }` - The parsed data, or whatever a script set.
+- `public Error Parse(string jsonText, bool keepText = false)` - Parses jsonText into Data.
+- `public string GetParsedText()` - The text given to Parse with keepText, else empty.
+- `public int GetErrorLine()` - The line (counting from 1) where the last Parse failed; 0 when it worked.
+- `public string GetErrorMessage()`
+- `public static Variant ParseString(string jsonString)` - The data a JSON text holds, or nil if it is not JSON.
+- `public static string Stringify(Variant data, string indent = "", bool sortKeys = true, bool fullPrecision = false)` - The data as JSON text.
+
 ### Key
 
 `public enum Key : long` - Keyboard keys, with Godot's key codes (letters and digits are their ASCII codes, special keys are 1 &lt;&lt; 22 plus an index).
@@ -4296,7 +4545,7 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 `public class Label3D : GeometryInstance3D` - Text in the world (Godot's Label3D).
 
 - `public string Text { get; set; }`
-- `public Resource? Font { get; set; }`
+- `public Font? Font { get; set; }` - The font; null draws with the project's default.
 - `public int FontSize { get; set; }`
 - `public int OutlineSize { get; set; }`
 - `public float PixelSize { get; set; }`
@@ -4348,6 +4597,8 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 - `public float LightEnergy { get; set; }`
 - `public float LightIndirectEnergy { get; set; }` - Kept, not applied: local lights add no indirect light, and the sun's indirect light is Aver's global illumination.
 - `public float LightVolumetricFogEnergy { get; set; }`
+- `public BakeMode LightBakeMode { get; set; }` - Stored, not applied (approximated): nothing is baked, every light is dynamic whatever this says.
+- `public bool EditorOnly { get; set; }` - Stored, not applied: Aver runs no editor, so a light never counts as editor-only.
 - `public float LightSpecular { get; set; }` - Godot's default is 0.5; the engine's specular multiplier is twice this (Godot's specular_amount).
 - `public bool LightNegative { get; set; }`
 - `public float LightSize { get; set; }` - The emitter radius in metres: widens the highlight and the shadow filter.
@@ -4362,6 +4613,12 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 - `public float DistanceFadeLength { get; set; }`
 - `public uint LightCullMask { get; set; }` - The instance layers this light affects (the raster local-light path; the ray-traced light path and the sun ignore it).
 - `public uint ShadowCasterMask { get; set; }` - The instance layers that cast this light's shadow (the raster local-light path).
+
+### Light3D.BakeMode
+
+`public enum BakeMode` - Whether a light is baked into lightmaps and the voxel GI (Godot's Light3D.BakeMode).
+
+Values: `Disabled = 0`, `Static = 1`, `Dynamic = 2`
 
 ### LightmapGI
 
@@ -4637,6 +4894,10 @@ Values: `Always = 0`, `OnHover = 1`, `Never = 2`
 - `public static double CubicInterpolate(double from, double to, double pre, double post, double weight)`
 - `public static float BezierInterpolate(float start, float control1, float control2, float end, float t)`
 - `public static double BezierInterpolate(double start, double control1, double control2, double end, double t)`
+- `public static float CubicInterpolateInTime(float from, float to, float pre, float post, float weight, float toT, float preT, float postT)` - Like CubicInterpolate(float, float, float, float, float) with the time each point is at (toT for the end, preT and postT for the outer points; the start is at 0), by the Barry-Goldman method: for points that are not evenly spaced in time.
+- `public static double CubicInterpolateInTime(double from, double to, double pre, double post, double weight, double toT, double preT, double postT)`
+- `public static float BezierDerivative(float start, float control1, float control2, float end, float t)` - The slope of the cubic Bezier curve through start and end with the two control points, at t.
+- `public static double BezierDerivative(double start, double control1, double control2, double end, double t)`
 - `public static float Ease(float s, float curve)` - Godot's ease: curve 1 is linear, above 1 ease-in, below 1 ease-out, negative in-out.
 - `public static double Ease(double s, double curve)`
 - `public static int NearestPo2(int value)`
@@ -4938,6 +5199,14 @@ Values: `Unreliable = 0`, `UnreliableOrdered = 1`, `Reliable = 2`
 `public enum VisibilityUpdateModeEnum`
 
 Values: `Idle = 0`, `Physics = 1`, `None = 2`
+
+### Mutex
+
+`public class Mutex : RefCounted` - A lock the same thread may take again (Godot's Mutex).
+
+- `public void Lock()`
+- `public bool TryLock()` - Takes the lock if it is free; false when another thread has it.
+- `public void Unlock()`
 
 ### NavigationAgent3D
 
@@ -5611,6 +5880,8 @@ Values: `Inherit = 0`, `Pausable = 1`, `WhenPaused = 2`, `Always = 3`, `Disabled
 - `public string GetSubname(int idx)`
 - `public string GetConcatenatedNames()`
 - `public string GetConcatenatedSubnames()`
+- `public NodePath Slice(int begin, int end = 0)` - The names from begin to end as a relative path.
+- `public uint Hash()` - A number that is the same for equal paths.
 - `public NodePath GetAsPropertyPath()` - The path read as a property path: ":position:x" for "position:x" style, names kept.
 - `public static bool operator ==(NodePath? l, NodePath? r)`
 - `public static bool operator !=(NodePath? l, NodePath? r)`
@@ -5618,6 +5889,23 @@ Values: `Inherit = 0`, `Pausable = 1`, `WhenPaused = 2`, `Always = 3`, `Disabled
 - `public override bool Equals(object? obj)`
 - `public override int GetHashCode()`
 - `public override string ToString()`
+
+### Occluder3D
+
+`public class Occluder3D : Resource` - A shape that hides what is behind it from the renderer (Godot's Occluder3D).
+
+- `public virtual Vector3[] GetVertices()` - The corners of the occluder in its own space; empty for a shape that has none yet.
+- `public virtual int[] GetIndices()` - Triangles of GetVertices, three indices each.
+
+### OccluderInstance3D
+
+`public class OccluderInstance3D : VisualInstance3D` - A node that places an Occluder3D in the world (Godot's OccluderInstance3D).
+
+- `public Occluder3D? Occluder { get; set; }` - The shape; setting it changes nothing that is drawn.
+- `public uint BakeMask { get; set; }` - The layers whose geometry would be baked into an occluder in the editor.
+- `public float BakeSimplificationDistance { get; set; }` - How far the baked occluder may deviate from the geometry it came from.
+- `public bool GetBakeMaskValue(int layerNumber)`
+- `public void SetBakeMaskValue(int layerNumber, bool value)`
 
 ### OfflineMultiplayerPeer
 
@@ -5722,6 +6010,44 @@ Values: `Vertical = 1`, `Horizontal = 0`
 - `public static ulong GetTicksUsec()`
 - `public static bool IsDebugBuild()`
 - `public static string GetEnvironment(string variable)`
+- `public static bool HasEnvironment(string variable)`
+- `public static void SetEnvironment(string variable, string value)`
+- `public static void UnsetEnvironment(string variable)`
+- `public static int GetProcessorCount()` - The number of logical processors.
+- `public static ulong GetStaticMemoryUsage()` - The bytes of managed memory in use: Godot's "static" memory is the engine's own allocations, and the managed heap is what this runtime holds.
+- `public static ulong GetStaticMemoryPeakUsage()` - The most GetStaticMemoryUsage has reported so far.
+- `public static string GetUserDataDir()` - The folder user:// names: the player's writable folder for this project, created on first use.
+- `public static string GetDataDir()` - The folder the platform keeps per-user application data in (Godot's get_data_dir).
+- `public static string GetConfigDir()` - The folder the platform keeps per-user configuration in (Godot's get_config_dir).
+- `public static string GetCacheDir()` - The folder the platform keeps per-user caches in (Godot's get_cache_dir).
+- `public static string GetExecutablePath()`
+- `public static int GetProcessId()`
+- `public static ulong GetThreadCallerId()` - The caller's thread id.
+- `public static string GetLocale()` - The user's locale in Godot's spelling ("en_US"), "en" when the system gives none.
+- `public static string GetLocaleLanguage()` - The language part of GetLocale ("en").
+- `public static bool IsUserfsPersistent()` - Whether user:// survives a restart: it is a folder on disk, so it does.
+- `public static void DelayMsec(int msec)` - Blocks the calling thread for the milliseconds.
+- `public static void DelayUsec(int usec)` - Blocks the calling thread for the microseconds (rounded up to whole milliseconds).
+- `public static string[] GetCmdlineArgs()` - Every argument the program was started with, after its own name (Godot's get_cmdline_args).
+- `public static string[] GetCmdlineUserArgs()` - The arguments after a lone "--": the ones meant for the game, as Godot's get_cmdline_user_args gives them.
+- `public static Error ShellOpen(string uri)` - Opens a web address, a file or a folder in the program the system associates with it (Godot's shell_open).
+
+### PackedArrays
+
+`public static class PackedArrays` - The methods of GDScript's packed arrays (PackedByteArray, PackedInt32Array, PackedStringArray, PackedVector3Array ...) for the arrays Aver.Fabric uses for them.
+
+- `public static T[] Append<T>(T[] array, T value)` - The array with value added at the end (push_back, append).
+- `public static T[] AppendArray<T>(T[] array, T[] other)` - The array with all of other added at the end (append_array).
+- `public static T[] Insert<T>(T[] array, long at, T value)` - The array with value inserted before at (insert); an index outside the array leaves it unchanged.
+- `public static T[] RemoveAt<T>(T[] array, long at)` - The array without the element at at (remove_at); an index outside the array leaves it unchanged.
+- `public static T[] Resize<T>(T[] array, long size)` - The array cut or padded with default values to size elements (resize); a negative size gives an empty array.
+- `public static void Fill<T>(T[] array, T value)` - Sets every element to value in place (fill).
+- `public static void Sort<T>(T[] array)` - Sorts the numbers or strings in ascending order, in place (sort); strings compare by code unit, as Godot compares them.
+- `public static void Reverse<T>(T[] array)` - Reverses the order in place (reverse).
+- `public static long Find<T>(T[] array, T value, long from = 0)` - The index of the first element equal to value at or after from, or -1 (find).
+- `public static long Count<T>(T[] array, T value)` - How many elements equal value (count).
+- `public static T[] Slice<T>(T[] array, long begin, long end = int.MaxValue)` - A copy of the elements from begin up to, not including, end (slice); a negative index counts from the end.
+- `public static T[] Duplicate<T>(T[] array)` - A copy of the array (duplicate).
 
 ### PackedScene
 
@@ -5846,6 +6172,24 @@ Values: `CorridorFunnel = 0`, `Edgecentered = 1`, `None = 2`
 `public enum PathSegmentType` - What a path point is (Godot's PathSegmentType).
 
 Values: `Region = 0`, `Link = 1`
+
+### Performance
+
+`public static class Performance` - Godot's Performance singleton: numbers a debug overlay shows, and custom monitors a script adds.
+
+- `public static double GetMonitor(Monitor monitor)` - The monitor's value.
+- `public static void AddCustomMonitor(StringName id, Callable callable, Collections.Array? arguments = null)` - Adds a monitor whose value is what callable returns, called with arguments each time it is read.
+- `public static void RemoveCustomMonitor(StringName id)`
+- `public static bool HasCustomMonitor(StringName id)`
+- `public static Variant GetCustomMonitor(StringName id)` - The value of a custom monitor: its callable's result; nil for a name no monitor has.
+- `public static StringName[] GetCustomMonitorNames()`
+- `public static ulong GetMonitorModificationTime()` - When a custom monitor was last added or removed, in GetTicksUsec microseconds: a monitor list redraws when this changes.
+
+### Performance.Monitor
+
+`public enum Monitor` - Godot's Performance.Monitor.
+
+Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigationProcess = 3`, `MemoryStatic = 4`, `MemoryStaticMax = 5`, `MemoryMessageBufferMax = 6`, `ObjectCount = 7`, `ObjectResourceCount = 8`, `ObjectNodeCount = 9`, `ObjectOrphanNodeCount = 10`, `RenderTotalObjectsInFrame = 11`, `RenderTotalPrimitivesInFrame = 12`, `RenderTotalDrawCallsInFrame = 13`, `RenderVideoMemUsed = 14`, `RenderTextureMemUsed = 15`, `RenderBufferMemUsed = 16`, `Physics2DActiveObjects = 17`, `Physics2DCollisionPairs = 18`, `Physics2DIslandCount = 19`, `Physics3DActiveObjects = 20`, `Physics3DCollisionPairs = 21`, `Physics3DIslandCount = 22`, `AudioOutputLatency = 23`, `NavigationActiveMaps = 24`, `NavigationRegionCount = 25`, `NavigationAgentCount = 26`, `NavigationLinkCount = 27`, `NavigationPolygonCount = 28`, `NavigationEdgeCount = 29`, `NavigationEdgeMergeCount = 30`, `NavigationEdgeConnectionCount = 31`, `NavigationEdgeFreeCount = 32`, `NavigationObstacleCount = 33`, `PipelineCompilationsCanvas = 34`, `PipelineCompilationsMesh = 35`, `PipelineCompilationsSurface = 36`, `PipelineCompilationsDraw = 37`, `PipelineCompilationsSpecialization = 38`, `Navigation2DActiveMaps = 39`, `Navigation2DRegionCount = 40`, `Navigation2DAgentCount = 41`, `Navigation2DLinkCount = 42`, `Navigation2DPolygonCount = 43`, `Navigation2DEdgeCount = 44`, `Navigation2DEdgeMergeCount = 45`, `Navigation2DEdgeConnectionCount = 46`, `Navigation2DEdgeFreeCount = 47`, `Navigation2DObstacleCount = 48`, `Navigation3DActiveMaps = 49`, `Navigation3DRegionCount = 50`, `Navigation3DAgentCount = 51`, `Navigation3DLinkCount = 52`, `Navigation3DPolygonCount = 53`, `Navigation3DEdgeCount = 54`, `Navigation3DEdgeMergeCount = 55`, `Navigation3DEdgeConnectionCount = 56`, `Navigation3DEdgeFreeCount = 57`, `Navigation3DObstacleCount = 58`, `Max = 59`
 
 ### PhysicalSkyMaterial
 
@@ -6006,6 +6350,14 @@ Values: `Transform = 0`, `LinearVelocity = 1`, `AngularVelocity = 2`, `Sleeping 
 - `public override readonly bool Equals(object? obj)`
 - `public override readonly int GetHashCode()`
 - `public override readonly string ToString()`
+
+### PolygonOccluder3D
+
+`public class PolygonOccluder3D : Occluder3D` - A flat occluder outlined by a 2D polygon in the XY plane (Godot's PolygonOccluder3D).
+
+- `public Vector2[] Polygon { get; set; }` - The outline, in order.
+- `public override Vector3[] GetVertices()`
+- `public override int[] GetIndices()` - A fan from the first corner: right for a convex outline, an approximation for a concave one.
 
 ### Popup
 
@@ -6221,6 +6573,8 @@ Values: `BeginToEnd = 0`, `EndToBegin = 1`, `TopToBottom = 2`, `BottomToTop = 3`
 
 - `public static Variant GetSetting(string name, Variant @default = default)`
 - `public static bool HasSetting(string name)`
+- `public static string GlobalizePath(string path)` - The operating-system path for a res:// or user:// path (res:// is the project's content folder, user:// the player's writable folder); any other path is returned unchanged.
+- `public static string LocalizePath(string path)` - The res:// or user:// path for a path inside the project's content folder or the user folder; any other path is returned unchanged.
 
 ### PropertyHint
 
@@ -6239,6 +6593,14 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public PropertyTweener SetEase(Tween.EaseType ease)`
 - `public PropertyTweener SetDelay(double delay)` - Waits this long before the property starts to change.
 - `public PropertyTweener SetCustomInterpolator(Func<float, float> interpolator)` - Replaces the curve with a function of the progress (0 to 1) that returns the eased progress.
+
+### QuadOccluder3D
+
+`public class QuadOccluder3D : Occluder3D` - A flat rectangle occluder facing +Z (Godot's QuadOccluder3D).
+
+- `public Vector2 Size { get; set; }`
+- `public override Vector3[] GetVertices()`
+- `public override int[] GetIndices()`
 
 ### Quaternion
 
@@ -6266,6 +6628,8 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public readonly Quaternion Inverse()`
 - `public readonly float GetAngle()`
 - `public readonly Vector3 GetAxis()`
+- `public readonly Quaternion Log()` - The logarithm of a unit quaternion: its axis scaled by its angle, as the vector part, with a zero real part.
+- `public readonly Quaternion Exp()` - The exponential of a pure (zero real part) quaternion: the rotation about its vector part by that vector's length; the identity for a vector too short to turn.
 - `public readonly Vector3 GetEuler(EulerOrder order = EulerOrder.Yxz)` - The Euler angles (radians) in the given order; the quaternion must be normalized.
 - `public readonly Quaternion Slerp(Quaternion to, float weight)`
 - `public readonly Quaternion Slerpni(Quaternion to, float weight)` - Slerp without taking the shorter arc.
@@ -6378,6 +6742,8 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public readonly Vector2 GetCenter()`
 - `public readonly Rect2 Grow(float by)`
 - `public readonly Rect2 GrowIndividual(float left, float top, float right, float bottom)`
+- `public readonly Rect2 GrowSide(Side side, float amount)` - The rectangle grown by amount on one side.
+- `public readonly Vector2 GetSupport(Vector2 direction)` - The corner furthest in the direction: the position, plus the size along each axis the direction points up.
 - `public readonly bool HasArea()`
 - `public readonly bool HasPoint(Vector2 point)`
 - `public readonly Rect2 Intersection(Rect2 b)`
@@ -6407,6 +6773,10 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public readonly int GetArea()`
 - `public readonly Vector2I GetCenter()`
 - `public readonly Rect2I Grow(int by)`
+- `public readonly Rect2I GrowIndividual(int left, int top, int right, int bottom)`
+- `public readonly Rect2I GrowSide(Side side, int amount)` - The rectangle grown by amount on one side.
+- `public readonly Rect2I Expand(Vector2I to)`
+- `public readonly Rect2I Intersection(Rect2I b)`
 - `public readonly bool HasArea()`
 - `public readonly bool HasPoint(Vector2I point)`
 - `public readonly bool Intersects(Rect2I b)`
@@ -6472,6 +6842,15 @@ Values: `Once = 0`, `Always = 1`
 
 `public static class RenderingServer` - Godot's RenderingServer enums that the environment nodes use.
 
+- `public static void EnvironmentSetSsaoQuality(EnvironmentSsaoQuality quality, bool halfSize, float adaptiveTarget, int blurPasses, float fadeoutFrom, float fadeoutTo)` - Approximated, kept as set: Aver has no screen-space ambient occlusion; its ray-traced GI occludes ambient light, at its own quality.
+- `public static void EnvironmentSetSsilQuality(EnvironmentSsilQuality quality, bool halfSize, float adaptiveTarget, int blurPasses, float fadeoutFrom, float fadeoutTo)` - Approximated, kept as set: Aver has no screen-space indirect lighting; its GI is ray traced.
+- `public static void EnvironmentSetSsrRoughnessQuality(EnvironmentSsrRoughnessQuality quality)` - Approximated, kept as set: reflections are ray traced or probe based, not screen-space.
+- `public static void GiSetUseHalfResolution(bool halfResolution)` - Approximated, kept as set: Aver's GI resolution follows its GI quality level (RENDER.GI), not this switch.
+- `public static void EnvironmentGlowSetUseBicubicUpscale(bool enable)` - Approximated, kept as set: the glow upscale filter is Aver's own.
+- `public static void EnvironmentSetVolumetricFogFilterActive(bool active)` - Approximated, kept as set: Aver's volumetric fog is filtered as the renderer decides.
+- `public static void EnvironmentSetVolumetricFogVolumeSize(int size, int depth)` - Approximated, kept as set: Aver's volumetric fog grid is sized by the renderer.
+- `public static Color GetDefaultClearColor()` - The colour behind everything when nothing else is drawn there (Godot's default clear colour, 0.3 grey unless the project sets it).
+- `public static void SetDefaultClearColor(Color color)` - Approximated, kept as set: a level's background is its sky, which the converter writes from the Environment (or the project's default clear colour) at conversion; a colour set here later does not repaint it.
 - `public static string GetCurrentRenderingMethod()` - The rendering method in Godot's spelling.
 - `public static string GetCurrentRenderingDriverName()` - The graphics API name in Godot's spelling ("vulkan", "d3d12" or "metal"); Aver picks by platform.
 - `public static void DirectionalSoftShadowFilterSetQuality(ShadowQuality quality)` - Kept as set.
@@ -6485,6 +6864,24 @@ Values: `Once = 0`, `Always = 1`
 - `public static Variant GlobalShaderParameterGet(StringName name)`
 - `public static GlobalShaderParameterType GlobalShaderParameterGetType(StringName name)`
 - `public static StringName[] GlobalShaderParameterGetList()`
+
+### RenderingServer.EnvironmentSsaoQuality
+
+`public enum EnvironmentSsaoQuality` - Godot's RenderingServer.EnvironmentSSAOQuality (ENV_SSAO_QUALITY_*).
+
+Values: `VeryLow = 0`, `Low = 1`, `Medium = 2`, `High = 3`, `Ultra = 4`
+
+### RenderingServer.EnvironmentSsilQuality
+
+`public enum EnvironmentSsilQuality` - Godot's RenderingServer.EnvironmentSSILQuality (ENV_SSIL_QUALITY_*).
+
+Values: `VeryLow = 0`, `Low = 1`, `Medium = 2`, `High = 3`, `Ultra = 4`
+
+### RenderingServer.EnvironmentSsrRoughnessQuality
+
+`public enum EnvironmentSsrRoughnessQuality` - Godot's RenderingServer.EnvironmentSSRRoughnessQuality (ENV_SSR_ROUGHNESS_QUALITY_*).
+
+Values: `Disabled = 0`, `Low = 1`, `Medium = 2`, `High = 3`
 
 ### RenderingServer.FogVolumeShape
 
@@ -6958,6 +7355,14 @@ Values: `Disabled = 0`, `Auto = 1`, `ShowAlways = 2`, `ShowNever = 3`, `Reserve 
 - `public static readonly StringName ScrollStarted`
 - `public static readonly StringName ScrollEnded`
 
+### Semaphore
+
+`public class Semaphore : RefCounted` - A counter that blocks a thread while it is zero (Godot's Semaphore).
+
+- `public void Wait()` - Waits until the count is above zero, then lowers it by one.
+- `public bool TryWait()` - Lowers the count by one if it is above zero; false when it is zero.
+- `public void Post(int count = 1)` - Raises the count, waking waiting threads.
+
 ### Separator
 
 `public class Separator : Control` - Base of the separators (Godot's Separator).
@@ -7224,6 +7629,12 @@ Values: `Size32`, `Size64`, `Size128`, `Size256`, `Size512`, `Size1024`, `Size20
 - `public float Radius { get; set; }`
 - `public float Height { get; set; }`
 
+### SphereOccluder3D
+
+`public class SphereOccluder3D : Occluder3D` - A sphere occluder (Godot's SphereOccluder3D).
+
+- `public float Radius { get; set; }`
+
 ### SphereShape3D
 
 `public class SphereShape3D : Shape3D`
@@ -7446,7 +7857,7 @@ Values: `None = 0`, `Connecting = 1`, `Connected = 2`, `Error = 3`
 - `public static bool IsValidFloat(this string s)`
 - `public static string Capitalize(this string s)`
 - `public static string PadZeros(this string s, long digits)`
-- `public static string PadDecimals(this string s, long digits)`
+- `public static string PadDecimals(this string s, long digits)` - The number text with exactly digits digits after the point: zeros are added, and digits past that are cut off (not rounded).
 - `public static string Repeat(this string s, long count)`
 - `public static string Insert(this string s, long position, string what)`
 - `public static string Erase(this string s, long position, long chars = 1)`
@@ -7460,6 +7871,87 @@ Values: `None = 0`, `Connecting = 1`, `Connected = 2`, `Error = 3`
 - `public static string ToSnakeCase(this string s)`
 - `public static string ToPascalCase(this string s)`
 - `public static string Format(this string s, Variant values)` - String.format: "{name}" placeholders from a Dictionary, "{0}" from an Array.
+- `public static long CasecmpTo(this string s, string to)` - Compares by character code: -1, 0 or 1.
+- `public static long NocasecmpTo(this string s, string to)` - Compares by character code ignoring case: -1, 0 or 1.
+- `public static long NaturalcasecmpTo(this string s, string to)` - Compares with runs of digits taken as numbers ("file2" before "file10"): -1, 0 or 1.
+- `public static long NaturalnocasecmpTo(this string s, string to)`
+- `public static long FilecasecmpTo(this string s, string to)` - Like NaturalcasecmpTo, with names that start with '.' or '_' first: for sorting files.
+- `public static long FilenocasecmpTo(this string s, string to)`
+- `public static string GetSlice(this string s, string delimiter, long slice)` - The slice-th part of the string split at delimiter; empty past the last, or for an empty delimiter.
+- `public static string GetSlicec(this string s, long delimiter, long slice)` - Like GetSlice with a one-character delimiter given by its code.
+- `public static long GetSliceCount(this string s, string delimiter)` - How many parts the string has when split at the delimiter; 0 for an empty delimiter.
+- `public static long Findn(this string s, string what, long from = 0)`
+- `public static long Rfindn(this string s, string what, long from = -1)`
+- `public static long Countn(this string s, string what, long from = 0, long to = 0)`
+- `public static bool Containsn(this string s, string what)`
+- `public static bool Match(this string s, string expr)` - Whether the string matches a pattern with '*' (any run of characters) and '?' (any one).
+- `public static bool Matchn(this string s, string expr)`
+- `public static bool IsSubsequenceOf(this string s, string text)` - Whether all of this string's characters appear in text, in order.
+- `public static bool IsSubsequenceOfn(this string s, string text)`
+- `public static string[] Bigrams(this string s)` - Every pair of neighbouring characters.
+- `public static double Similarity(this string s, string text)` - How alike two strings are, 0 to 1, from the pairs of neighbouring characters they share (the Sørensen–Dice coefficient).
+- `public static string Replacen(this string s, string what, string forwhat)`
+- `public static string ReplaceChar(this string s, long key, long with)`
+- `public static string ReplaceChars(this string s, string keys, long with)`
+- `public static string RemoveChar(this string s, long what)`
+- `public static string RemoveChars(this string s, string chars)`
+- `public static string Reverse(this string s)`
+- `public static string TrimPrefix(this string s, string prefix)`
+- `public static string TrimSuffix(this string s, string suffix)`
+- `public static string Lstrip(this string s, string chars)`
+- `public static string Rstrip(this string s, string chars)`
+- `public static string StripEscapes(this string s)` - Removes the control characters (codes 0 to 31) such as tabs and line breaks; spaces stay.
+- `public static string Lpad(this string s, long minLength, string character = " ")`
+- `public static string Rpad(this string s, long minLength, string character = " ")`
+- `public static string ToCamelCase(this string s)` - "snake_case_name" or "PascalCase" as "snakeCaseName".
+- `public static string ToKebabCase(this string s)` - "PascalCase" or "snake_case" as "kebab-case".
+- `public static string[] Rsplit(this string s, string delimiter, bool allowEmpty = true, long maxsplit = 0)` - Like Split, cutting from the right: with maxsplit cuts the rest stays whole in the first part.
+- `public static double[] SplitFloats(this string s, string delimiter, bool allowEmpty = true)` - The numbers in the string split at the delimiter (the PackedFloat64Array of split_floats); a part that is not a number is 0.
+- `public static string Indent(this string s, string prefix)` - Puts prefix in front of every line that is not empty.
+- `public static string Dedent(this string s)` - Removes the leading whitespace every non-empty line shares.
+- `public static string GetBasename(this string s)` - The path without the extension.
+- `public static string PathJoin(this string s, string file)` - The path and the file joined by exactly one slash.
+- `public static bool IsAbsolutePath(this string s)`
+- `public static bool IsRelativePath(this string s)`
+- `public static string SimplifyPath(this string s)` - The path with "." and ".." resolved and double slashes joined.
+- `public static string XmlEscape(this string s, bool escapeQuotes = false)`
+- `public static string XmlUnescape(this string s)`
+- `public static string UriEncode(this string s)` - Percent-encodes everything but letters, digits and "-._~", as UTF-8.
+- `public static string UriDecode(this string s)`
+- `public static string UriFileDecode(this string s)` - Like UriDecode for a file name: a "+" stays a plus.
+- `public static string CEscape(this string s)`
+- `public static string CUnescape(this string s)`
+- `public static string JsonEscape(this string s)`
+- `public static string ValidateNodeName(this string s)` - The string with the characters a node name may not have (.
+- `public static string ValidateFilename(this string s)` - The string with every character a file name may not have (\ / : * ?
+- `public static bool IsValidFilename(this string s)`
+- `public static bool IsValidAsciiIdentifier(this string s)`
+- `public static bool IsValidUnicodeIdentifier(this string s)`
+- `public static bool IsValidIdentifier(this string s)`
+- `public static bool IsValidHexNumber(this string s, bool withPrefix = false)`
+- `public static bool IsValidHtmlColor(this string s)` - Whether the string is a colour in HTML form: "#rgb", "#rgba", "#rrggbb" or "#rrggbbaa" (the "#" is optional).
+- `public static bool IsValidIpAddress(this string s)`
+- `public static long HexToInt(this string s)` - A hexadecimal number, with or without "0x" and a sign: "0xff" is 255; 0 if the text is not one.
+- `public static long BinToInt(this string s)` - A binary number, with or without "0b" and a sign: "0b101" is 5; 0 if the text is not one.
+- `public static string Num(double number, long decimals = -1)` - A number as text: with decimals given, exactly that many decimals; by default up to 14 significant digits with trailing zeros left off (5 is "5", 1.50 is "1.5").
+- `public static string NumScientific(double number)` - A number in scientific notation.
+- `public static string NumInt64(long number, long @base = 10, bool capitalizeHex = false)` - A whole number in the given base (2 to 36).
+- `public static string NumUint64(long number, long @base = 10, bool capitalizeHex = false)` - An unsigned whole number (the bits of number) in the given base (2 to 36).
+- `public static string Chr(long code)` - The character with the given code, as a string.
+- `public static string HumanizeSize(long size)` - A byte count as text in the largest fitting unit: "512 B", "1.5 KiB", "20 MiB".
+- `public static string Md5Text(this string s)`
+- `public static string Sha1Text(this string s)`
+- `public static string Sha256Text(this string s)`
+- `public static byte[] Md5Buffer(this string s)`
+- `public static byte[] Sha1Buffer(this string s)`
+- `public static byte[] Sha256Buffer(this string s)`
+- `public static byte[] ToAsciiBuffer(this string s)` - The characters as ASCII bytes; a character outside ASCII becomes '?'.
+- `public static byte[] ToUtf8Buffer(this string s)`
+- `public static byte[] ToUtf16Buffer(this string s)`
+- `public static byte[] ToUtf32Buffer(this string s)`
+- `public static byte[] ToWcharBuffer(this string s)` - The wide characters of the platform: UTF-16 on Windows, UTF-32 elsewhere.
+- `public static byte[] ToMultibyteCharBuffer(this string s, string encoding = "")` - The bytes of the string in a character set by name ("utf-8", "latin1" ...); UTF-8 for an empty or unknown name.
+- `public static byte[] HexDecode(this string s)` - The bytes named by hex digit pairs ("ff00a1"); empty for text that is not even-length hex.
 
 ### StringName
 
@@ -8179,6 +8671,61 @@ Values: `Color = 0`, `Constant = 1`, `Font = 2`, `FontSize = 3`, `Icon = 4`, `St
 - `public static void SetProjectTheme(Theme? theme)` - Sets the project theme (a script or the host).
 - `public static int FallbackFontSize { get; }` - The fallback font size when no theme sets one.
 
+### Thread
+
+`public class Thread : RefCounted` - A thread that runs a callable (Godot's Thread).
+
+- `public Error Start(Callable callable, Priority priority = Priority.Normal)` - Starts the thread, which runs callable once and ends.
+- `public string GetId()` - The thread's id as text; empty before it is started.
+- `public bool IsStarted()` - Whether the thread was started, and not yet waited for.
+- `public new bool IsAlive()` - Whether the thread is still running its callable.
+- `public Variant WaitToFinish()` - Waits for the thread to finish and gives the callable's result.
+- `public static void SetThreadSafetyChecksEnabled(bool enabled)` - Godot's switch for its own thread-safety checks on nodes.
+
+### Thread.Priority
+
+`public enum Priority` - Godot's Thread.Priority.
+
+Values: `Low = 0`, `Normal = 1`, `High = 2`
+
+### Time
+
+`public static class Time` - Godot's Time singleton: the clock, and conversions between unix time, datetime dictionaries and ISO 8601 strings.
+
+- `public static ulong GetTicksUsec()` - Microseconds since the program started.
+- `public static ulong GetTicksMsec()` - Milliseconds since the program started.
+- `public static double GetUnixTimeFromSystem()` - Seconds since 1970-01-01 UTC, with the fraction.
+- `public static Collections.Dictionary GetDatetimeDictFromUnixTime(long unixTimeVal)`
+- `public static Collections.Dictionary GetDateDictFromUnixTime(long unixTimeVal)`
+- `public static Collections.Dictionary GetTimeDictFromUnixTime(long unixTimeVal)`
+- `public static string GetDatetimeStringFromUnixTime(long unixTimeVal, bool useSpace = false)`
+- `public static string GetDateStringFromUnixTime(long unixTimeVal)`
+- `public static string GetTimeStringFromUnixTime(long unixTimeVal)`
+- `public static long GetUnixTimeFromDatetimeDict(Collections.Dictionary datetime)`
+- `public static string GetDatetimeStringFromDatetimeDict(Collections.Dictionary datetime, bool useSpace)`
+- `public static Collections.Dictionary GetDatetimeDictFromDatetimeString(string datetime, bool weekday)` - Reads "YYYY-MM-DDTHH:MM:SS", "YYYY-MM-DD HH:MM:SS", a date alone or a time alone into a dictionary of the keys that were given; weekday adds the weekday of a date.
+- `public static long GetUnixTimeFromDatetimeString(string datetime)`
+- `public static string GetOffsetStringFromOffsetMinutes(long offsetMinutes)` - "+HH:MM" or "-HH:MM" for an offset in minutes from UTC.
+- `public static Collections.Dictionary GetDatetimeDictFromSystem(bool utc = false)`
+- `public static Collections.Dictionary GetDateDictFromSystem(bool utc = false)`
+- `public static Collections.Dictionary GetTimeDictFromSystem(bool utc = false)`
+- `public static string GetDatetimeStringFromSystem(bool utc = false, bool useSpace = false)`
+- `public static string GetDateStringFromSystem(bool utc = false)`
+- `public static string GetTimeStringFromSystem(bool utc = false)`
+- `public static Collections.Dictionary GetTimeZoneFromSystem()` - The local time zone: "bias" is its offset from UTC in minutes (east is positive, as in Godot 4) and "name" its name.
+
+### Time.Month
+
+`public enum Month` - Godot's Time.Month (MONTH_JANUARY = 1).
+
+Values: `January = 1`, `February = 2`, `March = 3`, `April = 4`, `May = 5`, `June = 6`, `July = 7`, `August = 8`, `September = 9`, `October = 10`, `November = 11`, `December = 12`
+
+### Time.Weekday
+
+`public enum Weekday` - Godot's Time.Weekday (WEEKDAY_SUNDAY = 0).
+
+Values: `Sunday = 0`, `Monday = 1`, `Tuesday = 2`, `Wednesday = 3`, `Thursday = 4`, `Friday = 5`, `Saturday = 6`
+
 ### Timer
 
 `public class Timer : Node` - Counts down and emits "timeout" (Godot's Timer).
@@ -8233,6 +8780,8 @@ Values: `Physics = 0`, `Idle = 1`
 - `public readonly Vector2 GetScale()`
 - `public readonly float GetSkew()`
 - `public readonly Transform2D InterpolateWith(Transform2D m, float weight)`
+- `public readonly Vector2 GetOrigin()`
+- `public readonly bool IsConformal()` - Whether the transform keeps angles: a rotation, possibly flipped and uniformly scaled, with no skew.
 - `public readonly bool IsEqualApprox(Transform2D other)`
 - `public readonly bool IsFinite()`
 - `public readonly Transform2D Orthonormalized()`
@@ -8730,6 +9279,7 @@ Values: `Nil = 0`, `Bool = 1`, `Int = 2`, `Float = 3`, `String = 4`, `Vector2 = 
 
 - `public static Variant Parse(string text)` - Parses one value.
 - `public static bool TryParse(string text, out Variant value)`
+- `public static string Write(Variant value)` - The text form of a value that Parse reads back (Godot's var_to_str): "Vector3(1, 2, 3)", "[1, 2]", a quoted string, "null".
 
 ### VariantWire
 
@@ -8805,6 +9355,13 @@ Values: `Nil = 0`, `Bool = 1`, `Int = 2`, `Float = 3`, `String = 4`, `Vector2 = 
 - `public readonly Vector2 Slide(Vector2 normal)`
 - `public readonly Vector2 Snapped(Vector2 step)`
 - `public readonly Vector2 Snapped(float step)`
+- `public readonly Vector2 Clampf(float min, float max)`
+- `public readonly Vector2 Minf(float with)`
+- `public readonly Vector2 Maxf(float with)`
+- `public readonly Vector2 Snappedf(float step)`
+- `public readonly Vector2 Posmodv(Vector2 modv)`
+- `public readonly Vector2 BezierDerivative(Vector2 control1, Vector2 control2, Vector2 end, float t)`
+- `public readonly Vector2 CubicInterpolateInTime(Vector2 b, Vector2 preA, Vector2 postB, float weight, float bT, float preAT, float postBT)`
 - `public static Vector2 operator +(Vector2 l, Vector2 r)`
 - `public static Vector2 operator -(Vector2 l, Vector2 r)`
 - `public static Vector2 operator -(Vector2 v)`
@@ -8862,6 +9419,10 @@ Values: `X = 0`, `Y = 1`
 - `public readonly Axis MinAxisIndex()`
 - `public readonly Vector2I Sign()`
 - `public readonly Vector2I Snapped(Vector2I step)`
+- `public readonly Vector2I Clampi(int min, int max)`
+- `public readonly Vector2I Mini(int with)`
+- `public readonly Vector2I Maxi(int with)`
+- `public readonly Vector2I Snappedi(int step)`
 - `public static Vector2I operator +(Vector2I l, Vector2I r)`
 - `public static Vector2I operator -(Vector2I l, Vector2I r)`
 - `public static Vector2I operator -(Vector2I v)`
@@ -8956,6 +9517,14 @@ Values: `X = 0`, `Y = 1`
 - `public readonly Vector3 Slide(Vector3 normal)`
 - `public readonly Vector3 Snapped(Vector3 step)`
 - `public readonly Vector3 Snapped(float step)`
+- `public readonly Vector3 Clampf(float min, float max)`
+- `public readonly Vector3 Minf(float with)`
+- `public readonly Vector3 Maxf(float with)`
+- `public readonly Vector3 Snappedf(float step)`
+- `public readonly Vector3 Posmodv(Vector3 modv)`
+- `public readonly Vector3 CubicInterpolateInTime(Vector3 b, Vector3 preA, Vector3 postB, float weight, float bT, float preAT, float postBT)`
+- `public readonly Vector2 OctahedronEncode()` - A unit vector packed into two numbers between 0 and 1 (octahedral encoding), undone by OctahedronDecode.
+- `public static Vector3 OctahedronDecode(Vector2 oct)`
 - `public static Vector3 operator +(Vector3 l, Vector3 r)`
 - `public static Vector3 operator -(Vector3 l, Vector3 r)`
 - `public static Vector3 operator -(Vector3 v)`
@@ -9015,6 +9584,10 @@ Values: `X = 0`, `Y = 1`, `Z = 2`
 - `public readonly Axis MinAxisIndex()`
 - `public readonly Vector3I Sign()`
 - `public readonly Vector3I Snapped(Vector3I step)`
+- `public readonly Vector3I Clampi(int min, int max)`
+- `public readonly Vector3I Mini(int with)`
+- `public readonly Vector3I Maxi(int with)`
+- `public readonly Vector3I Snappedi(int step)`
 - `public static Vector3I operator +(Vector3I l, Vector3I r)`
 - `public static Vector3I operator -(Vector3I l, Vector3I r)`
 - `public static Vector3I operator -(Vector3I v)`
@@ -9079,6 +9652,17 @@ Values: `X = 0`, `Y = 1`, `Z = 2`
 - `public readonly Vector4 Round()`
 - `public readonly Vector4 Sign()`
 - `public readonly Vector4 Snapped(Vector4 step)`
+- `public readonly Vector4 Snapped(float step)`
+- `public readonly Vector4 PosMod(Vector4 modv)`
+- `public readonly Vector4 Max(Vector4 with)`
+- `public readonly Vector4 Min(Vector4 with)`
+- `public readonly Vector4 CubicInterpolate(Vector4 b, Vector4 preA, Vector4 postB, float weight)`
+- `public readonly Vector4 Clampf(float min, float max)`
+- `public readonly Vector4 Minf(float with)`
+- `public readonly Vector4 Maxf(float with)`
+- `public readonly Vector4 Snappedf(float step)`
+- `public readonly Vector4 Posmodv(Vector4 modv)`
+- `public readonly Vector4 CubicInterpolateInTime(Vector4 b, Vector4 preA, Vector4 postB, float weight, float bT, float preAT, float postBT)`
 - `public static Vector4 operator +(Vector4 l, Vector4 r)`
 - `public static Vector4 operator -(Vector4 l, Vector4 r)`
 - `public static Vector4 operator -(Vector4 v)`
@@ -9117,6 +9701,15 @@ Values: `X = 0`, `Y = 1`, `Z = 2`, `W = 3`
 - `public readonly float Length()`
 - `public readonly int LengthSquared()`
 - `public readonly Vector4I Sign()`
+- `public readonly Vector4I Snapped(Vector4I step)`
+- `public readonly Vector4I Max(Vector4I with)`
+- `public readonly Vector4I Min(Vector4I with)`
+- `public readonly Vector4I Clampi(int min, int max)`
+- `public readonly Vector4I Mini(int with)`
+- `public readonly Vector4I Maxi(int with)`
+- `public readonly Vector4I Snappedi(int step)`
+- `public readonly float DistanceTo(Vector4I to)`
+- `public readonly int DistanceSquaredTo(Vector4I to)`
 - `public static Vector4I operator +(Vector4I l, Vector4I r)`
 - `public static Vector4I operator -(Vector4I l, Vector4I r)`
 - `public static Vector4I operator -(Vector4I v)`
@@ -9183,6 +9776,7 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 
 - `public virtual Vector2I Size { get; set; }` - The size in pixels.
 - `public virtual ViewportTexture? GetTexture()` - The picture this viewport draws as a texture.
+- `public ScreenSpaceAAEnum ScreenSpaceAA { get; set; }` - Stored, not applied (approximated): the project's anti-aliasing is converted into RENDER.NEURAA and RENDER.TAA when the project is converted; this value, set at run time, does not switch them.
 - `public virtual Rect2 GetVisibleRect()` - The area Controls are laid out in: the viewport's size (the window's stretched content size for the root window).
 - `public Control? GuiGetFocusOwner()` - The control that has keyboard focus, or null.
 - `public void GuiReleaseFocus()` - Takes keyboard focus away from whichever control has it.
@@ -9196,6 +9790,12 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public Vector2 GetMousePosition()` - The pointer in viewport pixels.
 - `public void SetInputAsHandled()` - Stops the input event being processed by anything further (Godot's set_input_as_handled).
 - `public bool IsInputHandled()`
+
+### Viewport.ScreenSpaceAAEnum
+
+`public enum ScreenSpaceAAEnum` - Godot's Viewport.ScreenSpaceAA: the anti-aliasing a viewport applies after it has drawn (a post-process filter, apart from MSAA).
+
+Values: `Disabled = 0`, `Fxaa = 1`, `Smaa = 2`, `Max = 3`
 
 ### ViewportTexture
 
@@ -9326,6 +9926,20 @@ Values: `Disabled = 0`, `CanvasItems = 1`, `Viewport = 2`
 `public enum ContentScaleStretchEnum`
 
 Values: `Fractional = 0`, `Integer = 1`
+
+### WorkerThreadPool
+
+`public static class WorkerThreadPool` - Runs callables on the pool's worker threads (Godot's WorkerThreadPool).
+
+- `public static long AddTask(Callable action, bool highPriority = false, string description = "")` - Runs action on a worker and returns the task's id.
+- `public static bool IsTaskCompleted(long taskId)`
+- `public static Error WaitForTaskCompletion(long taskId)` - Waits for the task and forgets it; a task id is good for one wait.
+- `public static long GetCallerTaskId()` - The id of the task the calling worker is running; -1 outside a task.
+- `public static long AddGroupTask(Callable action, int elements, int tasksNeeded = -1, bool highPriority = false, string description = "")` - Calls action with each index from 0 to elements - 1, spread over the workers, and returns the group's id.
+- `public static bool IsGroupTaskCompleted(long groupId)`
+- `public static int GetGroupProcessedElementCount(long groupId)` - How many of the group's elements have been called so far.
+- `public static void WaitForGroupTaskCompletion(long groupId)` - Waits for every element of the group and forgets the group.
+- `public static long GetCallerGroupId()` - The id of the group task the calling worker is running; -1 outside one.
 
 ### World3D
 

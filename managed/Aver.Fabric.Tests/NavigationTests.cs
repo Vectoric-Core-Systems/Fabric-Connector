@@ -10,6 +10,7 @@
 using Aver.Fabric;
 using Collections = Aver.Fabric.Collections;
 using IO = System.IO;
+using Thread = System.Threading.Thread;
 
 static class NavigationTests
 {

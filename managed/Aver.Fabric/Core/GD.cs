@@ -89,7 +89,11 @@ public static partial class GD
         _ => Variant.TryFrom(o, out Variant v2) ? v2.AsString() : o.ToString() ?? "",
     };
 
-    public static string VarToStr(Variant var) => var.VariantType == Variant.Type.String ? "\"" + var.AsString() + "\"" : var.AsString();
+    /// <summary>The text form of a value, which <see cref="StrToVar"/> reads back (Godot's var_to_str).</summary>
+    public static string VarToStr(Variant var) => VariantText.Write(var);
+
+    /// <summary>Reads the text form of a value (Godot's str_to_var); nil for text that is not one.</summary>
+    public static Variant StrToVar(string @string) => VariantText.TryParse(@string, out Variant v) ? v : default;
 
     // ---- randomness: the shared PCG32 generator of G1 (Aver.Framework.AverRandom) ----
 

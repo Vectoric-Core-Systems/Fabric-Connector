@@ -12,7 +12,7 @@ using Aver.Fabric.Collections;
 namespace Aver.Fabric;
 
 /// <summary>GDScript's operators, conversions, dynamic access and built-in functions, over <see cref="Variant"/>.</summary>
-public static class GDScript
+public static partial class GDScript
 {
     private static InvalidOperationException Invalid(string op, Variant a, Variant b) =>
         new($"Invalid operands '{a.VariantType}' and '{b.VariantType}' in operator '{op}'.");
@@ -620,12 +620,56 @@ public static class GDScript
         {
             case Variant.Type.Object: return target.AsGodotObject()?.Get(name) ?? default;
             case Variant.Type.Dictionary: return target.AsGodotDictionary().Get(name);
-            case Variant.Type.Vector2: { var v = target.AsVector2(); return name switch { "x" => v.X, "y" => v.Y, _ => Bad(target, name) }; }
-            case Variant.Type.Vector3: { var v = target.AsVector3(); return name switch { "x" => v.X, "y" => v.Y, "z" => v.Z, _ => Bad(target, name) }; }
-            case Variant.Type.Vector4: { var v = target.AsVector4(); return name switch { "x" => v.X, "y" => v.Y, "z" => v.Z, "w" => v.W, _ => Bad(target, name) }; }
-            case Variant.Type.Color: { var v = target.AsColor(); return name switch { "r" => v.R, "g" => v.G, "b" => v.B, "a" => v.A, _ => Bad(target, name) }; }
+            case Variant.Type.Vector2: { var v = target.AsVector2(); return name switch { "x" => v.X, "y" => v.Y, _ => ValueMember(target, name) }; }
+            case Variant.Type.Vector3: { var v = target.AsVector3(); return name switch { "x" => v.X, "y" => v.Y, "z" => v.Z, _ => ValueMember(target, name) }; }
+            case Variant.Type.Vector4: { var v = target.AsVector4(); return name switch { "x" => v.X, "y" => v.Y, "z" => v.Z, "w" => v.W, _ => ValueMember(target, name) }; }
+            case Variant.Type.Color: { var v = target.AsColor(); return name switch { "r" => v.R, "g" => v.G, "b" => v.B, "a" => v.A, _ => ValueMember(target, name) }; }
+            default: return ValueMember(target, name);
         }
+    }
+
+    // ---- members and methods of the math structs (Vector2I, Rect2, Plane, Aabb, Transform2D/3D, Basis, Quaternion, Projection, Color ...), by name ----
+
+    // The value held as a boxed struct of its Fabric type, or null for a type that is not one of the math structs.
+    private static object? Boxed(Variant v) => v.VariantType switch
+    {
+        Variant.Type.Vector2 => v.AsVector2(),
+        Variant.Type.Vector2I => v.AsVector2I(),
+        Variant.Type.Rect2 => v.AsRect2(),
+        Variant.Type.Rect2I => v.AsRect2I(),
+        Variant.Type.Vector3 => v.AsVector3(),
+        Variant.Type.Vector3I => v.AsVector3I(),
+        Variant.Type.Transform2D => v.AsTransform2D(),
+        Variant.Type.Vector4 => v.AsVector4(),
+        Variant.Type.Vector4I => v.AsVector4I(),
+        Variant.Type.Plane => v.AsPlane(),
+        Variant.Type.Quaternion => v.AsQuaternion(),
+        Variant.Type.Aabb => v.AsAabb(),
+        Variant.Type.Basis => v.AsBasis(),
+        Variant.Type.Transform3D => v.AsTransform3D(),
+        Variant.Type.Projection => v.AsProjection(),
+        Variant.Type.Color => v.AsColor(),
+        _ => null,
+    };
+
+    // A field or property of a math struct by its GDScript name (origin, basis, position, size, end, normal, d, r8 ...).
+    private static Variant ValueMember(Variant target, string name)
+    {
+        if (Boxed(target) is { } boxed && MemberAccess.TryGet(boxed, name, out Variant v)) return v;
         return Bad(target, name);
+    }
+
+    /// <summary>The value after one of its members was set: <c>v.origin = p</c> on a value of a type that is not known is written <c>v = WithMember(v, "origin", p)</c>.
+    /// An object or a dictionary is changed in place and given back; a math struct (Vector3, Transform3D, Aabb ...) is copied with the member changed.</summary>
+    public static Variant WithMember(Variant target, string name, Variant value)
+    {
+        if (target.VariantType is Variant.Type.Object or Variant.Type.Dictionary)
+        {
+            SetMember(target, name, value);
+            return target;
+        }
+        if (Boxed(target) is { } boxed && MemberAccess.TrySet(boxed, name, value)) return Variant.FromObject(boxed);
+        throw new InvalidOperationException($"Invalid assignment of property or key '{name}' with value of type '{value.VariantType}' on a base object of type '{target.VariantType}'.");
     }
 
     private static Variant Bad(Variant target, string name) =>
@@ -655,6 +699,8 @@ public static class GDScript
             case Variant.Type.Callable when method is "call": return target.AsCallable().Call(args);
             case Variant.Type.Callable when method is "callv": return target.AsCallable().Callv(args[0].AsGodotArray());
             case Variant.Type.Callable when method is "bind": return target.AsCallable().Bind(args);
+            case Variant.Type.Callable: return CallByReflection(target.AsCallable(), method, args);
+            case Variant.Type.NodePath: return CallByReflection(target.AsNodePath(), method, args);
             case Variant.Type.Signal:
             {
                 Signal s = target.AsSignal();
@@ -667,36 +713,65 @@ public static class GDScript
                 }
                 break;
             }
-            case Variant.Type.Vector2:
-            case Variant.Type.Vector3:
-            case Variant.Type.Color:
-            case Variant.Type.Quaternion:
-            case Variant.Type.Basis:
-            case Variant.Type.Transform3D:
-                return CallByReflection(target.ToType(target.VariantType switch
-                {
-                    Variant.Type.Vector2 => typeof(Vector2), Variant.Type.Vector3 => typeof(Vector3), Variant.Type.Color => typeof(Color),
-                    Variant.Type.Quaternion => typeof(Quaternion), Variant.Type.Basis => typeof(Basis), _ => typeof(Transform3D),
-                })!, method, args);
+            default:
+                if (Boxed(target) is { } math) return CallByReflection(math, method, args);
+                break;
         }
         throw new InvalidOperationException($"Invalid call. Nonexistent function '{method}' in base '{target.VariantType}'.");
     }
 
-    // The math types' methods by their Godot name, through reflection: this is the untyped fallback, not a hot path.
-    private static Variant CallByReflection(object value, string method, Variant[] args)
+    // A GDScript name compared the way the converter matches it: case and underscores do not count.
+    private static string Fold(string s) => s.Replace("_", "", StringComparison.Ordinal).ToLowerInvariant();
+
+    // A call of a static extension method (the receiver is its first parameter) by GDScript name: how String, Array and Dictionary get methods beyond the ones the
+    // switches above list. False when no method of that name takes these arguments.
+    private static bool TryCallExtension(System.Type extensions, object receiver, string method, Variant[] args, out Variant result)
     {
-        string pascal = string.Concat(method.Split('_', StringSplitOptions.RemoveEmptyEntries).Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
-        foreach (System.Reflection.MethodInfo m in value.GetType().GetMethods().Where(m => m.Name == pascal && m.GetParameters().Length == args.Length))
+        string want = Fold(method);
+        foreach (System.Reflection.MethodInfo m in extensions.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
         {
+            if (m.IsGenericMethodDefinition || Fold(m.Name) != want) continue;
+            System.Reflection.ParameterInfo[] ps = m.GetParameters();
+            if (ps.Length == 0 || !ps[0].ParameterType.IsInstanceOfType(receiver)) continue;
+            int required = ps.Skip(1).Count(p => !p.IsOptional);
+            if (args.Length < required || args.Length > ps.Length - 1) continue;
             try
             {
-                object?[] converted = m.GetParameters().Select((p, i) => args[i].ToType(p.ParameterType)).ToArray();
-                return Variant.FromObject(m.Invoke(value, converted));
+                var values = new object?[ps.Length];
+                values[0] = receiver;
+                for (int i = 1; i < ps.Length; i++) values[i] = i - 1 < args.Length ? args[i - 1].ToType(ps[i].ParameterType) : ps[i].DefaultValue;
+                result = Variant.FromObject(m.Invoke(null, values));
+                return true;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidCastException) { }
         }
-        throw new InvalidOperationException($"Invalid call. Nonexistent function '{method}' in base '{value.GetType().Name}'.");
+        result = default;
+        return false;
     }
+
+    // An instance method of a Fabric type, by GDScript name, then an extension method of the given static class.
+    private static Variant CallFallback(object receiver, System.Type? extensions, string baseName, string method, Variant[] args, bool extensionsFirst = false)
+    {
+        if (extensionsFirst && extensions != null && TryCallExtension(extensions, receiver, method, args, out Variant first)) return first;
+        string pascal = string.Concat(method.Split('_', StringSplitOptions.RemoveEmptyEntries).Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
+        foreach (System.Reflection.MethodInfo m in receiver.GetType().GetMethods().Where(m => string.Equals(m.Name, pascal, StringComparison.OrdinalIgnoreCase) && !m.IsGenericMethodDefinition))
+        {
+            System.Reflection.ParameterInfo[] ps = m.GetParameters();
+            if (args.Length < ps.Count(p => !p.IsOptional) || args.Length > ps.Length) continue;
+            try
+            {
+                var values = new object?[ps.Length];
+                for (int i = 0; i < ps.Length; i++) values[i] = i < args.Length ? args[i].ToType(ps[i].ParameterType) : ps[i].DefaultValue;
+                return Variant.FromObject(m.Invoke(receiver, values));
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidCastException) { }
+        }
+        if (extensions != null && TryCallExtension(extensions, receiver, method, args, out Variant r)) return r;
+        throw new InvalidOperationException($"Invalid call. Nonexistent function '{method}' in base '{baseName}'.");
+    }
+
+    // The math types' methods by their Godot name, through reflection: this is the untyped fallback, not a hot path.
+    private static Variant CallByReflection(object value, string method, Variant[] args) => CallFallback(value, null, value.GetType().Name, method, args);
 
     private static Variant CallArray(Collections.Array a, string method, Variant[] args)
     {
@@ -737,6 +812,13 @@ public static class GDScript
             case "min": return a.Count == 0 ? default : a.Aggregate((x, y) => Lt(y, x) ? y : x);
             case "max": return a.Count == 0 ? default : a.Aggregate((x, y) => Gt(y, x) ? y : x);
             case "count": return a.Count(v => v == args[0]);
+            case "pop_at": return a.PopAt(args[0].AsInt64());
+            case "duplicate_deep": return a.Duplicate(true);
+            case "find_custom": return a.FindCustom(args[0].AsCallable(), args.Length > 1 ? args[1].AsInt64() : 0);
+            case "rfind_custom": return a.RfindCustom(args[0].AsCallable(), args.Length > 1 ? args[1].AsInt64() : -1);
+            case "bsearch": return a.Bsearch(args[0], args.Length > 1 ? args[1].AsBool() : true);
+            case "bsearch_custom": return a.BsearchCustom(args[0], args[1].AsCallable(), args.Length > 2 ? args[2].AsBool() : true);
+            case "hash": return (long)a.Hash();
             case "fill": for (int i = 0; i < a.Count; i++) a[i] = args[0]; return default;
             case "sort_custom":
             {
@@ -748,7 +830,7 @@ public static class GDScript
                 return default;
             }
         }
-        throw new InvalidOperationException($"Invalid call. Nonexistent function '{method}' in base 'Array'.");
+        return CallFallback(a, typeof(ArrayExtensions), "Array", method, args);
     }
 
     // GDScript's sort_custom calls less(a, b); it is not guaranteed stable, a stable merge sort is the safe choice.
@@ -787,7 +869,7 @@ public static class GDScript
                 foreach (var kv in d) if (kv.Value == args[0]) return kv.Key;
                 return default;
         }
-        throw new InvalidOperationException($"Invalid call. Nonexistent function '{method}' in base 'Dictionary'.");
+        return CallFallback(d, typeof(DictionaryExtensions), "Dictionary", method, args);
     }
 
     private static Variant CallString(string s, string method, Variant[] args)
@@ -816,6 +898,6 @@ public static class GDScript
             case "right": return s.Right(args[0].AsInt64());
             case "pad_zeros": return s.PadZeros(args[0].AsInt64());
         }
-        throw new InvalidOperationException($"Invalid call. Nonexistent function '{method}' in base 'String'.");
+        return CallFallback(s, typeof(StringExtensions), "String", method, args, extensionsFirst: true);
     }
 }

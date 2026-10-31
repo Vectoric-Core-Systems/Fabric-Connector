@@ -7,6 +7,7 @@
 // proxy (the protocol's SimNetwork is C++ only), and an in-memory MultiplayerPeer that records every send (mode, channel, target).
 
 using Aver.Fabric;
+using Thread = System.Threading.Thread;
 
 /// <summary>A node with one RPC method of every kind, logging each call with the sender id it saw.</summary>
 class NetNode : Node

@@ -101,6 +101,23 @@ public struct Quaternion : IEquatable<Quaternion>
         return new Vector3(X * r, Y * r, Z * r);
     }
 
+    /// <summary>The logarithm of a unit quaternion: its axis scaled by its angle, as the vector part, with a zero real part.</summary>
+    public readonly Quaternion Log()
+    {
+        Vector3 v = GetAxis() * GetAngle();
+        return new Quaternion(v.X, v.Y, v.Z, 0f);
+    }
+
+    /// <summary>The exponential of a pure (zero real part) quaternion: the rotation about its vector part by that vector's length; the identity for a vector too short to turn.</summary>
+    public readonly Quaternion Exp()
+    {
+        var v = new Vector3(X, Y, Z);
+        float theta = v.Length();
+        v = v.Normalized();
+        if (theta < Mathf.Epsilon || !v.IsNormalized()) return Identity;
+        return new Quaternion(v, theta);
+    }
+
     /// <summary>The Euler angles (radians) in the given order; the quaternion must be normalized.</summary>
     public readonly Vector3 GetEuler(EulerOrder order = EulerOrder.Yxz) => new Basis(this).GetEuler(order);
 

@@ -3,11 +3,15 @@
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // GDScript's built-in functions (print, len, clamp, lerp, randf ...) and the methods of its built-in types (String, Array, Dictionary).
 
+using Rs = Microsoft.CodeAnalysis;
+
 namespace Aver.Fabric.Convert.GdScript;
 
 internal sealed partial class GdEmitter
 {
     private static Ex R(string code, GdType type, int prec = P.Primary) => new(code, type, prec);
+
+    private static readonly GdType s_packedBytes = GdType.PackedOf(GdType.Int32, "byte[]");
 
     private string PrintArg(Ex e) => e.Type.Kind == GK.Enum ? "(long)" + Wrap(e, P.Unary) : e.Code;
 
@@ -15,6 +19,7 @@ internal sealed partial class GdEmitter
     {
         ["sqrt"] = "Math.Sqrt", ["sin"] = "Math.Sin", ["cos"] = "Math.Cos", ["tan"] = "Math.Tan", ["asin"] = "Math.Asin", ["acos"] = "Math.Acos",
         ["atan"] = "Math.Atan", ["sinh"] = "Math.Sinh", ["cosh"] = "Math.Cosh", ["tanh"] = "Math.Tanh", ["exp"] = "Math.Exp", ["log"] = "Math.Log",
+        ["asinh"] = "Math.Asinh", ["acosh"] = "Math.Acosh", ["atanh"] = "Math.Atanh",
         ["floorf"] = "Math.Floor", ["ceilf"] = "Math.Ceiling", ["absf"] = "Math.Abs",
     };
 
@@ -43,6 +48,8 @@ internal sealed partial class GdEmitter
         var cache = new Ex?[c.Args.Count];
         Ex E(int i) => cache[i] ??= Expr(c.Args[i], null);
         string F(int i) => Adapt(E(i), GdType.Float);
+        // A double for Math.Floor / Ceiling / Round, which also take a decimal: an int variable is cast, or the call is ambiguous.
+        string FD(int i) => E(i).Type.Kind == GK.Int && E(i).Const == null ? "(double)" + Wrap(E(i), P.Unary) : F(i);
         string I(int i) => Adapt(E(i), GdType.Int);
         int n = c.Args.Count;
         Ex? Done(Ex r) { _builtinResult = r; return r; }
@@ -61,6 +68,18 @@ internal sealed partial class GdEmitter
             case "str" when n >= 1:
                 if (n == 1 && E(0).Type.Kind == GK.String) { Done(E(0)); return true; }
                 Done(R($"GD.Str({string.Join(", ", Enumerable.Range(0, n).Select(i => PrintArg(E(i))))})", GdType.String)); return true;
+            case "var_to_bytes" when n == 1: Done(R($"GD.VarToBytes({VariantFromTyped(E(0))})", s_packedBytes)); return true;
+            case "var_to_bytes_with_objects" when n == 1: Done(R($"GD.VarToBytesWithObjects({VariantFromTyped(E(0))})", s_packedBytes)); return true;
+            case "bytes_to_var" when n == 1: Done(R($"GD.BytesToVar({Adapt(E(0), s_packedBytes)})", GdType.Variant)); return true;
+            case "bytes_to_var_with_objects" when n == 1: Done(R($"GD.BytesToVarWithObjects({Adapt(E(0), s_packedBytes)})", GdType.Variant)); return true;
+            case "type_convert" when n == 2: Done(R($"GDScript.TypeConvert({VariantFromTyped(E(0))}, {I(1)})", GdType.Variant)); return true;
+            case "rotate_toward" when n == 3: Done(R($"GDScript.RotateToward({F(0)}, {F(1)}, {F(2)})", GdType.Float)); return true;
+            case "Color8" when n is 3 or 4:
+            {
+                // The channels are bytes in C#; a GDScript int that is a literal 0 to 255 converts by itself, anything else is cast.
+                string Byte(int i) => E(i).Const is long v && v is >= 0 and <= 255 ? E(i).Code : "(byte)" + Wrap(new Ex(I(i), GdType.Int, E(i).Prec), P.Unary);
+                Done(R($"Color.Color8({string.Join(", ", Enumerable.Range(0, n).Select(Byte))})", Obj("Color"))); return true;
+            }
             case "var_to_str" when n == 1: Done(R($"GD.VarToStr({VariantFromTyped(E(0))})", GdType.String)); return true;
             case "str_to_var" when n == 1: Done(R($"VariantText.Parse({Adapt(E(0), GdType.String)})", GdType.Variant)); return true;
 
@@ -114,6 +133,17 @@ internal sealed partial class GdEmitter
             case "String" when n == 1: Done(R($"GD.Str({PrintArg(E(0))})", GdType.String)); return true;
             case "StringName" when n == 1: Done(R($"new StringName({Adapt(E(0), GdType.String)})", GdType.StringName)); return true;
             case "NodePath" when n == 1: Done(R($"new NodePath({Adapt(E(0), GdType.String)})", GdType.NodePath)); return true;
+            case "PackedByteArray" or "PackedInt32Array" or "PackedInt64Array" or "PackedFloat32Array" or "PackedFloat64Array" or "PackedStringArray"
+                or "PackedVector2Array" or "PackedVector3Array" or "PackedColorArray" when n <= 1:
+            {
+                GdType pt = ResolveType(new TypeRef { Parts = { name } });
+                if (n == 0) { Done(R($"new {pt.Name[..^2]}[0]", pt)); return true; }
+                Ex src = E(0);
+                string conv = src.Type.Kind == GK.Packed && src.Type.Name == pt.Name
+                    ? $"PackedArrays.Duplicate({src.Code})"
+                    : FromVariant(src.Type.IsVariant ? Wrap(src, P.Primary) : $"Variant.From({src.Code})", pt);
+                Done(R(conv, pt)); return true;
+            }
             case "Array" when n == 0: Done(R("new Collections.Array()", GdType.UntypedArray)); return true;
             case "Array" when n == 1:
                 Done(R($"{Wrap(new Ex(VariantFromTyped(E(0)), GdType.Variant), P.Primary)}.AsGodotArray().Duplicate()", GdType.UntypedArray)); return true;
@@ -157,12 +187,13 @@ internal sealed partial class GdEmitter
             {
                 Ex x = E(0);
                 if (x.Type.Kind == GK.Struct) { Done(R($"{Wrap(x, P.Primary)}.{Naming.Pascal(name)}()", x.Type)); return true; }
-                Done(R(RoundCall(name, F(0)), GdType.Float)); return true;
+                if (x.Type.Kind == GK.Int) { Done(x); return true; }   // a whole number rounds to itself, and stays an int
+                Done(R(RoundCall(name, FD(0)), GdType.Float)); return true;
             }
-            case "roundf" or "round" when n == 1: Done(R(RoundCall("round", F(0)), GdType.Float)); return true;
-            case "floori" when n == 1: Done(R($"(long)Math.Floor({F(0)})", GdType.Int, P.Unary)); return true;
-            case "ceili" when n == 1: Done(R($"(long)Math.Ceiling({F(0)})", GdType.Int, P.Unary)); return true;
-            case "roundi" when n == 1: Done(R($"(long){RoundCall("round", F(0))}", GdType.Int, P.Unary)); return true;
+            case "roundf" or "round" when n == 1: Done(R(RoundCall("round", FD(0)), GdType.Float)); return true;
+            case "floori" when n == 1: Done(R($"(long)Math.Floor({FD(0)})", GdType.Int, P.Unary)); return true;
+            case "ceili" when n == 1: Done(R($"(long)Math.Ceiling({FD(0)})", GdType.Int, P.Unary)); return true;
+            case "roundi" when n == 1: Done(R($"(long){RoundCall("round", FD(0))}", GdType.Int, P.Unary)); return true;
             case "posmod" when n == 2: Done(R($"GDScript.PosMod({I(0)}, {I(1)})", GdType.Int)); return true;
             case "wrapi" when n == 3: Done(R($"GDScript.Wrap({I(0)}, {I(1)}, {I(2)})", GdType.Int)); return true;
             case "snappedi" when n == 2: Done(R($"GDScript.Snapped({I(0)}, {I(1)})", GdType.Int)); return true;
@@ -226,7 +257,7 @@ internal sealed partial class GdEmitter
             case "is_finite" when n == 1: Done(R($"double.IsFinite({F(0)})", GdType.Bool)); return true;
         }
 
-        if (s_mathFloat.TryGetValue(name, out string? mf) && n == 1) { Done(R($"{mf}({F(0)})", GdType.Float)); return true; }
+        if (s_mathFloat.TryGetValue(name, out string? mf) && n == 1) { Done(R($"{mf}({FD(0)})", GdType.Float)); return true; }
         if (s_mathfDouble.TryGetValue(name, out string? md) && n >= 1)
         {
             var args = Enumerable.Range(0, n).Select(F).ToList();
@@ -318,8 +349,37 @@ internal sealed partial class GdEmitter
             case "hash": return R($"GD.Hash({s})", GdType.Int32);
             case "unicode_at": return R($"(long){s}[{Adapt(E(0), GdType.Int32)}]", GdType.Int, P.Unary);
         }
+        if (StringExtensionCall(s, name, c) is { } viaExtension) return viaExtension;
         Note(c, "call", name, Rating.Unsupported, $"String.{name}() is not converted");
         return R($"{s}.{Naming.Pascal(name)}({string.Join(", ", c.Args.Select(a => VariantFromTyped(Expr(a, null))))})", GdType.Variant);
+    }
+
+    // String.num(x), String.chr(65), String.humanize_size(n) ...: the static methods of StringExtensions that are not extension methods.
+    private Ex? StringStaticCall(string name, Call c)
+    {
+        if (Api?.Fabric("StringExtensions") is not { } ext) return null;
+        var candidates = ext.GetMembers(Naming.Pascal(name)).OfType<Rs.IMethodSymbol>().Where(m => m.IsStatic && !m.IsExtensionMethod).ToList();
+        if (candidates.Count == 0) return null;
+        (Rs.IMethodSymbol? pick, _) = PickOverload(candidates, c.Args.Select(a => TypeOf(a, null)).ToList(), null);
+        if (pick == null) return null;
+        return R($"StringExtensions.{pick.Name}({ArgsForMethod(pick, c.Args)})", Api!.FromSymbol(pick.ReturnType));
+    }
+
+    // A String method Aver.Fabric has as an extension method of StringExtensions (rsplit, get_slice, trim_prefix ...): the call as written on the string, with the
+    // overload picked by the argument types.
+    private Ex? StringExtensionCall(string receiver, string name, Call c)
+    {
+        if (Api?.Fabric("StringExtensions") is not { } ext) return null;
+        var candidates = new List<Rs.IMethodSymbol>();
+        foreach (Rs.IMethodSymbol m in ext.GetMembers(Naming.Pascal(name)).OfType<Rs.IMethodSymbol>())
+        {
+            if (!m.IsExtensionMethod || m.Parameters.Length == 0 || m.Parameters[0].Type.SpecialType != Rs.SpecialType.System_String) continue;
+            if (m.ReduceExtensionMethod(m.Parameters[0].Type) is { } reduced) candidates.Add(reduced);
+        }
+        if (candidates.Count == 0) return null;
+        (Rs.IMethodSymbol? pick, _) = PickOverload(candidates, c.Args.Select(a => TypeOf(a, null)).ToList(), null);
+        if (pick == null) return null;
+        return R($"{receiver}.{pick.Name}({ArgsForMethod(pick, c.Args)})", Api!.FromSymbol(pick.ReturnType));
     }
 
     // ---- Array ----
@@ -363,6 +423,12 @@ internal sealed partial class GdEmitter
             case "min": return R($"{a}.Min()", elem);
             case "max": return R($"{a}.Max()", elem);
             case "count": return R($"{a}.Count({El(0)})", GdType.Int);
+            case "pop_at": return R($"{a}.PopAt({Adapt(E(0), GdType.Int)})", elem);
+            case "duplicate_deep": return R($"{a}.Duplicate(true)", at);
+            case "find_custom": return LambdaArrayCall(a, "FindCustom", c, elem, typed, GdType.Int, 1, null);
+            case "rfind_custom": return LambdaArrayCall(a, "RfindCustom", c, elem, typed, GdType.Int, 1, null);
+            case "bsearch": return R($"{a}.Bsearch({El(0)}{(n > 1 ? ", " + Adapt(E(1), GdType.Bool) : "")})", GdType.Int);
+            case "hash": return R(typed ? $"((Collections.Array){a}).Hash()" : $"{a}.Hash()", GdType.Int);
             case "fill": return R($"{a}.Fill({El(0)})", GdType.Void);
             case "any": case "all": return LambdaArrayCall(a, name == "any" ? "Any" : "All", c, elem, typed, GdType.Bool, 1, null);
             case "filter": return LambdaArrayCall(a, "Filter", c, elem, typed, at, 1, null);
@@ -396,7 +462,7 @@ internal sealed partial class GdEmitter
             // A callable (not a lambda) over a typed array: call it through the Variant.
             string conv = method switch
             {
-                "Any" or "All" or "Filter" => $"x => {Wrap(f, P.Primary)}.Call({VariantFromTyped(new Ex("x", elem))}).AsBool()",
+                "Any" or "All" or "Filter" or "FindCustom" or "RfindCustom" => $"x => {Wrap(f, P.Primary)}.Call({VariantFromTyped(new Ex("x", elem))}).AsBool()",
                 "SortCustom" => $"(x, y) => {Wrap(f, P.Primary)}.Call({VariantFromTyped(new Ex("x", elem))}, {VariantFromTyped(new Ex("y", elem))}).AsBool()",
                 "Map" => $"x => {Wrap(f, P.Primary)}.Call({VariantFromTyped(new Ex("x", elem))})",
                 _ => $"(acc, x) => {Wrap(f, P.Primary)}.Call(acc, {VariantFromTyped(new Ex("x", elem))})",
@@ -433,6 +499,11 @@ internal sealed partial class GdEmitter
             case "values": return R($"{d}.ValuesArray()", typed ? GdType.ArrayOf(vt) : GdType.UntypedArray);
             case "merge": return R($"{d}.Merge({E(0).Code}{(n > 1 ? ", " + Adapt(E(1), GdType.Bool) : "")})", GdType.Void);
             case "duplicate": return R($"{d}.Duplicate({(n > 0 ? Adapt(E(0), GdType.Bool) : "")})", dt);
+            case "duplicate_deep": return R($"{d}.Duplicate(true)", dt);
+            case "merged" when n is 1 or 2: return R($"{d}.Merged({E(0).Code}{(n > 1 ? ", " + Adapt(E(1), GdType.Bool) : "")})", dt);
+            case "hash" when n == 0: return R(typed ? $"((Collections.Dictionary){d}).Hash()" : $"{d}.Hash()", GdType.Int);
+            case "find_key" when n == 1 && !typed: return R($"{d}.FindKey({VariantFromTyped(E(0))})", GdType.Variant);
+            case "get_or_add" when n is 1 or 2 && !typed: return R($"{d}.GetOrAdd({VariantFromTyped(E(0))}{(n > 1 ? ", " + VariantFromTyped(E(1)) : "")})", GdType.Variant);
         }
         Note(c, "call", name, Rating.Unsupported, $"Dictionary.{name}() is not converted");
         return R($"{d}.{Naming.Pascal(name)}({string.Join(", ", c.Args.Select(x => VariantFromTyped(Expr(x, null))))})", GdType.Variant);
@@ -444,13 +515,60 @@ internal sealed partial class GdEmitter
     {
         string a = Wrap(t, P.Primary);
         GdType elem = t.Type.Elem ?? GdType.Variant;
+        GdType pt = t.Type;
+        int n = c.Args.Count;
+        var cache = new Ex?[n];
+        Ex E(int i) => cache[i] ??= Expr(c.Args[i], null);
+        string El(int i) => PackedElement(E(i), pt);
+        string L(int i) => Adapt(E(i), GdType.Int);
+        string elemCs = pt.Name.EndsWith("[]", StringComparison.Ordinal) ? pt.Name[..^2] : pt.Name;
+        // A C# array cannot grow: the methods that change the length build a new array, which goes back into the variable the receiver names.
+        bool variable = a.Length > 0 && a.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or '.' or '[' or ']');
+        Ex? Replace(string helper, string args)
+        {
+            if (!variable) return null;
+            Note(c, "call", name, Rating.Approximated, "a packed array that changes length is replaced by a new array: another variable holding the old array does not see the change");
+            return R($"{a} = PackedArrays.{helper}({a}{args})", GdType.Void, P.Assign);
+        }
+        Ex? r = null;
         switch (name)
         {
             case "size": return R($"{a}.Length", GdType.Int32);
             case "is_empty": return R($"{a}.Length == 0", GdType.Bool, P.Eq);
             case "has": return R($"{a}.Contains({Adapt(Expr(c.Args[0], elem), elem)})", GdType.Bool);
+            case "push_back" or "append" when n == 1: r = Replace("Append", ", " + El(0)); break;
+            case "append_array" when n == 1: r = Replace("AppendArray", ", " + Adapt(E(0), pt)); break;
+            case "insert" when n == 2: r = Replace("Insert", $", {L(0)}, {El(1)}"); break;
+            case "remove_at" when n == 1: r = Replace("RemoveAt", ", " + L(0)); break;
+            case "resize" when n == 1: r = Replace("Resize", ", " + L(0)); break;
+            case "clear" when n == 0:
+                if (variable) { Note(c, "call", name, Rating.Approximated, "a packed array that is cleared is replaced by a new empty array"); return R($"{a} = new {elemCs}[0]", GdType.Void, P.Assign); }
+                break;
+            case "sort" when n == 0: return R($"PackedArrays.Sort({a})", GdType.Void);
+            case "reverse" when n == 0: return R($"PackedArrays.Reverse({a})", GdType.Void);
+            case "fill" when n == 1: return R($"PackedArrays.Fill({a}, {El(0)})", GdType.Void);
+            case "find" when n is 1 or 2: return R($"PackedArrays.Find({a}, {El(0)}{(n > 1 ? ", " + L(1) : "")})", GdType.Int);
+            case "count" when n == 1: return R($"PackedArrays.Count({a}, {El(0)})", GdType.Int);
+            case "slice" when n is 1 or 2: return R($"PackedArrays.Slice({a}, {L(0)}{(n > 1 ? ", " + L(1) : "")})", pt);
+            case "duplicate" when n == 0: return R($"PackedArrays.Duplicate({a})", pt);
         }
+        if (r != null) return r;
         Note(c, "call", name, Rating.Unsupported, $"Packed array .{name}() is not converted");
         return R($"{a}.{Naming.Pascal(name)}({string.Join(", ", c.Args.Select(x => VariantFromTyped(Expr(x, null))))})", GdType.Variant);
+    }
+
+    /// <summary>An element for a packed array, in the C# type of the array's elements (a PackedByteArray holds bytes, a PackedFloat32Array floats).</summary>
+    private string PackedElement(Ex value, GdType packed)
+    {
+        string cs = packed.Name.EndsWith("[]", StringComparison.Ordinal) ? packed.Name[..^2] : packed.Name;
+        switch (cs)
+        {
+            case "byte": return "(byte)" + Wrap(new Ex(Adapt(value, GdType.Int), GdType.Int, value.Prec), P.Unary);
+            case "int": return Adapt(value, GdType.Int32);
+            case "long": return Adapt(value, GdType.Int);
+            case "float": return Adapt(value, GdType.Float32);
+            case "double": return Adapt(value, GdType.Float);
+            default: return Adapt(value, packed.Elem ?? GdType.Variant);
+        }
     }
 }

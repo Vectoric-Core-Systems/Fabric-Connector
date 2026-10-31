@@ -278,7 +278,7 @@ bool widgetClassChoice(const std::string& t, ClassChoice& c) {
 
 bool isWidgetResourceType(const std::string& t) {
     return t == "LabelSettings" || t == "FontVariation" || t == "SystemFont" || t == "FontFile" || t == "ButtonGroup" || t == "Shortcut" || t == "InputEventKey" ||
-           t == "InputEventMouseButton" || t == "BitMap" || t == "RichTextEffect";
+           t == "InputEventMouseButton" || t == "InputEventAction" || t == "BitMap" || t == "RichTextEffect";
 }
 
 namespace {
@@ -315,6 +315,7 @@ const std::vector<ResRow>& resRows() {
         {"Shortcut", {"events"}, {}},
         {"InputEventKey", {"keycode", "physical_keycode", "key_label", "unicode", "pressed", "echo", "shift_pressed", "ctrl_pressed", "alt_pressed", "meta_pressed", "device"}, {}},
         {"InputEventMouseButton", {"button_index", "pressed", "double_click", "shift_pressed", "ctrl_pressed", "alt_pressed", "meta_pressed", "device"}, {}},
+        {"InputEventAction", {"action", "pressed", "strength", "event_index", "device"}, {}},
     };
     return r;
 }

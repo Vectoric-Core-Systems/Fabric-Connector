@@ -97,6 +97,14 @@ public class Environment : Resource
 
     // Kept for scripts and reported by the converter: Aver has no screen-space or SDF version of these (its ray-traced GI covers them).
     public bool SsrEnabled { get; set; }
+    /// <summary>The most steps a screen-space reflection ray takes. Stored, not applied: Aver has no screen-space reflections.</summary>
+    public int SsrMaxSteps { get; set; } = 64;
+    /// <summary>Stored, not applied (see <see cref="SsrMaxSteps"/>).</summary>
+    public float SsrFadeIn { get; set; } = 0.15f;
+    /// <summary>Stored, not applied (see <see cref="SsrMaxSteps"/>).</summary>
+    public float SsrFadeOut { get; set; } = 2f;
+    /// <summary>Stored, not applied (see <see cref="SsrMaxSteps"/>).</summary>
+    public float SsrDepthTolerance { get; set; } = 0.2f;
     public bool SsaoEnabled { get; set; }
     public bool SsilEnabled { get; set; }
     public bool SdfgiEnabled { get; set; }

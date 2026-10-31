@@ -25,6 +25,13 @@ public class Viewport : Node
 
     private Vector2I? _size;
 
+    /// <summary>Godot's Viewport.ScreenSpaceAA: the anti-aliasing a viewport applies after it has drawn (a post-process filter, apart from MSAA).</summary>
+    public enum ScreenSpaceAAEnum { Disabled = 0, Fxaa = 1, Smaa = 2, Max = 3 }
+
+    /// <summary>Stored, not applied (approximated): the project's anti-aliasing is converted into RENDER.NEURAA and RENDER.TAA when the project is converted;
+    /// this value, set at run time, does not switch them.</summary>
+    public ScreenSpaceAAEnum ScreenSpaceAA { get; set; }
+
     private static Vector2I ProjectWindowSize()
     {
         try

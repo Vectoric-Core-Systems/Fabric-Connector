@@ -107,6 +107,17 @@ public struct Vector2 : IEquatable<Vector2>, IComparable<Vector2>
     public readonly Vector2 Snapped(Vector2 step) => new(Mathf.Snapped(X, step.X), Mathf.Snapped(Y, step.Y));
     public readonly Vector2 Snapped(float step) => new(Mathf.Snapped(X, step), Mathf.Snapped(Y, step));
 
+    // GDScript's scalar-argument forms, which GodotSharp spells as overloads.
+    public readonly Vector2 Clampf(float min, float max) => new(Math.Clamp(X, min, max), Math.Clamp(Y, min, max));
+    public readonly Vector2 Minf(float with) => new(Math.Min(X, with), Math.Min(Y, with));
+    public readonly Vector2 Maxf(float with) => new(Math.Max(X, with), Math.Max(Y, with));
+    public readonly Vector2 Snappedf(float step) => Snapped(step);
+    public readonly Vector2 Posmodv(Vector2 modv) => PosMod(modv);
+    public readonly Vector2 BezierDerivative(Vector2 control1, Vector2 control2, Vector2 end, float t) => new(
+        Mathf.BezierDerivative(X, control1.X, control2.X, end.X, t), Mathf.BezierDerivative(Y, control1.Y, control2.Y, end.Y, t));
+    public readonly Vector2 CubicInterpolateInTime(Vector2 b, Vector2 preA, Vector2 postB, float weight, float bT, float preAT, float postBT) => new(
+        Mathf.CubicInterpolateInTime(X, b.X, preA.X, postB.X, weight, bT, preAT, postBT), Mathf.CubicInterpolateInTime(Y, b.Y, preA.Y, postB.Y, weight, bT, preAT, postBT));
+
     public static Vector2 operator +(Vector2 l, Vector2 r) => new(l.X + r.X, l.Y + r.Y);
     public static Vector2 operator -(Vector2 l, Vector2 r) => new(l.X - r.X, l.Y - r.Y);
     public static Vector2 operator -(Vector2 v) => new(-v.X, -v.Y);
@@ -169,6 +180,10 @@ public struct Vector2I : IEquatable<Vector2I>
     public readonly Axis MinAxisIndex() => X < Y ? Axis.X : Axis.Y;
     public readonly Vector2I Sign() => new(Mathf.Sign(X), Mathf.Sign(Y));
     public readonly Vector2I Snapped(Vector2I step) => new(Mathf.Snapped(X, step.X), Mathf.Snapped(Y, step.Y));
+    public readonly Vector2I Clampi(int min, int max) => new(Math.Clamp(X, min, max), Math.Clamp(Y, min, max));
+    public readonly Vector2I Mini(int with) => new(Math.Min(X, with), Math.Min(Y, with));
+    public readonly Vector2I Maxi(int with) => new(Math.Max(X, with), Math.Max(Y, with));
+    public readonly Vector2I Snappedi(int step) => new(Mathf.Snapped(X, step), Mathf.Snapped(Y, step));
 
     public static Vector2I operator +(Vector2I l, Vector2I r) => new(l.X + r.X, l.Y + r.Y);
     public static Vector2I operator -(Vector2I l, Vector2I r) => new(l.X - r.X, l.Y - r.Y);

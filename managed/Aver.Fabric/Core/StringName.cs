@@ -71,6 +71,27 @@ public sealed class NodePath : IEquatable<NodePath>
     public string GetConcatenatedNames() => string.Join('/', _names);
     public string GetConcatenatedSubnames() => string.Join(':', _subnames);
 
+    /// <summary>The names from <paramref name="begin"/> to <paramref name="end"/> as a relative path. The names, then the property parts, count as one list; a negative
+    /// position counts from the end, and an end of 0 means the end.</summary>
+    public NodePath Slice(int begin, int end = 0)
+    {
+        int count = _names.Length + _subnames.Length;
+        if (begin < 0) begin += count;
+        if (end <= 0) end += count;
+        begin = Math.Clamp(begin, 0, count);
+        end = Math.Clamp(end, begin, count);
+        var text = new StringBuilder();
+        for (int i = begin; i < end; i++)
+        {
+            if (i < _names.Length) text.Append(text.Length > 0 ? "/" : "").Append(_names[i]);
+            else text.Append(':').Append(_subnames[i - _names.Length]);
+        }
+        return new NodePath(text.ToString());
+    }
+
+    /// <summary>A number that is the same for equal paths.</summary>
+    public uint Hash() => unchecked((uint)GetHashCode());
+
     /// <summary>The path read as a property path: ":position:x" for "position:x" style, names kept.</summary>
     public NodePath GetAsPropertyPath() => new(":" + (_names.Length > 0 ? GetConcatenatedNames() + (_subnames.Length > 0 ? ":" : "") : "") + GetConcatenatedSubnames());
 

@@ -26,6 +26,7 @@ internal sealed partial class GdEmitter
     /// <summary>The C# file for a top-level script.</summary>
     public string EmitScript(ScriptInfo s)
     {
+        if (!_staticsChecked) { _staticsChecked = true; DemoteStaticsThatNeedAnInstance(); }
         string text = "";
         for (int round = 0; round < 6; round++)
         {
@@ -37,6 +38,43 @@ internal sealed partial class GdEmitter
                 _forced[kv.Key] = _forced.TryGetValue(kv.Key, out GdType? old) && old.IsVariant ? old : kv.Value;
         }
         return text;
+    }
+
+    private bool _staticsChecked;
+
+    // GDScript lets a static function fall back on a call by name (call(), an undeclared function), which C# can only make on an instance: such a function is
+    // written as an instance method, found by typing every static body once (a function that calls a demoted one may need an instance in turn).
+    private void DemoteStaticsThatNeedAnInstance()
+    {
+        for (bool changed = true; changed;)
+        {
+            changed = false;
+            foreach (ScriptInfo si in _m.AllScripts())
+                foreach (MemberInfo mi in si.Members)
+                {
+                    if (mi.Kind != MK.Func || !mi.IsStatic || mi.Func!.Name == "_init" || !StaticBodyUsesInstance(si, mi)) continue;
+                    mi.IsStatic = false;
+                    mi.StaticDemoted = true;
+                    changed = true;
+                }
+        }
+        ResetMemos();
+    }
+
+    private bool StaticBodyUsesInstance(ScriptInfo s, MemberInfo mi)
+    {
+        var saved = (_script, _ctx, _w);
+        _dry++;
+        try
+        {
+            _script = s;
+            Ctx ctx = NewFuncCtx(mi, mi.Func!, GdType.Variant, infer: true, out _);
+            _ctx = ctx;
+            _w = new CodeWriter();
+            EmitBlockBody(mi.Func!.Body);
+            return ctx.UsedInstance;
+        }
+        finally { _dry--; (_script, _ctx, _w) = saved; }
     }
 
     private void ResetMemos()
@@ -527,6 +565,7 @@ internal sealed partial class GdEmitter
         {
             GK.Array or GK.Dict => " = new()",
             GK.String => " = \"\"",
+            GK.Packed when t.Name.EndsWith("[]", StringComparison.Ordinal) => $" = new {t.Name[..^2]}[0]",
             GK.Struct when DefaultValue(t) != "default" => " = " + DefaultValue(t),
             _ => "",
         };

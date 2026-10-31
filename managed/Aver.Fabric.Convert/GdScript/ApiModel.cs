@@ -45,9 +45,82 @@ internal sealed class ApiModel
         if (_types.TryGetValue(name, out INamedTypeSymbol? hit)) return hit;
         // GDScript spells the integer vectors and rectangle Vector2i / Vector3i / Vector4i / Rect2i; GodotSharp (and so Aver.Fabric) spells them with a capital I.
         string lookup = name is "Vector2i" or "Vector3i" or "Vector4i" or "Rect2i" ? name[..^1] + "I" : name;
-        INamedTypeSymbol? t = _comp.GetTypeByMetadataName("Aver.Fabric." + lookup.Replace('.', '+'));
+        INamedTypeSymbol? t = _comp.GetTypeByMetadataName("Aver.Fabric." + lookup.Replace('.', '+')) ?? CasedFabric(lookup);
         _types[name] = t;
         return t;
+    }
+
+    private Dictionary<string, INamedTypeSymbol>? _byFoldedName;
+
+    /// <summary>Every public top-level type of Aver.Fabric by name, case-blind.</summary>
+    private Dictionary<string, INamedTypeSymbol> TypeIndex()
+    {
+        if (_byFoldedName != null) return _byFoldedName;
+        _byFoldedName = new Dictionary<string, INamedTypeSymbol>(StringComparer.OrdinalIgnoreCase);
+        INamespaceSymbol? ns = _comp.GlobalNamespace.GetNamespaceMembers().FirstOrDefault(n => n.Name == "Aver")?.GetNamespaceMembers().FirstOrDefault(n => n.Name == "Fabric");
+        if (ns != null)
+            foreach (INamedTypeSymbol t in ns.GetTypeMembers())
+                if (t.DeclaredAccessibility == Accessibility.Public) _byFoldedName.TryAdd(t.Name, t);
+        return _byFoldedName;
+    }
+
+    private readonly Dictionary<(INamedTypeSymbol, string), INamedTypeSymbol?> _subclassMembers = new(new BaseNameComparer());
+
+    private sealed class BaseNameComparer : IEqualityComparer<(INamedTypeSymbol, string)>
+    {
+        public bool Equals((INamedTypeSymbol, string) a, (INamedTypeSymbol, string) b) => SymbolEqualityComparer.Default.Equals(a.Item1, b.Item1) && a.Item2 == b.Item2;
+        public int GetHashCode((INamedTypeSymbol, string) k) => SymbolEqualityComparer.Default.GetHashCode(k.Item1) * 31 + k.Item2.GetHashCode();
+    }
+
+    /// <summary>GDScript reaches a member through a variable typed as a base class (a Material that is a ShaderMaterial, a Window typed Viewport) and C# does not.
+    /// The class below <paramref name="baseType"/> that first has the member, when exactly one does; the caller casts to it.</summary>
+    public INamedTypeSymbol? SubclassWithMember(INamedTypeSymbol baseType, string gd)
+    {
+        if (_subclassMembers.TryGetValue((baseType, gd), out INamedTypeSymbol? hit)) return hit;
+        var found = new List<INamedTypeSymbol>();
+        foreach (INamedTypeSymbol t in TypeIndex().Values)
+        {
+            if (SymbolEqualityComparer.Default.Equals(t, baseType) || t.TypeKind != TypeKind.Class || !IsSubclassOf(t, baseType)) continue;
+            if (HasMemberOrAccessor(t, gd)) found.Add(t);
+        }
+        // The least derived: a class whose own base does not have the member too.
+        var first = found.Where(t => t.BaseType == null || !found.Any(f => SymbolEqualityComparer.Default.Equals(f, t.BaseType))).ToList();
+        INamedTypeSymbol? result = first.Count == 1 ? first[0] : null;
+        _subclassMembers[(baseType, gd)] = result;
+        return result;
+    }
+
+    private static bool IsSubclassOf(INamedTypeSymbol t, INamedTypeSymbol baseType)
+    {
+        for (INamedTypeSymbol? b = t.BaseType; b != null; b = b.BaseType) if (SymbolEqualityComparer.Default.Equals(b, baseType)) return true;
+        return false;
+    }
+
+    private bool HasMemberOrAccessor(INamedTypeSymbol t, string gd)
+    {
+        if (Lookup(t, gd) is { Kind: not MemberKind.NestedType }) return true;
+        foreach (string pre in new[] { "get_", "set_", "is_", "has_" })
+            if (gd.StartsWith(pre, StringComparison.Ordinal) && gd.Length > pre.Length && Lookup(t, gd[pre.Length..]) is { Kind: MemberKind.Property or MemberKind.Field }) return true;
+        return false;
+    }
+
+    /// <summary>A Godot class spelled with an acronym (AABB, AudioStreamWAV, MultiplayerAPI) is Aabb, AudioStreamWav, MultiplayerApi in GodotSharp and so here:
+    /// the one type that differs from the name in letter case only. A nested enum (Viewport.MSAA is Viewport.Msaa) may also carry GodotSharp's Enum suffix,
+    /// which it takes when the enum's name is a member name of its class (Viewport.DebugDraw is DebugDrawEnum). Lower-case names never match.</summary>
+    private INamedTypeSymbol? CasedFabric(string dotted)
+    {
+        string[] parts = dotted.Split('.');
+        if (parts.Any(p => p.Length < 2 || !char.IsUpper(p[0]))) return null;
+        if (!TypeIndex().TryGetValue(parts[0], out INamedTypeSymbol? cur)) return null;
+        for (int i = 1; i < parts.Length; i++)
+        {
+            INamedTypeSymbol? next = null;
+            for (INamedTypeSymbol? c = cur; c != null && next == null; c = c.BaseType)
+                next = c.GetTypeMembers().FirstOrDefault(n => string.Equals(n.Name, parts[i], StringComparison.OrdinalIgnoreCase) || string.Equals(n.Name, parts[i] + "Enum", StringComparison.OrdinalIgnoreCase));
+            if (next == null) return null;
+            cur = next;
+        }
+        return cur;
     }
 
     public INamedTypeSymbol? Collections(string name) => _comp.GetTypeByMetadataName("Aver.Fabric.Collections." + name);
@@ -200,10 +273,9 @@ internal sealed class ApiModel
     {
         enumType = null;
         member = "";
-        string pascal = Naming.Pascal(gd);
         foreach (INamedTypeSymbol t in Chain(type))
             foreach (INamedTypeSymbol e in t.GetTypeMembers().Where(x => x.TypeKind == TypeKind.Enum))
-                if (MatchEnum(e, pascal, out member)) { enumType = e; return true; }
+                if (MatchEnum(e, gd, out member, wholeName: true)) { enumType = e; return true; }
         return false;
     }
 
@@ -215,13 +287,12 @@ internal sealed class ApiModel
         member = "";
         if (gd == "OK") return Fixed("Error", "Ok", out enumType, out member);
         if (gd == "FAILED") return Fixed("Error", "Failed", out enumType, out member);
-        string pascal = Naming.Pascal(gd);
         foreach (string name in s_globalEnums)
         {
             INamedTypeSymbol? e = Fabric(name);
-            if (e != null && e.TypeKind == TypeKind.Enum && MatchEnum(e, pascal, out member, stripPrefix: true)) { enumType = e; return true; }
+            if (e != null && e.TypeKind == TypeKind.Enum && MatchEnum(e, gd, out member)) { enumType = e; return true; }
         }
-        if (gd.StartsWith("TYPE_", StringComparison.Ordinal) && Fabric("Variant.Type") is { } vt && MatchEnum(vt, "Type" + Naming.Pascal(gd[5..]), out member)) { enumType = vt; return true; }
+        if (gd.StartsWith("TYPE_", StringComparison.Ordinal) && Fabric("Variant.Type") is { } vt && MatchEnum(vt, gd, out member)) { enumType = vt; return true; }
         return false;
     }
 
@@ -232,27 +303,34 @@ internal sealed class ApiModel
         return enumType != null;
     }
 
-    // Enums whose GDScript constants do not start with the enum's name (Tween.TRANS_SINE is TransitionType.Sine).
-    private static readonly Dictionary<string, string> s_constPrefix = new(StringComparer.Ordinal)
-    {
-        ["TransitionType"] = "Trans", ["EaseType"] = "Ease", ["TweenProcessMode"] = "TweenProcess", ["TweenPauseMode"] = "TweenPause",
-    };
-
-    private static bool MatchEnum(INamedTypeSymbol e, string pascal, out string member, bool stripPrefix = true)
+    /// <summary>A GDScript constant (BAKE_DYNAMIC) against one enum. GodotSharp drops the prefix the constants share and keeps the rest, so the member is
+    /// either the whole constant (Msaa4X, Key1) or its tail after a prefix that begins the enum's name: Dynamic after BAKE (Light3D.BakeMode), Lines after
+    /// PRIMITIVE (Mesh.PrimitiveType), Physics after ANIMATION_PROCESS (AnimationProcessCallback), Sine after TRANS (TransitionType). The longest member wins.</summary>
+    private static bool MatchEnum(INamedTypeSymbol e, string gd, out string member, bool wholeName = false)
     {
         member = "";
-        string prefix = e.Name.EndsWith("Enum", StringComparison.Ordinal) ? e.Name[..^4] : e.Name;
-        if (stripPrefix)
-            foreach (string p in s_constPrefix.TryGetValue(prefix, out string? alt) ? new[] { prefix, alt } : new[] { prefix })
-            {
-                if (!pascal.StartsWith(p, StringComparison.Ordinal) || pascal.Length <= p.Length) continue;
-                string rest = pascal[p.Length..];
-                IFieldSymbol? f = e.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(x => x.Name == rest);
-                if (f != null) { member = f.Name; return true; }
-            }
-        IFieldSymbol? exact = e.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(x => x.Name == pascal && x.HasConstantValue);
-        if (exact != null && !stripPrefix) { member = exact.Name; return true; }
-        return false;
+        string want = Fold(gd);
+        string enumName = Fold(e.Name.EndsWith("Enum", StringComparison.Ordinal) ? e.Name[..^4] : e.Name);
+        IFieldSymbol? best = null;
+        foreach (IFieldSymbol f in e.GetMembers().OfType<IFieldSymbol>())
+        {
+            if (!f.HasConstantValue) continue;
+            string fm = Fold(f.Name);
+            // The whole constant, when its constants share no prefix GodotSharp could strip: Performance.TIME_FPS is Monitor.TimeFps, FileAccess.READ is ModeFlags.Read.
+            // Only inside a class's own enums: among the global ones TYPE_STRING would meet PropertyHint.TypeString.
+            if (wholeName && fm == want && fm.Length >= 4) { member = f.Name; return true; }
+            if (fm == want && fm.StartsWith(enumName, StringComparison.Ordinal)) { member = f.Name; return true; }
+            if (fm.Length == 0 || !want.EndsWith(fm, StringComparison.Ordinal)) continue;
+            string prefix = want[..^fm.Length];
+            // RenderingServer's ENV_SSAO_QUALITY_* are EnvironmentSsaoQuality: the prefix may abbreviate the enum's "environment".
+            if (prefix.StartsWith("env", StringComparison.Ordinal) && !prefix.StartsWith("environment", StringComparison.Ordinal) && enumName.StartsWith("environment", StringComparison.Ordinal))
+                prefix = "environment" + prefix[3..];
+            if (prefix.Length < 2 || !enumName.StartsWith(prefix, StringComparison.Ordinal) && !prefix.StartsWith(enumName, StringComparison.Ordinal)) continue;
+            if (best == null || fm.Length > Fold(best.Name).Length) best = f;
+        }
+        if (best == null) return false;
+        member = best.Name;
+        return true;
     }
 
     /// <summary>The virtual a GDScript function of that name overrides in the API base chain: the C# name and the method.</summary>
@@ -275,6 +353,12 @@ internal sealed class ApiModel
             if (t != null)
                 foreach (IMethodSymbol m in t.GetMembers(opName).OfType<IMethodSymbol>()) yield return m;
     }
+
+    /// <summary>True when a conversion operator, implicit or explicit, goes from one type to the other (Vector3 to Vector3I, back again).</summary>
+    public bool HasConversion(INamedTypeSymbol? from, INamedTypeSymbol? to) =>
+        from != null && to != null && new[] { from, to }.SelectMany(t => t.GetMembers().OfType<IMethodSymbol>()).Any(m =>
+            m.MethodKind == MethodKind.Conversion && m.Parameters.Length == 1 && SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, from) &&
+            SymbolEqualityComparer.Default.Equals(m.ReturnType, to));
 
     public bool HasImplicitConversion(INamedTypeSymbol? from, string toFabricName) =>
         from != null && from.GetMembers("op_Implicit").OfType<IMethodSymbol>().Any(m => m.ReturnType.Name == toFabricName);

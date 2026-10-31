@@ -20,7 +20,11 @@ double Converter::setting(const char* path, double def) const {
 }
 
 std::string Converter::settingString(const char* path, const std::string& def) const {
-    return stringOf(project_.setting(path), def);
+    const std::string value = stringOf(project_.setting(path), def);
+    // A setting that names a resource may write it as uid://...; the project's uid table says which file that is.
+    if (gd::GodotProjectFs::isUid(value))
+        if (const std::string res = fs_.resolve(value, ""); !res.empty()) return res;
+    return value;
 }
 
 bool Converter::settingBool(const char* path, bool def) const { return boolOf(project_.setting(path), def); }
@@ -162,6 +166,30 @@ void Converter::convertInput() {
     data.contextName = name_ + "Input";
     data.contextPriority = 0;
 
+    // A key or mouse button that needs Shift, Ctrl or Alt held keeps that need: its binding carries a chord trigger on an action bound to the modifier key.
+    // Those actions are written after the project's own, one per modifier that turned up (Aver's Key enum has the left keys only, and no Meta).
+    std::map<std::string, std::string> modifierKeys;   // action name -> Aver key name
+    const auto requireModifiers = [&](const Var& ev, fmt::OcInputBinding& b, const gd::GodotInputAction& act, const std::string& cls) {
+        const struct { const char* flag; const char* word; const char* key; } mods[] = {
+            {"shift_pressed", "shift", "LeftShift"}, {"ctrl_pressed", "ctrl", "LeftCtrl"}, {"alt_pressed", "alt", "LeftAlt"}};
+        std::string held;
+        for (const auto& m : mods) {
+            if (!boolOf(ev.find(m.flag), false)) continue;
+            const std::string name = std::string("fabric_modifier_") + m.word;
+            modifierKeys[name] = m.key;
+            fmt::OcTriggerSpec chord;
+            chord.kind = fmt::OcTriggerKind::Chord;
+            chord.refs.push_back(name);
+            b.triggers.push_back(fmt::formatTriggerSpec(chord));
+            held += (held.empty() ? "" : ", ") + std::string(m.word);
+        }
+        if (!held.empty())
+            report_.add("input", kProject, act.name, cls, "", Rating::Approximated,
+                        held + " must be held: a chord trigger on an action bound to the left " + held + " key (the right-hand key does not count)", act.line);
+        if (boolOf(ev.find("meta_pressed"), false))
+            report_.add("input", kProject, act.name, cls, "", Rating::Approximated, "the Meta (Windows, Command) key requirement is dropped: Aver's Key enum has no Meta key", act.line);
+    };
+
     for (const gd::GodotInputAction& act : project_.inputActions) {
         fmt::OcInputAction a;
         a.name = act.name;
@@ -207,18 +235,23 @@ void Converter::convertInput() {
                                 "the key code is in Godot 3's encoding (special-key flag 1<<24, Godot 4 uses 1<<22); read as the " + keyDescription(code) + " key", act.line);
                 b.source = fmt::OcInputSource::Key;
                 b.key = n;
-                if (boolOf(ev.find("shift_pressed"), false) || boolOf(ev.find("ctrl_pressed"), false) || boolOf(ev.find("alt_pressed"), false) ||
-                    boolOf(ev.find("meta_pressed"), false))
-                    report_.add("input", kProject, act.name, cls, "", Rating::Approximated, "the key's modifier requirement is dropped; the bare key triggers the action", act.line);
+                requireModifiers(ev, b, act, cls);
             } else if (cls == "InputEventMouseButton") {
                 const int idx = static_cast<int>(numOf(ev.find("button_index"), 0));
                 if (idx == 1 || idx == 2 || idx == 3) {
                     b.source = fmt::OcInputSource::Key;
                     b.key = idx == 1 ? "MouseLeft" : idx == 2 ? "MouseRight" : "MouseMiddle";
+                    requireModifiers(ev, b, act, cls);
                 } else if (idx == 4 || idx == 5) {
                     b.source = fmt::OcInputSource::MouseWheel;
                     b.scale = idx == 4 ? 1.0f : -1.0f;
-                    report_.add("input", kProject, act.name, cls, "", Rating::Approximated, "a wheel notch is an axis value in Aver, a button press in Godot", act.line);
+                    // A wheel notch is an axis value for one frame; a pressed trigger turns it into the single press Godot's wheel button is.
+                    fmt::OcTriggerSpec pressed;
+                    pressed.kind = fmt::OcTriggerKind::Pressed;
+                    b.triggers.push_back(fmt::formatTriggerSpec(pressed));
+                    requireModifiers(ev, b, act, cls);
+                    report_.add("input", kProject, act.name, cls, "", Rating::Approximated,
+                                "a wheel notch is an axis value in Aver, a button press in Godot: the binding carries a pressed trigger, so one notch fires the action once", act.line);
                 } else {
                     skip("mouse button " + std::to_string(idx) + " (side buttons, horizontal wheel) is not in Aver's input set", act.line);
                     continue;
@@ -267,7 +300,7 @@ void Converter::convertInput() {
             // Two events can name one Aver input (Enter and KP Enter): one binding is enough.
             bool duplicate = false;
             for (const fmt::OcInputBinding& o : binds)
-                duplicate = duplicate || (o.source == b.source && o.key == b.key && o.scale == b.scale);
+                duplicate = duplicate || (o.source == b.source && o.key == b.key && o.scale == b.scale && o.triggers == b.triggers);
             ++converted;
             if (!duplicate) binds.push_back(std::move(b));
         }
@@ -288,6 +321,17 @@ void Converter::convertInput() {
             report_.add("input", kProject, act.name, "InputAction", "", Rating::Approximated, "its only event is an empty key event; the action is written with no bindings", act.line);
         else report_.add("input", kProject, act.name, "InputAction", "", Rating::Unsupported,
                          "none of its events could be mapped (" + std::to_string(unmapped) + " event(s) are outside Aver's input set, see the rows above)", act.line);
+    }
+    for (const auto& [name, key] : modifierKeys) {
+        fmt::OcInputAction a;
+        a.name = name;
+        a.type = fmt::OcInputValueType::Digital;
+        data.actions.push_back(std::move(a));
+        fmt::OcInputBinding b;
+        b.action = name;
+        b.source = fmt::OcInputSource::Key;
+        b.key = key;
+        data.bindings.push_back(std::move(b));
     }
     report_.add("input", kProject, "", "InputMap", "", Rating::Approximated,
                 "only the actions the project overrides are written; Godot's built-in ui_* actions are not", 0);
@@ -383,6 +427,33 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
     report_.add("setting", kProject, "", "", "physics/common/physics_interpolation", Rating::Converted, "PHYSICS.INTERPOLATION", 0);
     report_.add("setting", kProject, "", "", "physics", Rating::Converted, "PHYSICS.COMBINE material", 0);
 
+    // Jolt's limits are the engine's own PHYSICS.* keys. Both count the temporary memory buffer in MiB (Godot's default is 32).
+    const struct { const char* setting; int* field; const char* key; } joltLimits[] = {
+        {"physics/jolt_physics_3d/limits/max_bodies", &d.physMaxBodies, "PHYSICS.MAXBODIES"},
+        {"physics/jolt_physics_3d/limits/max_body_pairs", &d.physMaxBodyPairs, "PHYSICS.MAXBODYPAIRS"},
+        {"physics/jolt_physics_3d/limits/max_contact_constraints", &d.physMaxContacts, "PHYSICS.MAXCONTACTS"},
+        {"physics/jolt_physics_3d/limits/temporary_memory_buffer_size", &d.physTempAllocatorMb, "PHYSICS.TEMPALLOCMB"}};
+    for (const auto& limit : joltLimits) {
+        const Var* v = project_.setting(limit.setting);
+        if (!v) continue;
+        const double n = numOf(v, 0);
+        if (n >= 1 && n <= 2147483647.0) {
+            *limit.field = static_cast<int>(n);
+            report_.add("setting", kProject, "", "", limit.setting, Rating::Converted, std::string(limit.key) + " " + std::to_string(*limit.field), 0);
+        } else {
+            report_.add("setting", kProject, "", "", limit.setting, Rating::Unsupported, "not a positive whole number; the engine's own limit stays", 0);
+        }
+    }
+    // Aver always simulates with Jolt: the project's choice of engine changes nothing but how closely the bodies match what Godot's own engine would do.
+    if (const Var* engine = project_.setting("physics/3d/physics_engine")) {
+        const std::string which = stringOf(engine, "");
+        if (which == "Jolt Physics")
+            report_.add("setting", kProject, "", "", "physics/3d/physics_engine", Rating::Converted, "Jolt Physics: Aver's physics is Jolt too", 0);
+        else
+            report_.add("setting", kProject, "", "", "physics/3d/physics_engine", Rating::Approximated,
+                        "the project asks for " + (which.empty() ? std::string("Godot's default engine") : which) + "; Aver always simulates with Jolt, so contacts and stacking behave as Jolt's do", 0);
+    }
+
     // The start scene's environment: bloom and exposure are project-wide in Aver.
     // Godot's exposure is fixed unless CameraAttributes asks for auto exposure, so eye adaptation is off; the tonemapper is Godot's.
     if (projectEnv_.found) {
@@ -407,6 +478,27 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
         report_.add("setting", kProject, "", "Environment", "tonemap", Rating::Converted,
                     "RENDER.TONEMAP " + std::to_string(d.postTonemap) + " / TONEMAPWHITE / EXPOSURE / AUTOEXPOSURE / ADJUST* from the start scene's WorldEnvironment", 0);
     }
+
+    // Anti-aliasing: Godot's screen-space pass (FXAA, SMAA) has no twin; NeuRAA is the engine's edge anti-aliasing and the closest. Its TAA switch is the engine's TAA.
+    for (const char* key : {"rendering/anti_aliasing/quality/screen_space_aa", "rendering/textures/quality/screen_space_aa"}) {
+        const Var* v = project_.setting(key);
+        if (!v) continue;
+        const int aaMode = static_cast<int>(numOf(v, 0));
+        d.neuraa = aaMode > 0 ? 1 : 0;
+        if (aaMode > 0)
+            report_.add("setting", kProject, "", "", key, Rating::Approximated, "RENDER.NEURAA 1: the engine's edge anti-aliasing stands in for Godot's FXAA / SMAA pass; it is a different filter", 0);
+        else
+            report_.add("setting", kProject, "", "", key, Rating::Converted, "RENDER.NEURAA 0", 0);
+    }
+    if (project_.setting("rendering/anti_aliasing/quality/use_taa")) {
+        d.taa = settingBool("rendering/anti_aliasing/quality/use_taa", false) ? 1 : 0;
+        report_.add("setting", kProject, "", "", "rendering/anti_aliasing/quality/use_taa", Rating::Approximated,
+                    std::string("RENDER.TAA ") + std::to_string(d.taa) + ": the engine's temporal anti-aliasing (AverSR) is not Godot's TAA", 0);
+    }
+    // The clear colour is read where the start scene's Environment is written (a Clear Color background becomes a flat sky of this colour).
+    if (project_.setting("rendering/environment/defaults/default_clear_color"))
+        report_.add("setting", kProject, "", "", "rendering/environment/defaults/default_clear_color", Rating::Approximated,
+                    "an Environment whose background is Clear Color is written as a flat sky of this colour; a level with no Environment keeps the engine's own background", 0);
 
     // Comments the writer keeps verbatim: the layer names, which have no key of their own.
     std::string comments = "# Converted from a Godot " + (project_.engineVersion.empty() ? std::string("4") : project_.engineVersion) + " project by AverAssetC fabric.\n";
@@ -441,7 +533,11 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
                                     "gui/theme/custom", "gui/timers/tooltip_delay_sec", "physics/3d/default_gravity",
                                     "physics/3d/default_gravity_vector", "physics/3d/default_linear_damp", "physics/3d/default_angular_damp",
                                     "physics/common/physics_ticks_per_second", "physics/common/physics_interpolation", "internationalization/locale/",
-                                    "input/", "autoload/", "layer_names/", "editor_plugins/", "dotnet/project/", "config_version"};
+                                    "input/", "autoload/", "layer_names/", "editor_plugins/", "dotnet/project/", "config_version",
+                                    "physics/3d/physics_engine", "physics/jolt_physics_3d/limits/max_bodies", "physics/jolt_physics_3d/limits/max_body_pairs",
+                                    "physics/jolt_physics_3d/limits/max_contact_constraints", "physics/jolt_physics_3d/limits/temporary_memory_buffer_size",
+                                    "rendering/anti_aliasing/quality/screen_space_aa", "rendering/textures/quality/screen_space_aa", "rendering/anti_aliasing/quality/use_taa",
+                                    "rendering/environment/defaults/default_clear_color"};
     for (const gd::GodotConfigSection& sec : project_.config.sections) {
         for (const gd::GodotProperty& e : sec.entries) {
             const std::string key = sec.name.empty() ? e.name : sec.name + "/" + e.name;
@@ -455,17 +551,35 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
                             "and RenderingServer.global_shader_parameter_set updates them at run time", e.line);
                 continue;
             }
+            // The default bus layout was written (FabricAudio.cpp says so, under its resolved path): its setting row is that one.
+            if (key == "audio/buses/default_bus_layout" && !audioBusLayout_.empty()) continue;
             // Editor and import-time settings change nothing a running game does.
             static const char* editorOnly[] = {"application/config/tags", "debug/gdscript/warnings/", "debug/shader_language/warnings/",
-                                               "rendering/textures/vram_compression/"};
+                                               "rendering/textures/vram_compression/", "rendering/vram_compression/", "filesystem/import/"};
             bool editorSetting = false;
             for (const char* h : editorOnly)
                 if (key.rfind(h, 0) == 0) { editorSetting = true; break; }
             if (editorSetting) {
                 report_.add("setting", kProject, "", "", key, Rating::Approximated,
-                            "an editor or import-time setting (project tags, script warnings, texture compression formats); it changes nothing a running game does, so it is not written", e.line);
+                            "an editor or import-time setting (project tags, script warnings, texture compression formats, the Blender importer); it changes nothing a running game does, so it is not written", e.line);
                 continue;
             }
+            // Settings of the Godot runtime that have no counterpart to set: each says why nothing is lost.
+            static const struct { const char* prefix; const char* why; } inert[] = {
+                {"memory/multithread/thread_rid_pool_prealloc", "sizes Godot's pool of resource ids for threads; Aver's tables grow on demand, so it changes nothing"},
+                {"global_group/", "an entry of the editor's list of group names; a node's groups come from its scene, which is converted, so nothing reads this list"},
+                {"application/run/low_processor_mode", "makes Godot sleep between frames to save power; Aver draws every frame, so it changes nothing a player sees"},
+                {"debug/settings/physics_interpolation/enable_warnings", "switches Godot's debug warnings for physics interpolation; it changes nothing a running game does"},
+                {"gui/theme/default_font_generate_mipmaps", "a rasteriser option of Godot's default font; the engine draws coverage glyphs at the drawn size, so it changes nothing"},
+                {"gui/theme/default_font_multichannel_signed_distance_field", "turns Godot's default font into an MSDF font; the engine rasterises coverage glyphs at the drawn size (no MSDF), so it changes nothing"}};
+            bool inertSetting = false;
+            for (const auto& s : inert)
+                if (key.rfind(s.prefix, 0) == 0) {
+                    report_.add("setting", kProject, "", "", key, Rating::Approximated, s.why, e.line);
+                    inertSetting = true;
+                    break;
+                }
+            if (inertSetting) continue;
             report_.add("setting", kProject, "", "", key, Rating::Unsupported, "no Aver project key for this setting", e.line);
         }
     }

@@ -81,6 +81,23 @@ public struct Vector4 : IEquatable<Vector4>
         MathF.Round(Z, MidpointRounding.AwayFromZero), MathF.Round(W, MidpointRounding.AwayFromZero));
     public readonly Vector4 Sign() => new(Mathf.Sign(X), Mathf.Sign(Y), Mathf.Sign(Z), Mathf.Sign(W));
     public readonly Vector4 Snapped(Vector4 step) => new(Mathf.Snapped(X, step.X), Mathf.Snapped(Y, step.Y), Mathf.Snapped(Z, step.Z), Mathf.Snapped(W, step.W));
+    public readonly Vector4 Snapped(float step) => new(Mathf.Snapped(X, step), Mathf.Snapped(Y, step), Mathf.Snapped(Z, step), Mathf.Snapped(W, step));
+    public readonly Vector4 PosMod(Vector4 modv) => new(Mathf.PosMod(X, modv.X), Mathf.PosMod(Y, modv.Y), Mathf.PosMod(Z, modv.Z), Mathf.PosMod(W, modv.W));
+    public readonly Vector4 Max(Vector4 with) => new(Math.Max(X, with.X), Math.Max(Y, with.Y), Math.Max(Z, with.Z), Math.Max(W, with.W));
+    public readonly Vector4 Min(Vector4 with) => new(Math.Min(X, with.X), Math.Min(Y, with.Y), Math.Min(Z, with.Z), Math.Min(W, with.W));
+    public readonly Vector4 CubicInterpolate(Vector4 b, Vector4 preA, Vector4 postB, float weight) => new(
+        Mathf.CubicInterpolate(X, b.X, preA.X, postB.X, weight), Mathf.CubicInterpolate(Y, b.Y, preA.Y, postB.Y, weight),
+        Mathf.CubicInterpolate(Z, b.Z, preA.Z, postB.Z, weight), Mathf.CubicInterpolate(W, b.W, preA.W, postB.W, weight));
+
+    // GDScript's scalar-argument forms, which GodotSharp spells as overloads.
+    public readonly Vector4 Clampf(float min, float max) => new(Math.Clamp(X, min, max), Math.Clamp(Y, min, max), Math.Clamp(Z, min, max), Math.Clamp(W, min, max));
+    public readonly Vector4 Minf(float with) => new(Math.Min(X, with), Math.Min(Y, with), Math.Min(Z, with), Math.Min(W, with));
+    public readonly Vector4 Maxf(float with) => new(Math.Max(X, with), Math.Max(Y, with), Math.Max(Z, with), Math.Max(W, with));
+    public readonly Vector4 Snappedf(float step) => Snapped(step);
+    public readonly Vector4 Posmodv(Vector4 modv) => PosMod(modv);
+    public readonly Vector4 CubicInterpolateInTime(Vector4 b, Vector4 preA, Vector4 postB, float weight, float bT, float preAT, float postBT) => new(
+        Mathf.CubicInterpolateInTime(X, b.X, preA.X, postB.X, weight, bT, preAT, postBT), Mathf.CubicInterpolateInTime(Y, b.Y, preA.Y, postB.Y, weight, bT, preAT, postBT),
+        Mathf.CubicInterpolateInTime(Z, b.Z, preA.Z, postB.Z, weight, bT, preAT, postBT), Mathf.CubicInterpolateInTime(W, b.W, preA.W, postB.W, weight, bT, preAT, postBT));
 
     public static Vector4 operator +(Vector4 l, Vector4 r) => new(l.X + r.X, l.Y + r.Y, l.Z + r.Z, l.W + r.W);
     public static Vector4 operator -(Vector4 l, Vector4 r) => new(l.X - r.X, l.Y - r.Y, l.Z - r.Z, l.W - r.W);
@@ -133,6 +150,15 @@ public struct Vector4I : IEquatable<Vector4I>
     public readonly float Length() => MathF.Sqrt(LengthSquared());
     public readonly int LengthSquared() => X * X + Y * Y + Z * Z + W * W;
     public readonly Vector4I Sign() => new(Mathf.Sign(X), Mathf.Sign(Y), Mathf.Sign(Z), Mathf.Sign(W));
+    public readonly Vector4I Snapped(Vector4I step) => new(Mathf.Snapped(X, step.X), Mathf.Snapped(Y, step.Y), Mathf.Snapped(Z, step.Z), Mathf.Snapped(W, step.W));
+    public readonly Vector4I Max(Vector4I with) => new(Math.Max(X, with.X), Math.Max(Y, with.Y), Math.Max(Z, with.Z), Math.Max(W, with.W));
+    public readonly Vector4I Min(Vector4I with) => new(Math.Min(X, with.X), Math.Min(Y, with.Y), Math.Min(Z, with.Z), Math.Min(W, with.W));
+    public readonly Vector4I Clampi(int min, int max) => new(Math.Clamp(X, min, max), Math.Clamp(Y, min, max), Math.Clamp(Z, min, max), Math.Clamp(W, min, max));
+    public readonly Vector4I Mini(int with) => new(Math.Min(X, with), Math.Min(Y, with), Math.Min(Z, with), Math.Min(W, with));
+    public readonly Vector4I Maxi(int with) => new(Math.Max(X, with), Math.Max(Y, with), Math.Max(Z, with), Math.Max(W, with));
+    public readonly Vector4I Snappedi(int step) => new(Mathf.Snapped(X, step), Mathf.Snapped(Y, step), Mathf.Snapped(Z, step), Mathf.Snapped(W, step));
+    public readonly float DistanceTo(Vector4I to) => (to - this).Length();
+    public readonly int DistanceSquaredTo(Vector4I to) => (to - this).LengthSquared();
 
     public static Vector4I operator +(Vector4I l, Vector4I r) => new(l.X + r.X, l.Y + r.Y, l.Z + r.Z, l.W + r.W);
     public static Vector4I operator -(Vector4I l, Vector4I r) => new(l.X - r.X, l.Y - r.Y, l.Z - r.Z, l.W - r.W);

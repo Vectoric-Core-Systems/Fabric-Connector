@@ -286,9 +286,9 @@ int main() {
               "Floor: a StaticBody3D half a metre down");
         check(propIs(w, floorIdx, "collision_layer", "3") && propIs(w, floorIdx, "collision_mask", "1"), "layer 3 as written, mask 1 made explicit");
         const gd::GodotVariant pm = variantOf(w, floorIdx, "physics_material_override");
-        check(pm.type == gd::GodotVType::Dictionary && pm.find("friction") && near(pm.find("friction")->asNumber(), 0.1) && pm.find("bounce") &&
+        check(pm.type == gd::GodotVType::Object && pm.s == "PhysicsMaterial" && pm.find("friction") && near(pm.find("friction")->asNumber(), 0.1) && pm.find("bounce") &&
                   near(pm.find("bounce")->asNumber(), 0.4) && pm.find("rough") && pm.find("rough")->asBool(),
-              "the PhysicsMaterial's friction, bounce and rough are kept");
+              "the PhysicsMaterial is an Object(PhysicsMaterial) that keeps its friction, bounce and rough");
         const gd::GodotVariant box = variantOf(w, find(w, {"Main", "Floor", "Shape"}), "shape");
         check(box.type == gd::GodotVType::Object && box.s == "BoxShape3D" && box.find("size") && box.find("size")->type == gd::GodotVType::Vector3 &&
                   near(box.find("size")->num(0), 20) && near(box.find("size")->num(1), 1),

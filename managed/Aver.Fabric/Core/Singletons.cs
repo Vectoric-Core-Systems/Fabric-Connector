@@ -23,23 +23,194 @@ public static class Engine
         set => Aver.Framework.Game.TimeScale = (float)value;
     }
 
-    /// <summary>The physics step rate: 1 / the project's fixed step, 60 when it states none.</summary>
-    public static int PhysicsTicksPerSecond => 60;
+    private static int s_physicsTicks;
+
+    /// <summary>The physics step rate: 1 / the engine's fixed step (the project's PHYSICS.FIXEDSTEP, 60 when it states none). Setting it changes the engine's
+    /// fixed step (0.5 s at most, so 2 ticks a second at least). Unverified with bodies alive: change it before the first body is built.</summary>
+    public static int PhysicsTicksPerSecond
+    {
+        get
+        {
+            if (s_physicsTicks > 0) return s_physicsTicks;
+            try
+            {
+                if (Aver.Physics.Physics.Ready) return Math.Max(1, (int)Math.Round(1.0 / Aver.Physics.Physics.FixedStep));
+            }
+            catch (Exception ex) when (PhysicsClockNative.Missing(ex)) { }
+            return (int)ProjectSettings.GetSetting("physics/common/physics_ticks_per_second", 60L).AsInt64();
+        }
+        set
+        {
+            if (value < 1) return;
+            s_physicsTicks = value;
+            try { Aver.Physics.Physics.SetFixedStep(1f / value); }
+            catch (Exception ex) when (PhysicsClockNative.Missing(ex)) { }
+        }
+    }
+
+    /// <summary>The most physics steps one frame runs to catch up. Stored, not applied (approximated): the engine's own catch-up limit stays.</summary>
+    public static int MaxPhysicsStepsPerFrame { get; set; } = 8;
+
+    /// <summary>The frame rate cap, 0 for none. Stored, not applied (approximated): the engine paces frames by the display's refresh (vsync) and the project's
+    /// RENDER.FRAMEBUDGETMS, and has no hard cap a script can set.</summary>
+    public static int MaxFps { get; set; }
+
+    /// <summary>Godot's jitter fix for fixed steps. Stored, not applied: the engine's physics interpolation (PHYSICS.INTERPOLATION) does the smoothing.</summary>
+    public static double PhysicsJitterFix { get; set; } = 0.5;
+
+    /// <summary>Whether the engine prints errors from scripts. Stored, not applied: the log always carries them.</summary>
+    public static bool PrintErrorMessages { get; set; } = true;
+
+    /// <summary>The frames drawn so far: the engine draws once per process frame, so this is the process frame count.</summary>
+    public static long GetFramesDrawn() => Aver.Framework.Engine.ProcessFrames;
+
+    /// <summary>How far the physics clock is into the current step, 0 to 1: what a renderer blends the last two physics states by (Godot's
+    /// get_physics_interpolation_fraction). 0 when the engine's physics is not running.</summary>
+    public static double GetPhysicsInterpolationFraction()
+    {
+        try { return PhysicsClockNative.aver_phys_step_alpha(); }
+        catch (Exception ex) when (PhysicsClockNative.Missing(ex)) { return 0.0; }
+    }
+
+    /// <summary>The Godot version whose API this runtime follows, as Godot's get_version_info gives it: major, minor, patch, hex, status, build, hash, timestamp and
+    /// string. Aver is not Godot, so build is "aver" and the hash is empty.</summary>
+    public static Collections.Dictionary GetVersionInfo() => new()
+    {
+        { "major", 4L }, { "minor", 5L }, { "patch", 0L }, { "hex", 0x040500L }, { "status", "stable" }, { "build", "aver" },
+        { "hash", "" }, { "timestamp", 0L }, { "string", "4.5-stable (aver)" },
+    };
+
+    /// <summary>The processor architecture in Godot's spelling ("x86_64", "arm64" ...).</summary>
+    public static string GetArchitectureName() => System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture switch
+    {
+        System.Runtime.InteropServices.Architecture.X64 => "x86_64",
+        System.Runtime.InteropServices.Architecture.Arm64 => "arm64",
+        System.Runtime.InteropServices.Architecture.X86 => "x86_32",
+        System.Runtime.InteropServices.Architecture.Arm => "arm32",
+        var other => other.ToString().ToLowerInvariant(),
+    };
+}
+
+/// <summary>The one export of the physics library a script reaches directly: the position inside the current step.</summary>
+internal static class PhysicsClockNative
+{
+    [System.Runtime.InteropServices.DllImport("Aver.Physics")] internal static extern float aver_phys_step_alpha();
+
+    /// <summary>Whether an exception says the physics library is not there (a host without it: tests, tools) rather than that a call failed.</summary>
+    internal static bool Missing(Exception ex) => ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException;
 }
 
 /// <summary>Godot's OS singleton.</summary>
 public static class OS
 {
+    private static ulong s_staticPeak;
+
     public static string GetName() => Aver.Framework.OS.Name;
     public static bool HasFeature(string tagName)
     {
         try { return Aver.Framework.OS.HasFeature(tagName); }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return tagName.ToLowerInvariant() is "pc" or "64"; }
     }
-    public static ulong GetTicksMsec() => (ulong)System.Environment.TickCount64;
-    public static ulong GetTicksUsec() => (ulong)(System.Diagnostics.Stopwatch.GetTimestamp() * 1_000_000.0 / System.Diagnostics.Stopwatch.Frequency);
+    public static ulong GetTicksMsec() => Time.GetTicksMsec();
+    public static ulong GetTicksUsec() => Time.GetTicksUsec();
     public static bool IsDebugBuild() => Aver.Framework.OS.HasFeature("debug");
     public static string GetEnvironment(string variable) => System.Environment.GetEnvironmentVariable(variable) ?? "";
+    public static bool HasEnvironment(string variable) => System.Environment.GetEnvironmentVariable(variable) != null;
+    public static void SetEnvironment(string variable, string value) => System.Environment.SetEnvironmentVariable(variable, value);
+    public static void UnsetEnvironment(string variable) => System.Environment.SetEnvironmentVariable(variable, null);
+
+    /// <summary>The number of logical processors.</summary>
+    public static int GetProcessorCount() => System.Environment.ProcessorCount;
+
+    /// <summary>The bytes of managed memory in use: Godot's "static" memory is the engine's own allocations, and the managed heap is what this runtime holds.</summary>
+    public static ulong GetStaticMemoryUsage()
+    {
+        ulong now = (ulong)Math.Max(0, GC.GetTotalMemory(false));
+        if (now > s_staticPeak) s_staticPeak = now;
+        return now;
+    }
+
+    /// <summary>The most <see cref="GetStaticMemoryUsage"/> has reported so far.</summary>
+    public static ulong GetStaticMemoryPeakUsage()
+    {
+        GetStaticMemoryUsage();
+        return s_staticPeak;
+    }
+
+    /// <summary>The folder user:// names: the player's writable folder for this project, created on first use.</summary>
+    public static string GetUserDataDir() => FabricPaths.User;
+
+    /// <summary>The folder the platform keeps per-user application data in (Godot's get_data_dir).</summary>
+    public static string GetDataDir() => System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData);
+
+    /// <summary>The folder the platform keeps per-user configuration in (Godot's get_config_dir).</summary>
+    public static string GetConfigDir() => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        ? System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData)
+        : System.Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") ?? System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), ".config");
+
+    /// <summary>The folder the platform keeps per-user caches in (Godot's get_cache_dir).</summary>
+    public static string GetCacheDir() => OperatingSystem.IsWindows()
+        ? System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData)
+        : OperatingSystem.IsMacOS() ? System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), "Library", "Caches")
+        : System.Environment.GetEnvironmentVariable("XDG_CACHE_HOME") ?? System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), ".cache");
+
+    public static string GetExecutablePath() => System.Environment.ProcessPath ?? "";
+
+    public static int GetProcessId() => System.Environment.ProcessId;
+
+    /// <summary>The caller's thread id.</summary>
+    public static ulong GetThreadCallerId() => (ulong)System.Environment.CurrentManagedThreadId;
+
+    /// <summary>The user's locale in Godot's spelling ("en_US"), "en" when the system gives none.</summary>
+    public static string GetLocale()
+    {
+        string name = System.Globalization.CultureInfo.CurrentCulture.Name.Replace('-', '_');
+        return name.Length == 0 ? "en" : name;
+    }
+
+    /// <summary>The language part of <see cref="GetLocale"/> ("en").</summary>
+    public static string GetLocaleLanguage()
+    {
+        string name = System.Globalization.CultureInfo.CurrentCulture.TwoLetterISOLanguageName;
+        return name.Length == 0 || name == "iv" ? "en" : name;
+    }
+
+    /// <summary>Whether user:// survives a restart: it is a folder on disk, so it does.</summary>
+    public static bool IsUserfsPersistent() => true;
+
+    /// <summary>Blocks the calling thread for the milliseconds.</summary>
+    public static void DelayMsec(int msec) => System.Threading.Thread.Sleep(Math.Max(0, msec));
+
+    /// <summary>Blocks the calling thread for the microseconds (rounded up to whole milliseconds).</summary>
+    public static void DelayUsec(int usec) => System.Threading.Thread.Sleep(Math.Max(0, (usec + 999) / 1000));
+
+    /// <summary>Every argument the program was started with, after its own name (Godot's get_cmdline_args).</summary>
+    public static string[] GetCmdlineArgs() => System.Environment.GetCommandLineArgs().Skip(1).ToArray();
+
+    /// <summary>The arguments after a lone "--": the ones meant for the game, as Godot's get_cmdline_user_args gives them.</summary>
+    public static string[] GetCmdlineUserArgs()
+    {
+        string[] args = GetCmdlineArgs();
+        int at = System.Array.IndexOf(args, "--");
+        return at < 0 ? System.Array.Empty<string>() : args[(at + 1)..];
+    }
+
+    /// <summary>Opens a web address, a file or a folder in the program the system associates with it (Godot's shell_open). The system's own opener is asked,
+    /// so a "file://" folder or an "https://" address both work. <see cref="Error.Ok"/> once the opener started, <see cref="Error.CantOpen"/> if it did not.</summary>
+    public static Error ShellOpen(string uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri)) return Error.InvalidParameter;
+        try
+        {
+            string target = FabricPaths.IsVirtual(uri) ? FabricPaths.Globalize(uri) : uri;
+            using System.Diagnostics.Process? p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true });
+            return p != null || OperatingSystem.IsWindows() ? Error.Ok : Error.CantOpen;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException or System.IO.FileNotFoundException)
+        {
+            return Error.CantOpen;
+        }
+    }
 }
 
 /// <summary>Godot's ProjectSettings singleton. The converter keeps the project's Godot values it can name in the manifest, so
@@ -84,6 +255,13 @@ public static class ProjectSettings
         or "physics/common/physics_ticks_per_second" or "display/window/size/viewport_width" or "display/window/size/viewport_height"
         or "gui/theme/custom" or "display/window/stretch/mode" or "display/window/stretch/aspect" or "display/window/stretch/scale_mode"
         or "display/window/stretch/scale" or "gui/timers/tooltip_delay_sec";
+
+    /// <summary>The operating-system path for a res:// or user:// path (res:// is the project's content folder, user:// the player's writable folder); any other path is
+    /// returned unchanged.</summary>
+    public static string GlobalizePath(string path) => FabricPaths.Globalize(path);
+
+    /// <summary>The res:// or user:// path for a path inside the project's content folder or the user folder; any other path is returned unchanged.</summary>
+    public static string LocalizePath(string path) => FabricPaths.Localize(path);
 
     private static bool TryFloat(string s, out double d) => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d);
 

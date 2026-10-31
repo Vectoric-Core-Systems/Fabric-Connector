@@ -89,6 +89,7 @@ internal static class Manifest
                 if (!string.IsNullOrEmpty(cn)) name = cn!;
             }
             catch (IOException) { }
+            name = Aver.Fabric.Convert.GdScript.Naming.ScriptClass(name);
             string unique = name;
             for (int n = 2; !used.Add(unique); n++) unique = name + n;
             list.Add(new ManifestScript { Path = "res://" + rel, Kind = "gdscript", ClassName = unique, Output = "Content/Scripts/" + unique + ".cs" });

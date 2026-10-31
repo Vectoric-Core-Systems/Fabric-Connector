@@ -317,3 +317,17 @@ fabric_needs_converter(FabricBinaryTest)
 target_compile_definitions(FabricBinaryTest PRIVATE AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>")
 set_target_properties(FabricBinaryTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# FabricConverterBugsTest -- the converter bugs of docs/plans/GODOT_PARITY.md section 3.4 that live in the scene and project converter (C1, C12 to C20): script
+# class names, binary resources found by their magic, PhysicsMaterial, a uid in a setting, editor-only settings, Jolt limits, a Radiance .hdr, InputEventAction in a
+# Shortcut, key modifiers and wheel notches, and the per-instance rendering flags. The project is built by the test; the tool is run as a process.
+add_executable(FabricConverterBugsTest src/FabricConverterBugsTest.cpp)
+target_link_libraries(FabricConverterBugsTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+if(TARGET Aver.Formats.Material)
+  target_link_libraries(FabricConverterBugsTest PRIVATE Aver.Formats.Material)
+  target_compile_definitions(FabricConverterBugsTest PRIVATE AVER_FABRIC_TEST_OCMAT=1)
+endif()
+fabric_needs_converter(FabricConverterBugsTest)
+target_compile_definitions(FabricConverterBugsTest PRIVATE AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>")
+set_target_properties(FabricConverterBugsTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

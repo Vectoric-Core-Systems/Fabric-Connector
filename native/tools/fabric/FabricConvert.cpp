@@ -92,7 +92,10 @@ void scanCsScript(const std::string& text, const std::string& stem, ScriptInfo& 
 bool reservedClassName(const std::string& n) {
     static const std::set<std::string> extra = {"Object", "GodotObject", "RefCounted", "Resource", "Mesh", "Material", "Shape3D", "Texture2D", "PackedScene",
                                                 "SceneTree", "Variant", "Callable", "Signal", "StringName", "NodePath", "Vector2", "Vector3",
-                                                "Transform3D", "Basis", "Quaternion", "Color", "Aabb", "Plane", "Projection", "GD", "Mathf", "Input"};
+                                                "Transform3D", "Basis", "Quaternion", "Color", "Aabb", "Plane", "Projection", "GD", "Mathf", "Input",
+                                                // What converted scripts name unqualified: a script class of the same name hides it (a class System breaks `using System;`).
+                                                "System", "Math", "Task", "Enum", "Action", "Func", "Delegate", "Exception", "Array", "MidpointRounding", "StringComparison",
+                                                "GDScript", "PackedArrays", "Collections"};
     return extra.count(n) || isControlClass(n) || is2DClass(n) || isNode3DClass(n) || n == "Node" || n == "Timer" || n == "Viewport" || n == "CanvasLayer" ||
            n == "Window" || n == "CanvasItem" || n == "WorldEnvironment" || n == "AnimationPlayer" || n == "AudioStreamPlayer" ||
            n == "AudioStreamPlayer3D" || n == "AudioListener3D" || n == "AudioServer" || n == "AudioStream" || n == "NavigationAgent3D" ||

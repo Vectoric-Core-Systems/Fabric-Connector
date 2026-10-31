@@ -337,6 +337,8 @@ internal sealed partial class GdEmitter
         string header = isCtor ? $"{mods}{name}({sig})" : $"{mods}{RetCs()} {name}({sig})";
 
         if (fd.GetAnnotation("rpc") is { } rpc) EmitRpcAttribute(fd, rpc);
+        if (mi.StaticDemoted)
+            Note(fd, "function", mi.Name, Rating.Approximated, "a static function that makes a call by name (call(), a function that is not declared) is written as an instance method: C# can make that call only on an object");
         _w.Open(header);
         if (isCtor && ctorInits != null)
             foreach ((MemberInfo m, string code) in ctorInits) _w.Line($"{FieldTarget(m)} = {code};");

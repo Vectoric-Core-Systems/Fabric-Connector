@@ -26,6 +26,7 @@ internal sealed class MemberInfo
     public Member Decl = null!;
     public ScriptInfo Owner = null!;
     public bool IsStatic;
+    public bool StaticDemoted;                 // declared static, but its body needs an instance (a call by name): written as an instance method
     public GdType? Type;                       // var/const: its type; func: the return type; memoized
     public bool Resolving;
     public bool Async;                         // func containing await

@@ -21,6 +21,16 @@ internal static class Naming
 
     public static bool IsKeyword(string s) => s_keywords.Contains(s);
 
+    // Names the converted code writes unqualified (Math.Round, Task, Enum.GetValues, using System): a script class of the same name would hide them, and a class
+    // named System makes `using System;` an error. The scene converter renames these the same way (native/tools/fabric/FabricConvert.cpp, reservedClassName).
+    private static readonly HashSet<string> s_reservedScriptNames = new(StringComparer.Ordinal)
+    {
+        "System", "Math", "Task", "Enum", "Action", "Func", "Delegate", "Exception", "Array", "MidpointRounding", "StringComparison", "GD", "GDScript", "Mathf", "PackedArrays", "Collections",
+    };
+
+    /// <summary>The C# class name for a script called <paramref name="name"/>: the name itself, or with "Script" after it when it would hide something the converted code uses.</summary>
+    public static string ScriptClass(string name) => s_reservedScriptNames.Contains(name) ? name + "Script" : name;
+
     /// <summary>"@event" for a C# keyword, the name itself otherwise.</summary>
     public static string Safe(string s) => s_keywords.Contains(s) ? "@" + s : s;
 
@@ -34,6 +44,8 @@ internal static class Naming
         {
             bool allUpper = w.All(c => !char.IsLetter(c) || char.IsUpper(c));
             string t = allUpper && w.Length > 1 ? w.ToLowerInvariant() : w;
+            // GodotSharp writes a word of digits and one letter with the letter capital: msaa_3d is Msaa3D, scaling_3d_mode Scaling3DMode, MSAA_4X Msaa4X.
+            if (t.Length > 1 && char.IsLetter(t[^1]) && t[..^1].All(char.IsDigit)) t = t[..^1] + char.ToUpperInvariant(t[^1]);
             sb.Append(char.ToUpperInvariant(t[0])).Append(t, 1, t.Length - 1);
         }
         string r = sb.ToString();

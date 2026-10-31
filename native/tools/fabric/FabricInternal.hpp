@@ -312,6 +312,10 @@ public:
     Var environmentObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w);
     Var genericResourceDict(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc,
                             const Where& w, const char* why);
+    // A PhysicsMaterial as `Object(PhysicsMaterial, ...)`: Aver.Fabric's class of that name takes friction, bounce, rough and absorbent.
+    Var physicsMaterialObject(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line);
+    // An occluder shape (BoxOccluder3D, ArrayOccluder3D ...) as `Object(Class, ...)`: Aver.Fabric keeps it; the renderer's occlusion culling is automatic.
+    Var occluderObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line);
     void convertStandaloneResources();
     void reportProjectFiles();
 

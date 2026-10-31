@@ -101,6 +101,10 @@ internal sealed partial class GdEmitter
                 Signal = new SignalRef { Owner = "", NameCode = root.Name + ".SignalName." + sig, OwnerType = GdType.OfScript(_script) }, UsesInstance = true,
             };
 
+        // A constant of an enum the base class declares, written bare (process_mode = PROCESS_MODE_ALWAYS in a Node script).
+        if (Api != null && root != null && IsConstantName(name) && Api.FindEnumConstant(root, name, out Rs.INamedTypeSymbol? baseEnum, out string baseMember))
+            return new Ex(baseEnum!.ToDisplayString(s_nameFormat) + "." + baseMember, GdType.Obj(baseEnum)) { IsConstExpr = true };
+
         // Globals.
         switch (name)
         {
@@ -129,6 +133,8 @@ internal sealed partial class GdEmitter
         return new Ex($"Get({q})", GdType.Variant) { SetTemplate = $"Set({q}, \u0001)", UsesInstance = true };
     }
 
+    private static bool IsConstantName(string name) => name.Length > 2 && name.Contains('_') && name.All(c => char.IsUpper(c) || char.IsDigit(c) || c == '_');
+
     // GDScript is case sensitive: Basis is the type and basis the property, but the case-blind member match would take Basis for the Node3D property
     // (and Mesh for MeshInstance3D.Mesh) and the constructor call would become a call by name. A PascalCase name that is a type of the API is the type.
     private bool IsApiTypeName(string name) =>
@@ -139,7 +145,7 @@ internal sealed partial class GdEmitter
         ScriptInfo? s = _m.ByPath.GetValueOrDefault(a.Path);
         GdType t = s != null ? GdType.OfScript(s) : Obj("Node").WithWeak(true);
         string tn = s != null ? QualifiedScript(s) : "Node";
-        bool inNode = _script.ApiRoot is { } r && Api?.Fabric("Node") is { } node && GdType.Derives(r, node);
+        bool inNode = !_ctx.IsStatic && _script.ApiRoot is { } r && Api?.Fabric("Node") is { } node && GdType.Derives(r, node);
         string code = inNode ? $"GetNode<{tn}>(\"/root/{a.Name}\")" : $"SceneTree.Instance.Root.GetNode<{tn}>(\"{a.Name}\")";
         return new Ex(code, t) { UsesInstance = inNode };
     }
@@ -357,6 +363,9 @@ internal sealed partial class GdEmitter
                 // untyped (weak) receiver is a dynamic property read.
                 if (SubtypeWith(tt, name, false) is { } sub) return MemberOf(AsScriptType(target, sub), name, at, expected);
                 if (tt.Weak || tt.FromScene || sym == null || sym.Name is "Node" or "GodotObject") return DynamicMember(target, name, at);
+                // Typed as a base class and only a subclass has the member (Viewport.content_scale_size is the Window's): read it through a cast.
+                if (Api != null && tt.Kind == GK.Object && Api.SubclassWithMember(sym, name) is { } owner)
+                    return MemberOf(new Ex("(" + owner.ToDisplayString(s_nameFormat) + ")" + Wrap(target, P.Unary), GdType.Obj(owner), P.Unary), name, at, expected);
                 Note(at, "member", name, Rating.Unsupported, $"Aver.Fabric has no member '{name}' on {tt.Cs}");
                 return new Ex(tcode + "." + Naming.Pascal(name), GdType.Variant);
             }
@@ -378,7 +387,11 @@ internal sealed partial class GdEmitter
         if (target.Type.IsVariant)
         {
             Note(at, "dynamic", name, Rating.Approximated, $"'{name}' is read by name at run time: the type of the receiver is not known");
-            return new Ex($"GDScript.GetMember({target.Code}, {q})", GdType.Variant) { SetTemplate = $"GDScript.SetMember({target.Code}, {q}, \u0001)", IsDynamic = true };
+            // A value type held in a variable (a Transform3D, an Aabb) is changed by assigning the variable its changed copy; an object or a dictionary is changed in place.
+            string set = target.Addressable && target.Parent == null
+                ? $"{target.Code} = GDScript.WithMember({target.Code}, {q}, \u0001)"
+                : $"GDScript.SetMember({target.Code}, {q}, \u0001)";
+            return new Ex($"GDScript.GetMember({target.Code}, {q})", GdType.Variant) { SetTemplate = set, IsDynamic = true };
         }
         Note(at, "dynamic", name, Rating.Approximated, $"'{name}' is read by name at run time: {target.Type.Cs} has no such member");
         string recv = Wrap(target, P.Primary);
@@ -733,6 +746,7 @@ internal sealed partial class GdEmitter
                 if (v.HasValue)
                 {
                     res.Const = v.Value;
+                    res.FromName = l.FromName || r.FromName;   // a named long constant keeps its C# type: no implicit narrowing of the result
                     // Two int literals whose result does not fit C#'s int: write the 64-bit result (C# would wrap or refuse).
                     if (v.Value < int.MinValue || v.Value > int.MaxValue) { res.Code = v.Value.ToString(CultureInfo.InvariantCulture) + "L"; res.Prec = v.Value < 0 ? P.Unary : P.Primary; }
                 }

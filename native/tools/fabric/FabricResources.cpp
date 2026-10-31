@@ -9,6 +9,8 @@
 #if AVER_HAVE_MATERIAL_COMPILE
 #include "aver/formats/ImportCook.hpp"
 #include "aver/formats/MaterialCook.hpp"
+#include "aver/platform/Image.hpp"
+#include "stb_image_write.h"
 #endif
 
 #include <algorithm>
@@ -198,6 +200,35 @@ const Var* findProp(const std::vector<gd::GodotProperty>& props, const char* nam
     return nullptr;
 }
 
+// A Radiance .hdr picture as PNG bytes. stb reads the floating point pixels and maps them to 8 bits (gamma 2.2, nothing above 1.0 kept), which is
+// all the engine's image loader holds anyway.
+bool hdrToPng(const std::string& disk, std::vector<u8>& png, std::string& why) {
+#if AVER_HAVE_MATERIAL_COMPILE
+    ImageData img;
+    if (!decodeImage(disk, img, &why) || !img.valid()) {
+        if (why.empty()) why = "the picture could not be decoded";
+        return false;
+    }
+    png.clear();
+    const auto sink = [](void* context, void* data, int size) {
+        auto* out = static_cast<std::vector<u8>*>(context);
+        out->insert(out->end(), static_cast<const u8*>(data), static_cast<const u8*>(data) + size);
+    };
+    if (!stbi_write_png_to_func(sink, &png, static_cast<int>(img.width), static_cast<int>(img.height), 4, img.pixels.data(), static_cast<int>(img.width) * 4)) {
+        why = "the PNG could not be written";
+        return false;
+    }
+    return true;
+#else
+    (void)disk; (void)png;
+    why = "this build of the converter has no PNG encoder";
+    return false;
+#endif
+}
+
+constexpr const char* kHdrNote =
+    "a Radiance HDR picture: the engine's image loader holds 8 bits per channel, so it was tone-mapped to 8 bits (values above 1.0 are clamped) and written as a PNG";
+
 }  // namespace
 
 // ---- textures ------------------------------------------------------------------------------------------------------
@@ -223,6 +254,23 @@ std::string Converter::copyTexture(const std::string& resPath, const Where& w) {
                 report_.add("resource", resPath, "", "Texture2D", "", Rating::Converted, "copied to " + asset, 0);
             }
         }
+    } else if (e == ".hdr") {
+        const std::string disk = fs_.toDiskPath(resPath);
+        std::vector<u8> png;
+        std::string why;
+        if (disk.empty() || !hdrToPng(disk, png, why)) {
+            report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "the Radiance HDR picture could not be converted" + (why.empty() ? std::string() : ": " + why), 0);
+        } else {
+            asset = "Textures/" + (resPath.rfind("res://", 0) == 0 ? resPath.substr(6) : resPath) + ".png";
+            const std::string dst = contentDir_ + "/" + asset;
+            createDirectories(std::filesystem::path(dst).parent_path().string());
+            if (!writeFileBytes(dst, png.data(), png.size())) {
+                report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "could not write " + dst, 0);
+                asset.clear();
+            } else {
+                report_.add("resource", resPath, "", "Texture2D", "", Rating::Approximated, std::string(kHdrNote) + ": " + asset, 0);
+            }
+        }
     } else if (isOtherTextureExt(e)) {
         report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported,
                     "a " + e + " texture is not decoded by the engine's image loader; convert it to PNG", 0);
@@ -239,6 +287,22 @@ namespace {
 bool loadImage(Converter& c, const std::string& resPath, const Where& w, fmt::ImportedImage& img) {
     const std::string e = extOf(resPath);
     img.ok = false;
+    if (e == ".hdr") {
+        // The cook takes encoded bytes: the picture goes in as a PNG.
+        const std::string disk = c.fs_.toDiskPath(resPath);
+        std::string why;
+        if (disk.empty() || !hdrToPng(disk, img.bytes, why)) {
+            c.report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "the Radiance HDR picture could not be converted" + (why.empty() ? std::string() : ": " + why), 0);
+            return false;
+        }
+        c.report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Approximated, kHdrNote, 0);
+        c.materialTextureSources_.insert(resPath);
+        img.ext = ".png";
+        img.suggestedName = safeName(stemOf(resPath), "texture");
+        img.sourcePath = resPath;
+        img.ok = true;
+        return true;
+    }
     if (!isImageExt(e)) {
         c.report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported,
                       isOtherTextureExt(e) ? "a " + e + " texture is not decoded by the engine's image loader; convert it to PNG"
@@ -879,6 +943,33 @@ const gd::GodotResource* Converter::resourceDoc(const std::string& resPath) {
 
 // ---- shapes and other resources -------------------------------------------------------------------------------------------
 
+Var Converter::physicsMaterialObject(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line) {
+    // Godot stores the properties that differ from its defaults; the runtime class has the same defaults (friction 1, the rest off or 0).
+    std::vector<std::pair<std::string, Var>> entries;
+    for (const char* key : {"friction", "rough", "bounce", "absorbent"})
+        if (const Var* p = findProp(props, key)) entries.emplace_back(key, convertValue(*p, doc, w, key));
+    report_.add("resource", doc.file, w.node, "PhysicsMaterial", "", Rating::Converted,
+                "friction, bounce, rough and absorbent become Aver.Fabric's PhysicsMaterial, which the body applies to its surface when it is built", line);
+    return makeObject("PhysicsMaterial", std::move(entries));
+}
+
+namespace {
+bool isOccluderType(const std::string& t) {
+    return t == "BoxOccluder3D" || t == "SphereOccluder3D" || t == "QuadOccluder3D" || t == "PolygonOccluder3D" || t == "ArrayOccluder3D";
+}
+}  // namespace
+
+Var Converter::occluderObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line) {
+    std::vector<std::pair<std::string, Var>> entries;
+    for (const gd::GodotProperty& p : props) {
+        if (ignorableResourceProp(p.name)) continue;
+        entries.emplace_back(p.name, convertValue(p.value, doc, w, p.name));
+    }
+    report_.add("resource", doc.file, w.node, type, "", Rating::Approximated,
+                "kept as Aver.Fabric's " + type + " and not used: the renderer's occlusion culling is automatic, so an authored occluder shape changes nothing that is drawn", line);
+    return makeObject(type, std::move(entries));
+}
+
 Var Converter::genericResourceDict(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc,
                                    const Where& w, const char* why) {
     std::vector<std::pair<std::string, Var>> entries;
@@ -1054,6 +1145,8 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                             sr->line);
                 return makeNil();
             }
+            if (t == "PhysicsMaterial") return physicsMaterialObject(sr->props, doc, w, sr->line);
+            if (isOccluderType(t)) return occluderObject(t, sr->props, doc, w, sr->line);
             if (isShapeType(t)) return shapeObject(t, sr->props, doc, w);
             if (isEnvironmentType(t)) return environmentObject(t, sr->props, doc, w);
             return genericResourceDict(t, sr->props, doc, w, "no Aver counterpart for this resource class; its properties are kept as a dictionary");
@@ -1097,7 +1190,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 const std::string a = copyTexture(res, w);
                 return a.empty() ? makeNil() : makeResource(a);
             }
-            if (ext == ".tres" || ext == ".res") {
+            if (ext == ".tres" || ext == ".res" || fs_.isBinaryResource(res)) {   // a .mesh, .occ or .lmbake is a binary resource like a .res
                 const gd::GodotResource* r = resourceDoc(res);
                 if (!r) return makeNil();
                 const std::string& rt = r->header.type;
@@ -1113,6 +1206,8 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                     const std::string a = primitiveMeshAsset(rt, r->props, *r, w);
                     return a.empty() ? makeNil() : makeResource(a);
                 }
+                if (rt == "PhysicsMaterial") return physicsMaterialObject(r->props, *r, w, 0);
+                if (isOccluderType(rt)) return occluderObject(rt, r->props, *r, w, 0);
                 if (isShapeType(rt)) return shapeObject(rt, r->props, *r, w);
                 if (isEnvironmentType(rt)) return environmentObject(rt, r->props, *r, w);
                 if (rt == "ArrayMesh") {
@@ -1156,7 +1251,7 @@ void Converter::convertStandaloneResources() {
     for (const std::string& res : fs_.files()) {
         const std::string ext = extOf(res);
         const Where w{res, "", ""};
-        if (ext == ".tres" || ext == ".res") {   // a binary .res reads into the same model (GodotBinary.hpp)
+        if (ext == ".tres" || ext == ".res" || fs_.isBinaryResource(res)) {   // a binary .res (or a .mesh, .occ ... with its magic) reads into the same model (GodotBinary.hpp)
             const gd::GodotResource* r = resourceDoc(res);
             if (!r) continue;
             const std::string& t = r->header.type;
@@ -1193,8 +1288,10 @@ void Converter::convertStandaloneResources() {
             }
             if (t == "ShaderMaterial")
                 shaderMaterialAsset(res, r->props, *r, stemOf(res), w);   // G6 SH2: every shader material is written, whether or not a scene names it
-            else if (isShapeType(t))
+            else if (isShapeType(t) || t == "PhysicsMaterial")
                 report_.add("resource", res, "", t, "", Rating::Converted, "converted where a scene uses it", 0);
+            else if (isOccluderType(t))
+                report_.add("resource", res, "", t, "", Rating::Approximated, "kept as Aver.Fabric's " + t + " where a scene uses it; occlusion culling is automatic", 0);
             else
                 report_.add("resource", res, "", t, "", Rating::Unsupported, "a " + t + " resource has no Aver counterpart yet", 0);
         } else if (isModelExt(ext)) {

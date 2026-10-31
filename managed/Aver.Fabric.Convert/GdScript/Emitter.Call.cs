@@ -173,6 +173,9 @@ internal sealed partial class GdEmitter
         Rs.INamedTypeSymbol? sym = t.Sym;
         if (Api != null && sym != null)
         {
+            // Vector3i(a_vector3), Vector3(a_vector3i): the conversion the math types declare, not a constructor.
+            if (t.Kind == GK.Struct && args.Count == 1 && TypeOf(args[0], null) is { Kind: GK.Struct, Sym: { } from } && !Rs.SymbolEqualityComparer.Default.Equals(from, sym) && Api.HasConversion(from, sym))
+                return new Ex($"({typeRef.Code}){Wrap(Expr(args[0], null), P.Unary)}", GdType.Obj(sym), P.Unary);
             List<Rs.IMethodSymbol> ctors = Api.Constructors(sym);
             if (ctors.Count > 0)
             {
@@ -309,7 +312,7 @@ internal sealed partial class GdEmitter
     }
 
     // get_global_transform(), set_visible(false), is_visible(): the property of the same name.
-    private Ex? ApiAccessorCall(Rs.INamedTypeSymbol? type, string receiver, string name, IReadOnlyList<Expr> args, Node at)
+    private Ex? ApiAccessorCall(Rs.INamedTypeSymbol? type, string receiver, string name, IReadOnlyList<Expr> args, Node at, bool staticOnly = false)
     {
         if (Api == null || type == null) return null;
         string gd = name;
@@ -339,6 +342,8 @@ internal sealed partial class GdEmitter
         }
         if (prop == null) return null;
         ApiMember member = Api.Lookup(type, prop)!;
+        if (staticOnly && !member.IsStatic) return null;
+        if (setter && !member.CanWrite) return null;
         string prefix = receiver.Length > 0 ? Wrap(new Ex(receiver, GdType.Variant), P.Primary) + "." : "";
         if (receiver.Length == 0 && !member.IsStatic) _ctx.UsedInstance = true;
         if (setter)
@@ -354,6 +359,7 @@ internal sealed partial class GdEmitter
     private Ex CallMember(MemberAccess m, Call c, GdType? expected)
     {
         string name = m.Name;
+        if (m.Target is Identifier { Name: "String" } && FindLocal("String") == null && StringStaticCall(name, c) is { } stringStatic) return stringStatic;
         if (m.Target is SuperExpr)
         {
             _ctx.UsedInstance = true;
@@ -422,6 +428,15 @@ internal sealed partial class GdEmitter
                 if (acc != null) return acc;
                 if (SubtypeWith(tt, name, true) is { } sub && sub.Find(name) is { } subFunc) return CallScript(subFunc, Wrap(AsScriptType(t, sub), P.Primary), c.Args);
                 if (tt.Weak || tt.FromScene || sym == null || sym.Name is "Node" or "GodotObject") return DynamicCall(t, name, c);
+                // The variable is typed as a base class and only a subclass has the member (Material.set_shader_parameter, Resource.instantiate): call it through a cast.
+                if (Api != null && sym != null && tt.Kind == GK.Object && Api.SubclassWithMember(sym, name) is { } owner)
+                {
+                    string cast = "((" + owner.ToDisplayString(s_nameFormat) + ")" + Wrap(t, P.Unary) + ")";
+                    ApiMember? viaCast = Api.Lookup(owner, name);
+                    if (viaCast != null && viaCast.Kind == MemberKind.Method) return CallApi(viaCast, cast, c.Args, expected, c);
+                    Ex? castAccessor = ApiAccessorCall(owner, cast, name, c.Args, c);
+                    if (castAccessor != null) return castAccessor;
+                }
                 // A member the runtime lacks: keep the name, let the compiler say so.
                 string args = string.Join(", ", c.Args.Select(a => VariantFromTyped(Expr(a, null))));
                 Note(c, "call", name, Rating.Unsupported, $"Aver.Fabric has no method '{name}' on {tt.Cs}");
@@ -472,6 +487,9 @@ internal sealed partial class GdEmitter
         {
             ApiMember? api = Api.Lookup(sym, name);
             if (api != null && api.Kind == MemberKind.Method) return CallApi(api, t.Code, c.Args, expected, c);
+            // A singleton's get_x() / set_x(v) is its static property x (Input.set_mouse_mode, Engine.get_time_scale).
+            Ex? accessor = ApiAccessorCall(sym, t.Code, name, c.Args, c, staticOnly: true);
+            if (accessor != null) return accessor;
             if (sym.Name == "Color" && Api.Fabric("Colors") is { } colors)
             {
                 ApiMember? fromHtml = Api.Lookup(sym, "from_" + name) ?? Api.Lookup(sym, name == "html" ? "from_html" : name);

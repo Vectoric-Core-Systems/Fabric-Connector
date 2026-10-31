@@ -7,6 +7,7 @@
 using Aver.Fabric;
 using GArray = Aver.Fabric.Collections.Array;
 using GDict = Aver.Fabric.Collections.Dictionary;
+using Thread = System.Threading.Thread;
 
 static class MultiplayerTests
 {

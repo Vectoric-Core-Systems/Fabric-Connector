@@ -120,6 +120,54 @@ public readonly struct Callable : IEquatable<Callable>
     /// <summary>A callable that drops the last <paramref name="argCount"/> arguments it is called with.</summary>
     public Callable Unbind(int argCount) => new(this, null, argCount);
 
+    /// <summary>Like <see cref="Bind"/> with the arguments in an array.</summary>
+    public Callable Bindv(Collections.Array arguments) => Bind(arguments.ToArray());
+
+    /// <summary>A callable for a method of an object given as a value (GDScript's Callable.create); null if the value is not an object.</summary>
+    public static Callable Create(Variant variant, StringName method) =>
+        variant.AsGodotObject() is { } target ? new Callable(target, method) : default;
+
+    /// <summary>The object the method is called on; null for a callable of a delegate that has none.</summary>
+    public GodotObject? GetObject() => Target;
+
+    public ulong GetObjectId() => Target?.GetInstanceId() ?? 0UL;
+
+    /// <summary>The method's name; empty for a delegate (a lambda has no name to give).</summary>
+    public StringName GetMethod() => Method ?? StringName.Empty;
+
+    /// <summary>A callable of an object and a method name (not a delegate, not a lambda).</summary>
+    public bool IsStandard() => _inner is Callable c ? c.IsStandard() : _delegate == null && _target != null;
+
+    /// <summary>How many arguments the callable expects when it is called (bound arguments are not counted; unbound ones are). 0 when it cannot be told: a variadic
+    /// delegate, or a method name that no member of the target has.</summary>
+    public int GetArgumentCount()
+    {
+        if (_inner is Callable c) return Math.Max(0, c.GetArgumentCount() - (_bound?.Length ?? 0)) + _unbind;
+        if (_delegate != null) return _variadic ? 0 : _delegate.Method.GetParameters().Length;
+        if (_target == null || _method == null) return 0;
+        foreach (string name in MemberAccess.Candidates(_method))
+            foreach (MethodInfo m in _target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                if (m.Name == name) return m.GetParameters().Length;
+        return 0;
+    }
+
+    /// <summary>The arguments bound by <see cref="Bind"/>, in the order they are passed.</summary>
+    public Collections.Array GetBoundArguments()
+    {
+        var all = new Collections.Array();
+        if (_bound != null) foreach (Variant v in _bound) all.Add(v);
+        if (_inner is Callable c) foreach (Variant v in c.GetBoundArguments()) all.Add(v);
+        return all;
+    }
+
+    public int GetBoundArgumentsCount() => GetBoundArguments().Count;
+
+    /// <summary>How many trailing arguments <see cref="Unbind"/> drops in all.</summary>
+    public int GetUnboundArgumentsCount() => _unbind + (_inner is Callable c ? c.GetUnboundArgumentsCount() : 0);
+
+    /// <summary>A number that is the same for equal callables.</summary>
+    public uint Hash() => unchecked((uint)GetHashCode());
+
     private Variant InvokeDelegate(Variant[] args)
     {
         if (_variadic)

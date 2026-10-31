@@ -21,6 +21,18 @@ static class Program
             Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
             return failures;
         }
+        if (args.Length == 1 && args[0] == "converter-bugs") // only the converter-bug suite (docs/plans/GODOT_PARITY.md, C1 to C20)
+        {
+            failures = ConverterBugTests.RunAll();
+            Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
+            return failures;
+        }
+        if (args.Length == 1 && args[0] == "fabric-api") // only the package API suite (docs/plans/GODOT_PARITY.md, F20 to F75 of wave 1)
+        {
+            failures = FabricApiTests.RunAll();
+            Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
+            return failures;
+        }
         if (args.Length == 1 && args[0] == "script-typing") // only the scripts package suite (typed node access, the runtime classes it needed)
         {
             failures = ScriptTypingTests.RunAll();
@@ -120,6 +132,8 @@ static class Program
         failures += GdScriptConvertTests.RunAll(); // F4b: GDScript converted to C#, compiled against this runtime, run against GDScript's results
         failures += ScriptTypingTests.RunAll(); // scripts package: typed $Path / get_node / %Unique / instantiate, built-in constructors, the runtime classes two demos needed
         failures += ScriptSubtypeTests.RunAll(); // members of a derived script through a declared base, enum size, Tween constants, frame_post_draw
+        failures += ConverterBugTests.RunAll(); // converter bugs C1 to C20 of the parity plan: names, singletons, enums, coercions, base-typed receivers, packed arrays, utility functions
+        failures += FabricApiTests.RunAll(); // wave 1 package API: the Godot members Aver.Fabric lacked (enums, singletons, files, threads, string / vector / variant methods)
         failures += GdextTests.RunAll();     // F5: the GDExtension host from C# (wire form always; the native host and test plugin when built)
 
         Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");

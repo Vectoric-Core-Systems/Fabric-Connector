@@ -430,12 +430,15 @@ internal static class Gui
         return Navigate(e);
     }
 
-    /// <summary>Whether <paramref name="e"/> triggers a ui_* action: the project's InputMap entry when it has events, else Godot's built-in keys.</summary>
+    /// <summary>Whether <paramref name="e"/> triggers a ui_* action: the project's InputMap entry when it has events, else Godot's built-in keys (the InputMap's defaults:
+    /// keys by the table below, which ignores modifiers the way the GUI navigates, a gamepad button by the default map).</summary>
     internal static bool IsUiAction(InputEvent e, string action)
     {
-        if (InputMap.HasAction(action) && e.IsAction(action)) return true;
+        bool builtin = InputMap.IsBuiltinActive(action);
+        if (builtin && e is InputEventJoypadButton { Pressed: true }) return e.IsAction(action, true);
+        if (!builtin && InputMap.HasAction(action) && e.IsAction(action)) return true;
         if (e is not InputEventKey { Pressed: true } k) return false;
-        if (InputMap.HasAction(action) && InputMap.ActionGetEvents(action).Count > 0) return false;   // the project rebound it
+        if (!builtin && InputMap.HasAction(action) && InputMap.ActionGetEvents(action).Count > 0) return false;   // the project rebound it
         Key key = k.GetKeycodeWithModifiers();
         return action switch
         {

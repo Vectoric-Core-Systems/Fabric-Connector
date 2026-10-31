@@ -170,7 +170,33 @@ public struct Color : IEquatable<Color>
     public readonly uint ToArgb32() => ((uint)A8 << 24) | ((uint)R8 << 16) | ((uint)G8 << 8) | (uint)B8;
     public readonly uint ToAbgr32() => ((uint)A8 << 24) | ((uint)B8 << 16) | ((uint)G8 << 8) | (uint)R8;
     public readonly ulong ToRgba64() => ((ulong)To16(R) << 48) | ((ulong)To16(G) << 32) | ((ulong)To16(B) << 16) | To16(A);
+    public readonly ulong ToArgb64() => ((ulong)To16(A) << 48) | ((ulong)To16(R) << 32) | ((ulong)To16(G) << 16) | To16(B);
+    public readonly ulong ToAbgr64() => ((ulong)To16(A) << 48) | ((ulong)To16(B) << 32) | ((ulong)To16(G) << 16) | To16(R);
     private static ushort To16(float v) => (ushort)(Math.Clamp(v, 0f, 1f) * 65535f + 0.5f);
+
+    /// <summary>The same as <see cref="Luminance"/>: GDScript's get_luminance.</summary>
+    public readonly float GetLuminance() => Luminance();
+
+    /// <summary>From a 32-bit 0xRRGGBBAA value (GDScript's Color.hex).</summary>
+    public static Color Hex(uint hex) => FromRgba32(hex);
+
+    /// <summary>From a 64-bit 0xRRRRGGGGBBBBAAAA value.</summary>
+    public static Color Hex64(ulong hex) => new(
+        ((hex >> 48) & 0xFFFF) / 65535f, ((hex >> 32) & 0xFFFF) / 65535f, ((hex >> 16) & 0xFFFF) / 65535f, (hex & 0xFFFF) / 65535f);
+
+    /// <summary>From 0..255 channels (GDScript's Color.from_rgba8).</summary>
+    public static Color FromRgba8(long r8, long g8, long b8, long a8 = 255) => new(r8 / 255f, g8 / 255f, b8 / 255f, a8 / 255f);
+
+    /// <summary>From a name or an HTML hex code, or <paramref name="default"/> when it is neither.</summary>
+    public static Color FromString(string str, Color @default) => TryParse(str, out Color c) ? c : @default;
+
+    /// <summary>From a shared-exponent value (RGB9E5: 9 bits for each of r, g, b and 5 for the exponent), as the engine stores HDR textures.</summary>
+    public static Color FromRgbe9995(uint rgbe)
+    {
+        float r = rgbe & 0x1ff, g = (rgbe >> 9) & 0x1ff, b = (rgbe >> 18) & 0x1ff, e = rgbe >> 27;
+        float m = MathF.Pow(2f, e - 15f - 9f);
+        return new Color(r * m, g * m, b * m, 1f);
+    }
 
     /// <summary>The colour as lowercase hex, "rrggbbaa" or "rrggbb".</summary>
     public readonly string ToHtml(bool includeAlpha = true)

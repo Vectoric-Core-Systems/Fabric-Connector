@@ -696,6 +696,7 @@ static partial class UiTests
         // ui_* actions
         T.Check("ui_accept is Enter, Space and keypad Enter by default", Gui.IsUiAction(new InputEventKey { Keycode = Key.Enter, Pressed = true }, "ui_accept") && Gui.IsUiAction(new InputEventKey { Keycode = Key.Space, Pressed = true }, "ui_accept") &&
                                                                           !Gui.IsUiAction(new InputEventKey { Keycode = Key.A, Pressed = true }, "ui_accept"));
+        InputMap.EraseAction("ui_accept");
         InputMap.AddAction("ui_accept");
         InputMap.ActionAddEvent("ui_accept", new InputEventKey { Keycode = Key.A, PhysicalKeycode = Key.A });
         T.Check("a project that rebinds ui_accept replaces the built-in keys", Gui.IsUiAction(new InputEventKey { Keycode = Key.A, Pressed = true }, "ui_accept") && !Gui.IsUiAction(new InputEventKey { Keycode = Key.Enter, Pressed = true }, "ui_accept"));

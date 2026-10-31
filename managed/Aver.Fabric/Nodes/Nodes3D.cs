@@ -113,6 +113,30 @@ public class GeometryInstance3D : VisualInstance3D
     public ShadowCastingSetting CastShadow { get; set; } = ShadowCastingSetting.On;
     public float Transparency { get; set; }
     public float LodBias { get; set; } = 1f;
+
+    /// <summary>How an instance takes part in global illumination (Godot's GeometryInstance3D.GIMode).</summary>
+    public enum GIModeEnum { Disabled = 0, Static = 1, Dynamic = 2 }
+
+    /// <summary>The resolution of an instance's lightmap relative to the scene's (Godot's GeometryInstance3D.LightmapScale).</summary>
+    public enum LightmapScaleEnum { Scale1X = 0, Scale2X = 1, Scale4X = 2, Scale8X = 3, Max = 4 }
+
+    /// <summary>Stored, not applied (approximated): Aver has no baked lightmaps and global illumination follows the whole level, so every instance counts as dynamic whatever this says.</summary>
+    public GIModeEnum GIMode { get; set; } = GIModeEnum.Static;
+
+    /// <summary>Stored, not applied: there is no lightmap to size.</summary>
+    public float GILightmapTexelScale { get; set; } = 1f;
+
+    /// <summary>Stored, not applied: there is no lightmap to size.</summary>
+    public LightmapScaleEnum GILightmapScale { get; set; } = LightmapScaleEnum.Scale1X;
+
+    /// <summary>Stored, not applied: the engine culls with its own bounds, so a wider margin changes nothing.</summary>
+    public float ExtraCullMargin { get; set; }
+
+    /// <summary>Stored, not applied: occlusion culling is automatic, so an instance cannot opt out.</summary>
+    public bool IgnoreOcclusionCulling { get; set; }
+
+    /// <summary>Stored, not applied: the engine uses the mesh's own bounds.</summary>
+    public Aabb CustomAabb { get; set; }
 }
 
 /// <summary>A node that draws a mesh (Godot's MeshInstance3D). On entering the tree it gives its entity a mesh renderer for
@@ -232,6 +256,15 @@ public class Light3D : VisualInstance3D
     /// <summary>Kept, not applied: local lights add no indirect light, and the sun's indirect light is Aver's global illumination.</summary>
     public float LightIndirectEnergy { get; set; } = 1f;
     public float LightVolumetricFogEnergy { get; set; } = 1f;
+
+    /// <summary>Whether a light is baked into lightmaps and the voxel GI (Godot's Light3D.BakeMode).</summary>
+    public enum BakeMode { Disabled = 0, Static = 1, Dynamic = 2 }
+
+    /// <summary>Stored, not applied (approximated): nothing is baked, every light is dynamic whatever this says.</summary>
+    public BakeMode LightBakeMode { get; set; } = BakeMode.Dynamic;
+
+    /// <summary>Stored, not applied: Aver runs no editor, so a light never counts as editor-only.</summary>
+    public bool EditorOnly { get; set; }
     /// <summary>Godot's default is 0.5; the engine's specular multiplier is twice this (Godot's specular_amount).</summary>
     public float LightSpecular { get => _specular; set { _specular = value; ApplyLight(); } }
     public bool LightNegative { get => _negative; set { _negative = value; ApplyLight(); } }

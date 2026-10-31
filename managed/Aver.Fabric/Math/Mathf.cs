@@ -244,6 +244,43 @@ public static class Mathf
         return start * omt3 + control1 * omt2 * t * 3 + control2 * omt * t2 * 3 + end * t3;
     }
 
+    /// <summary>Like <see cref="CubicInterpolate(float, float, float, float, float)"/> with the time each point is at (<paramref name="toT"/> for the end, <paramref name="preT"/> and
+    /// <paramref name="postT"/> for the outer points; the start is at 0), by the Barry-Goldman method: for points that are not evenly spaced in time.</summary>
+    public static float CubicInterpolateInTime(float from, float to, float pre, float post, float weight, float toT, float preT, float postT)
+    {
+        float t = Lerp(0f, toT, weight);
+        float a1 = Lerp(pre, from, preT == 0f ? 0f : (t - preT) / -preT);
+        float a2 = Lerp(from, to, toT == 0f ? 0.5f : t / toT);
+        float a3 = Lerp(to, post, postT - toT == 0f ? 1f : (t - toT) / (postT - toT));
+        float b1 = Lerp(a1, a2, toT - preT == 0f ? 0.5f : (t - preT) / (toT - preT));
+        float b2 = Lerp(a2, a3, postT == 0f ? 1f : t / postT);
+        return Lerp(b1, b2, toT == 0f ? 0.5f : t / toT);
+    }
+
+    public static double CubicInterpolateInTime(double from, double to, double pre, double post, double weight, double toT, double preT, double postT)
+    {
+        double t = Lerp(0.0, toT, weight);
+        double a1 = Lerp(pre, from, preT == 0.0 ? 0.0 : (t - preT) / -preT);
+        double a2 = Lerp(from, to, toT == 0.0 ? 0.5 : t / toT);
+        double a3 = Lerp(to, post, postT - toT == 0.0 ? 1.0 : (t - toT) / (postT - toT));
+        double b1 = Lerp(a1, a2, toT - preT == 0.0 ? 0.5 : (t - preT) / (toT - preT));
+        double b2 = Lerp(a2, a3, postT == 0.0 ? 1.0 : t / postT);
+        return Lerp(b1, b2, toT == 0.0 ? 0.5 : t / toT);
+    }
+
+    /// <summary>The slope of the cubic Bezier curve through <paramref name="start"/> and <paramref name="end"/> with the two control points, at <paramref name="t"/>.</summary>
+    public static float BezierDerivative(float start, float control1, float control2, float end, float t)
+    {
+        float omt = 1f - t, omt2 = omt * omt, t2 = t * t;
+        return (control1 - start) * 3f * omt2 + (control2 - control1) * 6f * omt * t + (end - control2) * 3f * t2;
+    }
+
+    public static double BezierDerivative(double start, double control1, double control2, double end, double t)
+    {
+        double omt = 1 - t, omt2 = omt * omt, t2 = t * t;
+        return (control1 - start) * 3 * omt2 + (control2 - control1) * 6 * omt * t + (end - control2) * 3 * t2;
+    }
+
     /// <summary>Godot's <c>ease</c>: curve 1 is linear, above 1 ease-in, below 1 ease-out, negative in-out.</summary>
     public static float Ease(float s, float curve)
     {

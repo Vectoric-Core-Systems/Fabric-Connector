@@ -427,7 +427,7 @@ public abstract class StreamPeer : RefCounted
     /// <summary>True for a transport that can deliver more later (a socket); a buffer is complete or not.</summary>
     internal virtual bool CanWait => false;
 
-    internal virtual void Wait(bool forWrite) => Thread.Sleep(1);
+    internal virtual void Wait(bool forWrite) => System.Threading.Thread.Sleep(1);
 
     public abstract int GetAvailableBytes();
 
@@ -736,7 +736,7 @@ public class StreamPeerTCP : StreamPeer
     internal override void Wait(bool forWrite)
     {
         if (_sock != 0) NetNative.aver_net_tcp_wait(_sock, forWrite ? 1 : 0, 5);
-        else Thread.Sleep(1);
+        else System.Threading.Thread.Sleep(1);
     }
 
     internal override Error WritePartial(byte[] data, int offset, int count, out int written)

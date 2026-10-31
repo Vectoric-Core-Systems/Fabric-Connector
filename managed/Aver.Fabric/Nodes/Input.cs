@@ -10,7 +10,7 @@ using Aver.Framework;
 namespace Aver.Fabric;
 
 /// <summary>The project's actions and the events that trigger them (Godot's InputMap).</summary>
-public static class InputMap
+public static partial class InputMap
 {
     private sealed class ManagedAction
     {
@@ -20,10 +20,24 @@ public static class InputMap
 
     private static readonly Dictionary<string, ManagedAction> s_actions = new(StringComparer.Ordinal);
 
-    internal static void ResetForTests() => s_actions.Clear();
+    internal static void ResetForTests()
+    {
+        s_actions.Clear();
+        s_erasedBuiltins.Clear();
+    }
 
-    public static bool HasAction(StringName action) =>
-        s_actions.ContainsKey(action.ToString()) || (NodeHost.Current.IsEngine && InputAction.Find(action.ToString()) != null);
+    private static bool EngineHas(string name)
+    {
+        if (!NodeHost.Current.IsEngine) return false;
+        try { return InputAction.Find(name) != null; }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return false; }
+    }
+
+    public static bool HasAction(StringName action)
+    {
+        string name = action.ToString();
+        return s_actions.ContainsKey(name) || EngineHas(name) || IsBuiltin(name);
+    }
 
     /// <summary>Adds an action with no events. A name that exists already is an error and changes nothing.</summary>
     public static void AddAction(StringName action, float deadzone = 0.5f)
@@ -36,25 +50,44 @@ public static class InputMap
         s_actions[action.ToString()] = new ManagedAction { Deadzone = deadzone };
     }
 
+    /// <summary>Removes an action: one script added, or one of Godot's built-in ui_* actions. The project's own actions (the engine's) cannot be removed here.</summary>
     public static void EraseAction(StringName action)
     {
-        if (!s_actions.Remove(action.ToString()))
-            Aver.Scripting.Log.Error($"[Fabric] InputMap.EraseAction: no action \"{action}\"");
+        string name = action.ToString();
+        if (s_actions.Remove(name)) { if (Builtins.ContainsKey(name)) s_erasedBuiltins.Add(name); return; }
+        if (IsBuiltin(name) && !EngineHas(name)) { s_erasedBuiltins.Add(name); return; }
+        Aver.Scripting.Log.Error($"[Fabric] InputMap.EraseAction: no action \"{action}\"");
     }
 
-    /// <summary>Every action, the project's and the ones added by script.</summary>
+    /// <summary>Every action: the project's, Godot's built-in ui_* ones, and the ones script added.</summary>
     public static Collections.Array<StringName> GetActions()
     {
         var names = new List<string>();
         if (NodeHost.Current.IsEngine)
             names.AddRange(Aver.Framework.Hosting.ExtensionHost.RegisteredActionNames());
         foreach (string k in s_actions.Keys) if (!names.Contains(k)) names.Add(k);
+        foreach (string k in Builtins.Keys) if (!s_erasedBuiltins.Contains(k) && !names.Contains(k)) names.Add(k);
         return new Collections.Array<StringName>(names.Select(s => new StringName(s)));
+    }
+
+    // The managed record of an action that exists. A built-in action no script has touched has none yet: it gets one holding Godot's default events, which
+    // the script's change then applies to. False when there is no such action.
+    private static bool TryManaged(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ManagedAction? action)
+    {
+        if (s_actions.TryGetValue(name, out action)) return true;
+        if (IsBuiltinActive(name))
+        {
+            action = s_actions[name] = new ManagedAction();
+            action.Events.AddRange(CreateBuiltinEvents(name));
+            return true;
+        }
+        action = null;
+        return false;
     }
 
     public static void ActionSetDeadzone(StringName action, float deadzone)
     {
-        if (s_actions.TryGetValue(action.ToString(), out ManagedAction? a)) a.Deadzone = deadzone;
+        if (TryManaged(action.ToString(), out ManagedAction? a)) a.Deadzone = deadzone;
         else Aver.Scripting.Log.Error($"[Fabric] InputMap.ActionSetDeadzone: no action \"{action}\" that script added");
     }
 
@@ -63,34 +96,42 @@ public static class InputMap
 
     public static void ActionAddEvent(StringName action, InputEvent @event)
     {
-        if (!s_actions.TryGetValue(action.ToString(), out ManagedAction? a))
+        string name = action.ToString();
+        if (!TryManaged(name, out ManagedAction? a))
         {
             if (!HasAction(action)) { Aver.Scripting.Log.Error($"[Fabric] InputMap.ActionAddEvent: no action \"{action}\""); return; }
-            a = s_actions[action.ToString()] = new ManagedAction();
+            a = s_actions[name] = new ManagedAction();
         }
         if (!a.Events.Contains(@event)) a.Events.Add(@event);
     }
 
-    public static bool ActionHasEvent(StringName action, InputEvent @event) =>
-        s_actions.TryGetValue(action.ToString(), out ManagedAction? a) && a.Events.Any(e => ReferenceEquals(e, @event) || (e.GetType() == @event.GetType() && e.IsMatch(@event, true) && @event.IsMatch(e, true)));
+    public static bool ActionHasEvent(StringName action, InputEvent @event)
+    {
+        string name = action.ToString();
+        IEnumerable<InputEvent> events = s_actions.TryGetValue(name, out ManagedAction? a) ? a.Events : IsBuiltinActive(name) ? BuiltinEvents(name) : System.Array.Empty<InputEvent>();
+        return events.Any(e => ReferenceEquals(e, @event) || (e.GetType() == @event.GetType() && e.IsMatch(@event, true) && @event.IsMatch(e, true)));
+    }
 
     public static void ActionEraseEvent(StringName action, InputEvent @event)
     {
-        if (s_actions.TryGetValue(action.ToString(), out ManagedAction? a))
+        if (TryManaged(action.ToString(), out ManagedAction? a))
             a.Events.RemoveAll(e => ReferenceEquals(e, @event) || (e.GetType() == @event.GetType() && e.IsMatch(@event, true) && @event.IsMatch(e, true)));
     }
 
     public static void ActionEraseEvents(StringName action)
     {
-        if (s_actions.TryGetValue(action.ToString(), out ManagedAction? a)) a.Events.Clear();
+        if (TryManaged(action.ToString(), out ManagedAction? a)) a.Events.Clear();
     }
 
-    /// <summary>The events that trigger the action: the ones script added, then the project's bindings (the engine's).</summary>
+    /// <summary>The events that trigger the action: the ones script added (or, for a built-in ui_* action no script has changed, Godot's defaults), then the project's
+    /// bindings (the engine's).</summary>
     public static Collections.Array<InputEvent> ActionGetEvents(StringName action)
     {
+        string name = action.ToString();
         var list = new List<InputEvent>();
-        if (s_actions.TryGetValue(action.ToString(), out ManagedAction? a)) list.AddRange(a.Events);
-        list.AddRange(NativeEvents(action.ToString()));
+        if (s_actions.TryGetValue(name, out ManagedAction? a)) list.AddRange(a.Events);
+        else if (IsBuiltinActive(name)) list.AddRange(BuiltinEvents(name));
+        list.AddRange(NativeEvents(name));
         return new Collections.Array<InputEvent>(list);
     }
 
@@ -175,7 +216,7 @@ public static class Input
 
     internal static void ResetForTests()
     {
-        s_actions.Clear(); s_keys.Clear(); s_mouseButtons.Clear(); s_joyButtons.Clear(); s_joyAxes.Clear();
+        s_actions.Clear(); s_keys.Clear(); s_mouseButtons.Clear(); s_joyButtons.Clear(); s_joyAxes.Clear(); s_builtin.Clear();
         s_mouseVelocity = s_mousePosition = default;
         InPhysicsFrame = false;
         s_mouseMode = MouseModeEnum.Captured;
@@ -187,6 +228,8 @@ public static class Input
     {
         FrameDelta = delta;
         InPhysicsFrame = false;
+        if (s_builtin.Count > 0)
+            foreach (string name in s_builtin.Keys.ToList()) BuiltinPoll(name, out _);
     }
 
     private static long ProcessFrameNow => NodeHost.Current.IsEngine ? Aver.Framework.Engine.ProcessFrames : SceneTree.Instance.GetFrame();
@@ -209,10 +252,59 @@ public static class Input
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
     }
 
+    // Godot's built-in ui_* actions that nobody changed have no entry in the engine or in s_actions: their default keys and buttons are read from the devices here.
+    // The state is tracked per action, and refreshed each frame once an action has been asked about, so "just pressed" is the frame the key went down.
+    private sealed class BuiltinState
+    {
+        public bool Held;
+        public float Strength;
+        public long PressedProcessFrame = -1, PressedPhysicsFrame = -1, ReleasedProcessFrame = -1, ReleasedPhysicsFrame = -1;
+    }
+
+    private static readonly Dictionary<string, BuiltinState> s_builtin = new(StringComparer.Ordinal);
+
+    private static bool BuiltinPoll(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out BuiltinState? state)
+    {
+        state = null;
+        if (!InputMap.IsBuiltinActive(name)) return false;
+        if (!s_builtin.TryGetValue(name, out state)) s_builtin[name] = state = new BuiltinState();
+        float strength = 0f;
+        foreach (InputEvent e in InputMap.BuiltinEvents(name))
+        {
+            switch (e)
+            {
+                case InputEventKey k:
+                    if (!IsKeyPressed(k.Keycode)) break;
+                    if ((k.CtrlPressed && !IsKeyPressed(Key.Ctrl)) || (k.ShiftPressed && !IsKeyPressed(Key.Shift)) || (k.AltPressed && !IsKeyPressed(Key.Alt))) break;
+                    strength = 1f;
+                    break;
+                case InputEventJoypadButton jb:
+                    if (IsJoyButtonPressed(0, jb.ButtonIndex)) strength = 1f;
+                    break;
+                case InputEventJoypadMotion jm:
+                {
+                    float v = GetJoyAxis(0, jm.Axis) * jm.AxisValue;
+                    if (v > InputMap.ActionGetDeadzone(name)) strength = MathF.Max(strength, Math.Clamp(v, 0f, 1f));
+                    break;
+                }
+            }
+        }
+        bool held = strength > 0f;
+        if (held != state.Held)
+        {
+            state.Held = held;
+            if (held) { state.PressedProcessFrame = ProcessFrameNow; state.PressedPhysicsFrame = PhysicsFrameNow; }
+            else { state.ReleasedProcessFrame = ProcessFrameNow; state.ReleasedPhysicsFrame = PhysicsFrameNow; }
+        }
+        state.Strength = strength;
+        return true;
+    }
+
     public static bool IsActionPressed(StringName action, bool exactMatch = false)
     {
         string name = action.ToString();
         if (s_actions.TryGetValue(name, out ActionState? st) && st.Pressed && (!exactMatch || st.Exact)) return true;
+        if (!exactMatch && BuiltinPoll(name, out BuiltinState? b) && b.Held) return true;
         return Native(name)?.IsHeld ?? false;
     }
 
@@ -223,6 +315,7 @@ public static class Input
         {
             if (InPhysicsFrame ? st.PressedPhysicsFrame == PhysicsFrameNow : st.PressedProcessFrame == ProcessFrameNow) return true;
         }
+        if (!exactMatch && BuiltinPoll(name, out BuiltinState? b) && b.Held && (InPhysicsFrame ? b.PressedPhysicsFrame == PhysicsFrameNow : b.PressedProcessFrame == ProcessFrameNow)) return true;
         return Native(name)?.WasPressed ?? false;
     }
 
@@ -233,6 +326,7 @@ public static class Input
         {
             if (InPhysicsFrame ? st.ReleasedPhysicsFrame == PhysicsFrameNow : st.ReleasedProcessFrame == ProcessFrameNow) return true;
         }
+        if (!exactMatch && BuiltinPoll(name, out BuiltinState? b) && !b.Held && (InPhysicsFrame ? b.ReleasedPhysicsFrame == PhysicsFrameNow : b.ReleasedProcessFrame == ProcessFrameNow)) return true;
         return Native(name)?.WasReleased ?? false;
     }
 
@@ -241,6 +335,7 @@ public static class Input
     {
         string name = action.ToString();
         float managed = s_actions.TryGetValue(name, out ActionState? st) && (!exactMatch || st.Exact) ? st.Strength : 0f;
+        if (!exactMatch && BuiltinPoll(name, out BuiltinState? b)) managed = MathF.Max(managed, b.Strength);
         float native = Native(name) is { } a ? Math.Clamp(MathF.Abs(a.Value1D), 0f, 1f) : 0f;
         return MathF.Max(managed, native);
     }
@@ -250,6 +345,7 @@ public static class Input
     {
         string name = action.ToString();
         float managed = s_actions.TryGetValue(name, out ActionState? st) && (!exactMatch || st.Exact) ? st.RawStrength : 0f;
+        if (!exactMatch && BuiltinPoll(name, out BuiltinState? b)) managed = MathF.Max(managed, b.Strength);
         float native = Native(name) is { } a ? Math.Clamp(MathF.Abs(a.Value1D), 0f, 1f) : 0f;
         return MathF.Max(managed, native);
     }
