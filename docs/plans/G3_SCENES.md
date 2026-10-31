@@ -4,11 +4,13 @@
 
 3D and UI first, one way only (Godot to Aver). 2D nodes are reported unsupported. This package records which script goes with which class (`Fabric/scripts.json`); the script converter (G3_SCRIPTS.md) and the GDExtension host (G3_GDEXT.md) are driven from the same command ("The whole conversion", below).
 
-Exit code 0 when the project converted (unsupported items are not a failure; they are in the report), 1 when the project could not be read or a scene or file could not be written, 2 on bad usage. stdout carries AverAssetC's JSON-lines artifacts for the imported models and a final summary line:
+Exit code 0 when the project converted (unsupported items are not a failure; they are in the report), 1 when the project could not be read or a scene or file could not be written, 2 on bad usage. stdout carries AverAssetC's JSON-lines artifacts for the imported models, `{"aver":"progress",...}` lines as the conversion goes, and a final result line in the engine's command protocol (`aver_ext_protocol.h`; this replaced the earlier `"summary":true` line):
 
 ```
-{"schemaVersion":1,"summary":true,"kind":"fabric","input":"...","output":"<out>/<Name>","project":"<Name>","levels":2,"converted":71,"approximated":21,"unsupported":13,"scripts":3,"scriptsConverted":true,"extensions":1,"report":"<out>/FabricReport.md","dryRun":false,"exitCode":0}
+{"aver":"result","ok":true,"open":"<out>/<Name>/<Name>.ocproject","report":"<out>/FabricReport.md","warnings":13,"errors":0,"message":"71 converted, 21 approximated, 13 unsupported; 2 level(s), 3 script(s), 1 GDExtension(s)."}
 ```
+
+`open` is empty for `--dry-run`; `warnings` is the unsupported count; the message adds "The scripts were not converted; see the report." when scripts exist and the script step did not run, and "(report only)" for `--dry-run`. A failure prints `"ok":false` with the reason as `message`.
 
 ## The whole conversion (F6)
 

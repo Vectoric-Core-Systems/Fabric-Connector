@@ -201,7 +201,7 @@ int main() {
     std::string log;
     const int code = runCapture("\"" + exe.string() + "\" fabric \"" + game + "\" \"" + out + "\" --scenes-only", log);
     check(code == 0, "the converter exits 0 (got " + std::to_string(code) + ")");
-    check(log.find("\"levels\":2") != std::string::npos, "two levels: the text scene and the binary one");
+    check(log.find("2 level(s)") != std::string::npos, "two levels: the text scene and the binary one");
     if (code != 0 || g_failures) AVER_INFO("{}", log);
 
     const std::string jsonl = slurp(out + "/FabricReport.jsonl");

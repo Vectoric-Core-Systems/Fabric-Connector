@@ -84,17 +84,21 @@ static std::vector<Entry> readReport(const std::string& path) {
     return out;
 }
 
-static long number(const std::string& line, const char* key) {
-    const std::string needle = std::string("\"") + key + "\":";
-    const size_t at = line.find(needle);
-    return at == std::string::npos ? -1 : std::strtol(line.c_str() + at + needle.size(), nullptr, 10);
+// The number in front of `word` in the result line's message ("71 converted, 21 approximated, ..."); -1 when there is none.
+static long number(const std::string& line, const char* word) {
+    const size_t at = line.find(std::string(" ") + word);
+    if (at == std::string::npos) return -1;
+    size_t begin = at;
+    while (begin > 0 && std::isdigit(static_cast<unsigned char>(line[begin - 1]))) --begin;
+    return begin == at ? -1 : std::strtol(line.c_str() + begin, nullptr, 10);
 }
 
+// The command's last result line (the engine's command protocol, aver_ext_protocol.h): ok, the file to open, the report, the counts and the message.
 static std::string summaryLine(const std::string& text) {
     std::istringstream in(text);
     std::string found;
     for (std::string line; std::getline(in, line);)
-        if (line.rfind("{\"schemaVersion\":1,\"summary\":true,\"kind\":\"fabric\"", 0) == 0) found = line;
+        if (line.rfind("{\"aver\":\"result\"", 0) == 0) found = line;
     return found;
 }
 
@@ -157,9 +161,9 @@ int main() {
     if (run1.exitCode != 0) AVER_INFO("{}", run1.text);
     check(run1.started && run1.exitCode == 0, "it exits 0 (got " + std::to_string(run1.exitCode) + ")");
     const std::string summary = summaryLine(run1.text);
-    check(!summary.empty() && contains(summary, "\"exitCode\":0") && contains(summary, "\"project\":\"E2EGame\"") && contains(summary, "\"levels\":2") &&
-              contains(summary, "\"scripts\":3") && contains(summary, "\"scriptsConverted\":true") && contains(summary, "\"extensions\":1") && contains(summary, "\"dryRun\":false"),
-          "the summary line: project E2EGame, 2 levels, 3 scripts converted, 1 GDExtension");
+    check(!summary.empty() && contains(summary, "\"ok\":true") && contains(summary, "/E2EGame/E2EGame.ocproject\"") && contains(summary, "2 level(s)") &&
+              contains(summary, "3 script(s)") && !contains(summary, "not converted") && contains(summary, "1 GDExtension(s)") && !contains(summary, "(report only)"),
+          "the result line: ok, the project E2EGame to open, 2 levels, 3 scripts converted, 1 GDExtension");
 
     const std::string proj = out1 + "/E2EGame";
     const std::string content = proj + "/Content";
@@ -242,7 +246,7 @@ int main() {
     for (const Entry& e : report) ++counts[e.rating];
     check(number(summary, "converted") == counts["converted"] && number(summary, "approximated") == counts["approximated"] &&
               number(summary, "unsupported") == counts["unsupported"],
-          "the summary line's counts are the jsonl's (" + std::to_string(counts["converted"]) + " / " + std::to_string(counts["approximated"]) + " / " +
+          "the result line's counts are the jsonl's (" + std::to_string(counts["converted"]) + " / " + std::to_string(counts["approximated"]) + " / " +
               std::to_string(counts["unsupported"]) + ")");
     std::set<std::string> unsupported;
     for (const Entry& e : report)
@@ -269,14 +273,14 @@ int main() {
 
         const std::string out2 = (root / "dry").string();
         const fabric::ProcessOutput dry = runFabric(exe.string(), {godot.string(), out2, "--dry-run"});
-        check(dry.exitCode == 0 && contains(summaryLine(dry.text), "\"dryRun\":true") && fileExists(out2 + "/FabricReport.md") && fileExists(out2 + "/FabricReport.jsonl") &&
+        check(dry.exitCode == 0 && contains(summaryLine(dry.text), "(report only)") && contains(summaryLine(dry.text), "\"open\":\"\"") && fileExists(out2 + "/FabricReport.md") && fileExists(out2 + "/FabricReport.jsonl") &&
                   !fsys::exists(out2 + "/E2EGame", ec),
               "--dry-run writes the report and no project");
         check(readReport(out2 + "/FabricReport.jsonl").size() == report.size(), "and finds the same items as the real run");
 
         const std::string out3 = (root / "scenes").string();
         const fabric::ProcessOutput scenes = runFabric(exe.string(), {godot.string(), out3, "--scenes-only"});
-        check(scenes.exitCode == 0 && contains(summaryLine(scenes.text), "\"scriptsConverted\":false") && fileExists(out3 + "/E2EGame/Content/Maps/main.ocworld") &&
+        check(scenes.exitCode == 0 && contains(summaryLine(scenes.text), "The scripts were not converted") && fileExists(out3 + "/E2EGame/Content/Maps/main.ocworld") &&
                   !fsys::exists(out3 + "/E2EGame/Content/Scripts", ec) && fileExists(out3 + "/E2EGame/Content/addons/fabrictest/fabrictest.gdextension"),
               "--scenes-only converts the scenes and the plugin and leaves the scripts alone");
         const std::vector<Entry> scenesReport = readReport(out3 + "/FabricReport.jsonl");
@@ -284,7 +288,7 @@ int main() {
               "whose report says the three scripts were skipped");
 
         const fabric::ProcessOutput scripts = runFabric(exe.string(), {godot.string(), out3, "--scripts-only"});
-        check(scripts.exitCode == 0 && contains(summaryLine(scripts.text), "\"scriptsConverted\":true") && fileExists(out3 + "/E2EGame/Content/Scripts/Player.cs"),
+        check(scripts.exitCode == 0 && !summaryLine(scripts.text).empty() && !contains(summaryLine(scripts.text), "not converted") && fileExists(out3 + "/E2EGame/Content/Scripts/Player.cs"),
               "--scripts-only then converts the scripts into that project");
         const std::vector<Entry> finalReport = readReport(out3 + "/FabricReport.jsonl");
         check(std::count_if(finalReport.begin(), finalReport.end(), [](const Entry& e) { return e.kind == "script" && e.rating == "converted"; }) == 3 &&

@@ -6,6 +6,12 @@ It does not change your Godot project, and the converted project does not need G
 
 Scope: **3D and UI first.** 2D is out of scope for now; 2D nodes are reported as unsupported. Godot 4.1 and later only (a Godot 3 project is refused).
 
+## Install
+
+Download `FabricConnector-<version>.avext` from the [releases page](https://github.com/Vectoric-Core-Systems/Fabric-Connector/releases) and, in the editor, choose **Window > Extensions > Install from file...**. The window shows the package's manifest and its SHA-256 (compare it with the one on the release page) before it copies anything, then unpacks it into `Extensions/FabricConnector/` beside the editor. **File > Import Godot Project...** appears at once; restart the editor so that the converted projects' scripts can use `Aver.Fabric`. To update, install the newer package and choose **Replace**: the old folder goes to the Recycle Bin. **Uninstall** in the same window removes it the same way. The engine range the package works on is in `extension.json` (`engine`), and the window says when a package does not fit the editor it runs in.
+
+To build it from source instead, see the repository's README ("Use it with your own engine build", `FABRIC_DEPLOY_TO`).
+
 ## Convert a project
 
 ### From the command line
@@ -34,7 +40,7 @@ AverAssetC fabric <godot-project-dir> <out-dir> [--dry-run] [--scenes-only] [--s
 | `--scripts-only` | Converts only the scripts, into a project converted before (needs `<out-dir>/<Name>/<Name>.ocproject`). The scene part of the earlier report is kept. |
 | `--overwrite` | Replaces a project already converted into `<out-dir>`. Without it the converter refuses, so a second run cannot silently overwrite hand edits. Files are replaced in place; nothing else in the folder is deleted. |
 
-Exit code: **0** converted (the report may list approximated and unsupported items; that is not a failure), **1** the conversion failed (no `project.godot`, a Godot 3 project, a file could not be written, the project already exists without `--overwrite`, or the script converter could not run), **2** wrong arguments. The last line on stdout is a JSON summary (`"kind":"fabric"`, with the output folder, the counts, how many scripts and GDExtensions were found, and the report path).
+Exit code: **0** converted (the report may list approximated and unsupported items; that is not a failure), **1** the conversion failed (no `project.godot`, a Godot 3 project, a file could not be written, the project already exists without `--overwrite`, or the script converter could not run), **2** wrong arguments. On stdout the command speaks the engine's command protocol (`aver_ext_protocol.h`, [EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md), "The command protocol"): `{"aver":"progress","fraction":0.15,"text":"scenes"}` lines as it goes, and one last `{"aver":"result","ok":true,"open":"<out>/<Name>/<Name>.ocproject","report":"<out>/FabricReport.md","warnings":<unsupported items>,"errors":0,"message":"71 converted, 21 approximated, 13 unsupported; 2 level(s), 3 script(s), 1 GDExtension(s)."}`. `open` is empty for `--dry-run` or a failure, and a failure (a Godot 3 project, a project that exists without `--overwrite`) prints `"ok":false` with the reason as `message`. Fabric's human log lines stay as they were.
 
 Scripts are converted by `Aver.Fabric.Convert`, a .NET tool in the extension's `tools` folder (`bin/Extensions/FabricConnector/tools`). It needs the **.NET SDK** (`dotnet` on `PATH`, or `DOTNET_ROOT`), the extension's managed runtime (`Extensions/FabricConnector/managed/Aver.Fabric.dll`) and the engine's assemblies in `bin/Scripting`. A project with no scripts needs none of them. The converted project's `Scripts.csproj` references `Aver.Fabric.dll` by a `HintPath` to the installed extension, and its `.ocproject` gains `EXTENSION FabricConnector <version>`: opening the project on an engine without the extension logs that name.
 
@@ -45,10 +51,10 @@ Scripts are converted by `Aver.Fabric.Convert`, a .NET tool in the extension's `
 1. **Godot project**: browse to the project's `project.godot` (or type the folder).
 2. **Output folder**: filled in as `<project>_Aver` beside the Godot folder; change it if you like.
 3. Optional: *Replace a project already converted there*, and *Report only*.
-4. **Import**. The converter runs as a separate process, so the editor stays usable. The log scrolls in the dialog and goes to the Output Log; a notification tracks progress and ends with the counts. Closing the dialog does not stop the import.
-5. When it ends, **Open converted project** switches the editor to it (save your open level first). The report path is shown and can be copied.
+4. **Import**. The converter runs as a separate process, so the editor stays usable. A progress bar follows the command's progress lines, its log scrolls in the dialog and goes to the Output Log, and a notification tracks it and ends with the result message. Closing the dialog does not stop the import.
+5. When it ends, the dialog shows the result message and the warning count, **Open result** switches the editor to the converted project (save your open level first), and the report path can be copied.
 
-The menu item is greyed out when `AverAssetC` is not beside the editor (build the `AverAssetC` target). The dialog runs `AverAssetC fabric <godot-dir> <out-dir> [--overwrite] [--dry-run]` and reads the summary line the command ends with; no extension code runs inside the editor. The dialog itself has not been run (engine-run ban); its logic is covered headless by `ExtensionImportTest` (the generic dialog logic against fake manifests and a fake tool) and `FabricImportTest` (the Fabric Connector's manifest through the loader and the real `AverAssetC`).
+The menu item is greyed out when `AverAssetC` is not beside the editor (build the `AverAssetC` target). The dialog runs `AverAssetC fabric <godot-dir> <out-dir> [--overwrite] [--dry-run]` and renders the progress and result lines; the Godot 3 refusal is the command's own (its result message), not the dialog's. No extension code runs inside the editor. The dialog itself has not been run (engine-run ban); its logic is covered headless by `ExtensionImportTest` (the generic dialog logic against fake manifests and a fake tool) and `FabricImportTest` (the Fabric Connector's manifest through the loader and the real `AverAssetC`).
 
 ## Run the converted project
 

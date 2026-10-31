@@ -1,7 +1,8 @@
 // FabricImportTest -- File > Import Godot Project... as the editor's generic extension import dialog drives it (sandbox/src/ExtensionImport.cpp,
 // compiled here without ImGui): the importer read from the installed extension.json through the loader, the folder checks, the command line,
-// reading the converter's closing summary, and the importer running the real AverAssetC on a worker thread and reporting through the editor's
-// notification queue. The generic logic itself is covered by the engine's ExtensionImportTest. The editor itself is not run.
+// reading the converter's progress and result lines (the engine's command protocol), the Godot 3 refusal the command makes itself, and the
+// importer running the real AverAssetC on a worker thread and reporting through the editor's notification queue. The generic logic itself is
+// covered by the engine's ExtensionImportTest. The editor itself is not run.
 #include "EditorNotifications.hpp"
 #include "ExtensionImport.hpp"
 #include "aver/core/ErrorCodes.hpp"
@@ -47,24 +48,23 @@ int main() {
     check(fabric != nullptr, "the Fabric Connector lists its importer (installed beside the test)");
     if (!fabric) { AVER_INFO("=== {} checks, {} failed ===", g_checks, g_failures); return exitCode(ExitCode::Failed); }
     const ext::ImporterInfo& info = fabric->info;
-    check(info.menu == "Import Godot Project..." && fabric->text.title == "Import Godot Project" && info.detect == "project.godot" && info.opensResult &&
-              info.input == "folder",
+    check(info.id == "godot-project" && info.menu == "Import Godot Project..." && fabric->text.title == "Import Godot Project" && info.input.detect == "project.godot" &&
+              info.input.kind == "folder" && info.outputDefault == "{input}_Aver",
           "the File menu text and the dialog title are the ones the editor always showed");
-    check(info.options.size() == 2 && info.options[0].flag == "--overwrite" && info.options[1].flag == "--dry-run" && fabric->text.inputLabel == "Godot project" &&
-              fabric->text.openLabel == "Open converted project" && fabric->text.failed == "Godot import failed" && fabric->text.logTag == "Fabric",
-          "its options and wording");
+    check(info.options.size() == 2 && info.options[0].flag == "--overwrite" && info.options[1].flag == "--dry-run" && !fabric->text.description.empty(), "its options and description");
 
     // ---- folder checks -----------------------------------------------------------------------------------------------------------
     AVER_INFO("-- choosing the project --");
     std::string why;
     check(importInputValid(info, data + "/ConvertGame", &why), "a folder with a Godot 4 project.godot is accepted: " + why);
-    check(!importInputValid(info, "", &why) && why == "Choose the folder of a Godot project.", "an empty path is refused with a reason: " + why);
+    check(!importInputValid(info, "", &why) && why == "Choose the input folder.", "an empty path is refused with a reason: " + why);
     check(!importInputValid(info, root.string(), &why) && contains(why, "project.godot"), "a folder without project.godot is refused: " + why);
     {
+        // The dialog accepts any folder with a project.godot; refusing a Godot 3 project is the converter's job (checked below, running AverAssetC).
         const fsys::path old = root / "godot3";
         fsys::create_directories(old, ec);
         writeFileText((old / "project.godot").string(), "config_version=4\n\n[application]\nconfig/name=\"Old\"\n");
-        check(!importInputValid(info, old.string(), &why) && contains(why, "Godot 3") && contains(why, "config_version 4"), "a Godot 3 project is refused and named: " + why);
+        check(importInputValid(info, old.string(), &why), "a Godot 3 project.godot passes the dialog's folder check: " + why);
     }
     const fsys::path expected = fsys::path(data + "/ConvertGame");
     check(fsys::path(importInputFrom(info, data + "/ConvertGame/project.godot")) == expected, "the dialog's project.godot gives its folder");
@@ -87,29 +87,20 @@ int main() {
     }
 
     // ---- reading the converter's output -----------------------------------------------------------------------------------------
-    AVER_INFO("-- the converter's summary --");
+    AVER_INFO("-- the converter's protocol lines --");
     {
         const std::string out =
             "[INFO ] fabric: a -> b\n"
-            "{\"schemaVersion\":1,\"input\":\"x.gltf\",\"kind\":\"mesh\",\"ok\":true}\n"
-            "{\"schemaVersion\":1,\"summary\":true,\"kind\":\"fabric\",\"input\":\"in\",\"output\":\"C:\\\\Out\\\\Game\",\"project\":\"Game\",\"levels\":3,\"converted\":10,"
-            "\"approximated\":4,\"unsupported\":2,\"scripts\":5,\"scriptsConverted\":true,\"extensions\":1,\"report\":\"C:\\\\Out\\\\FabricReport.md\",\"dryRun\":false,\"exitCode\":0}\n";
-        const ImportResult r = parseImportOutput("fabric", out, 0);
-        check(r.ok() && r.projectName == "Game" && r.projectDir == "C:\\Out\\Game" && r.reportPath == "C:\\Out\\FabricReport.md", "the project, folder and report path are read (escapes decoded)");
-        check(r.value("levels") == "3" && r.value("converted") == "10" && r.value("approximated") == "4" && r.value("unsupported") == "2" && r.value("scripts") == "5" &&
-                  r.value("extensions") == "1" && r.truthy("scriptsConverted"),
-              "and the counts");
-        check(r.manifestPath == "C:\\Out\\Game/Game.ocproject", "the manifest to open is <project>/<Name>.ocproject");
-        check(expandSummary(info.summaryText, r) == "10 converted, 4 approximated, 2 unsupported; 3 level(s), 5 script(s), 1 GDExtension(s).", "the line under the log reads as it always did");
-        check(summaryNotes(info, r).empty(), "no note when the scripts were converted");
-        ImportResult noScripts = r;
-        noScripts.values["scriptsConverted"] = "false";
-        const std::vector<std::string> notes = summaryNotes(info, noScripts);
-        check(notes.size() == 1 && notes[0] == "The scripts were not converted; see the report.", "and the note when they were not");
-        const ImportResult f = parseImportOutput("fabric", "[INFO ] fabric: x\n[ERROR] fabric: it already holds a converted project; pass --overwrite\n", 1);
-        check(!f.ok() && contains(f.error, "pass --overwrite") && f.manifestPath.empty(), "a failed run carries the converter's last error line");
-        const ImportResult n = parseImportOutput("fabric", "nothing useful\n", 0);
-        check(!n.ok() && !n.error.empty(), "a clean exit without a summary is not a success");
+            "{\"aver\":\"progress\",\"fraction\":0.15,\"text\":\"scenes\"}\n"
+            "{\"aver\":\"result\",\"ok\":true,\"open\":\"C:\\\\Out\\\\Game\\\\Game.ocproject\",\"report\":\"C:\\\\Out\\\\FabricReport.md\",\"warnings\":2,\"errors\":0,"
+            "\"message\":\"10 converted, 4 approximated, 2 unsupported; 3 level(s), 5 script(s), 1 GDExtension(s).\"}\n";
+        const ImportResult r = parseImportOutput(out, 0);
+        check(r.ok() && r.openPath == "C:\\Out\\Game\\Game.ocproject" && r.reportPath == "C:\\Out\\FabricReport.md" && r.warnings == 2, "the project to open, the report and the warning count are read");
+        check(r.message == "10 converted, 4 approximated, 2 unsupported; 3 level(s), 5 script(s), 1 GDExtension(s)." && r.fraction == 0.15, "and the message and progress");
+        const ImportResult f = parseImportOutput("[INFO ] fabric: x\n[ERROR] fabric: it already holds a converted project; pass --overwrite\n", 1);
+        check(!f.ok() && contains(f.error, "pass --overwrite") && f.openPath.empty(), "a failed run carries the converter's last error line");
+        const ImportResult n = parseImportOutput("nothing useful\n", 0);
+        check(!n.ok() && !n.error.empty(), "a clean exit without a result is not a success");
     }
 
     // ---- the real converter -------------------------------------------------------------------------------------------------------
@@ -129,9 +120,14 @@ int main() {
     if (!haveScriptTool) req.flags.push_back("--scenes-only");
     std::vector<std::string> seen;
     const ImportResult direct = runImport(req, converter, [&](const std::string& line) { seen.push_back(line); });
-    check(direct.ok() && direct.projectName == "ConvertGame" && direct.value("levels") == "2", "runImport converts ConvertGame: " + direct.error);
-    check(fileExists(direct.manifestPath) && fileExists(direct.reportPath), "the manifest and the report it names exist");
-    check(!seen.empty() && contains(seen.front() + seen.back(), "fabric"), "its lines were handed over as they arrived (" + std::to_string(seen.size()) + ")");
+    check(direct.ok() && contains(direct.openPath, "ConvertGame.ocproject") && contains(direct.message, "2 level(s)"), "runImport converts ConvertGame: " + direct.error);
+    check(fileExists(direct.openPath) && fileExists(direct.reportPath), "the project and the report it names exist");
+    bool sawLog = false, sawProgress = false;
+    for (const std::string& line : seen) {
+        sawLog = sawLog || contains(line, "fabric:");
+        sawProgress = sawProgress || contains(line, "{\"aver\":\"progress\"");
+    }
+    check(direct.fraction == 1.0 && sawLog && sawProgress, "its progress ran to 1 and its lines were handed over as they arrived (" + std::to_string(seen.size()) + ")");
 
     const ImportResult again = runImport(req, converter);
     check(!again.ok() && contains(again.error, "--overwrite"), "importing into the same folder again says to overwrite: " + again.error);
@@ -139,7 +135,8 @@ int main() {
     check(runImport(req, converter).ok(), "and does with overwrite");
     ImportRequest bad = req;
     bad.inDir = (root / "godot3").string();
-    check(!runImport(bad, converter).ok(), "a folder with a Godot 3 project fails in the converter too");
+    const ImportResult godot3 = runImport(bad, converter);
+    check(!godot3.ok() && contains(godot3.error, "Godot 3 project") && contains(godot3.error, "config_version 4"), "a Godot 3 project is refused by the converter, with its message: " + godot3.error);
     check(!runImport(req, (root / "no-such-tool").string()).started, "a missing converter is reported as not started");
 
     // ---- the importer on its worker thread -----------------------------------------------------------------------------------------
@@ -156,13 +153,13 @@ int main() {
     check(notifications().size() >= 1, "a progress notification is up while it runs");
     for (int i = 0; i < 600 && importer.running(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     importer.drawModal(1.0f);   // reaps the finished import
-    check(!importer.running() && importer.lastResult().ok() && fileExists(importer.lastResult().manifestPath), "it finishes and the result names the project to open");
+    check(!importer.running() && importer.lastResult().ok() && fileExists(importer.lastResult().openPath), "it finishes and the result names the project to open");
     std::vector<Notification> shown;
     usize hidden = 0;
     notifications().tick(1.0, shown, hidden);
     bool finished = false;
-    for (const Notification& n : shown) finished = finished || (n.title == "Godot project imported" && !n.hasProgress && n.severity != NotifySeverity::Error);
-    check(finished, "and the notification became 'Godot project imported'");
+    for (const Notification& n : shown) finished = finished || (n.title == "Import Godot Project finished" && !n.hasProgress && n.severity != NotifySeverity::Error);
+    check(finished, "and the notification became 'Import Godot Project finished'");
     check(importer.takeOpenRequest().empty(), "nothing asks the editor to open the project until the user presses the button");
 
     AVER_INFO("=== {} checks, {} failed ===", g_checks, g_failures);

@@ -1,12 +1,14 @@
 // The Fabric Connector's side of the extension ABI (aver_ext.h): the one export the engine's loader calls, and the command it runs.
 //
 // This library links its own copy of Core, so at entry its log sink is pointed at the host (every line reaches the engine's log once, not
-// twice) and the model importer the converter needs is the host's, reached through AverExtHost::importModel with plain structs.
+// twice) and the model importer the converter needs is the host's "aver.asset.import-model" service, asked for by name and version through
+// AverExtHost::getService and called with plain structs.
 #include "FabricConvert.hpp"
 
 #include "aver/core/Log.hpp"
 #include "aver/core/LogConsole.hpp"
 #include "aver/extensions/aver_ext.h"
+#include "aver/extensions/aver_ext_services.h"
 
 #include <cstring>
 #include <string>
@@ -24,11 +26,14 @@ void forwardLog(void*, aver::LogLevel level, std::string_view message) {
     g_host->log(int32_t(level), line.c_str());
 }
 
-// fabric::Host::importModel over the host's plain-struct importer.
+// fabric::Host::importModel over the host's model import service.
 aver::fabric::ModelResult importModelThroughHost(const std::string& input, const std::string& contentDir, const std::string& outSubdir,
                                                  const std::string& base) {
     aver::fabric::ModelResult out;
-    if (!g_host || !g_host->importModel) { out.error = "the host offers no model importer"; return out; }
+    const auto* service = g_host && g_host->getService
+        ? static_cast<const AverExtImportModelService*>(g_host->getService(AVER_EXT_SERVICE_IMPORT_MODEL, AVER_EXT_SERVICE_IMPORT_MODEL_VERSION))
+        : nullptr;
+    if (!service || service->size < sizeof(AverExtImportModelService)) { out.error = "the host offers no " AVER_EXT_SERVICE_IMPORT_MODEL " service"; return out; }
     AverExtModelArgs args;
     std::memset(&args, 0, sizeof(args));
     args.size = sizeof(args);
@@ -39,7 +44,7 @@ aver::fabric::ModelResult importModelThroughHost(const std::string& input, const
     AverExtModelResult res;
     std::memset(&res, 0, sizeof(res));
     res.size = sizeof(res);
-    g_host->importModel(&args, &res);
+    service->importModel(&args, &res);
     out.ok = res.ok != 0;
     out.error = res.error ? res.error : "";
     for (uint32_t i = 0; i < res.partCount; ++i) {
@@ -48,11 +53,11 @@ aver::fabric::ModelResult importModelThroughHost(const std::string& input, const
         part.meshAsset = p.meshAsset ? p.meshAsset : "";
         part.name = p.name ? p.name : "";
         part.x = p.x; part.y = p.y; part.z = p.z;
-        part.node = p.node;
+        part.node = p.sourceIndex;
         out.parts.push_back(std::move(part));
     }
     for (uint32_t i = 0; i < res.noteCount; ++i) out.notes.push_back(res.notes[i] ? res.notes[i] : "");
-    if (g_host->freeModelResult) g_host->freeModelResult(&res);
+    if (service->freeResult) service->freeResult(&res);
     return out;
 }
 

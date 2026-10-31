@@ -5,7 +5,8 @@ and ships as one `.avext` file. The engine gains an extension loader and neutral
 names Godot or Fabric when the move is done. This is the design. **Phase 1 is done** (section 5 has its gate results):
 the neutral hooks, the general-feature renames, the loader (3.1 to 3.4), the editor's import dialog (3.5, the dialog
 only), the managed half (3.6), the packaging that reads `EXTENSION` lines (3.7) and the in-tree relocation (section 4)
-are built. Still to do: the Extensions panel and `.avext` install (phase 3), and the new repo (phase 2). The
+are built. Phase 3 (the `.avext` package, `scripts/pack-avext.ps1`, the release workflow, and the engine's Extensions window with
+install from file and uninstall) is built; its window is a headed check. The
 engine-facing description of what exists is [EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md) in the engine repository.
 
 ## 1. Where Fabric is today
@@ -143,18 +144,23 @@ What was asked for as "one massive DLL" works out like this:
   "name": "FabricConnector",
   "displayName": "Fabric Connector",
   "version": "0.1.0",
-  "abi": 1,
+  "abi": 2,
   "engine": ">=0.7.0 <0.9.0",
   "license": "LGPL-2.1",
   "source": "https://github.com/Vectoric-Core-Systems/Fabric-Connector",
   "native": "Aver.Fabric.Native",
   "managed": { "runtime": ["Aver.Fabric.dll"], "actorBase": "Aver.Fabric.Node" },
   "commands": [ { "name": "fabric", "summary": "convert a Godot 4 project", "usage": "<godot-project-dir> <out-dir> [--dry-run] [--scenes-only] [--scripts-only] [--overwrite]" } ],
-  "importers": [ { "menu": "Import Godot Project...", "command": "fabric", "input": "folder",
-                   "detect": "project.godot", "opensResult": true } ],
+  "importers": [ { "id": "godot-project", "menu": "Import Godot Project...", "command": "fabric",
+                   "input": { "kind": "folder", "detect": "project.godot" }, "outputDefault": "{input}_Aver" } ],
   "runtimeFiles": ["native/{platform}/Aver.Fabric.Native.*", "managed/Aver.Fabric.dll", "data/extension_api.json"]
 }
 ```
+
+(`abi` 2 is the engine's neutral extension contract: services and interfaces by name, and the command protocol. The importer lists the
+wording and options as well; the full manifest is `extension.json`, and the fields are in the engine's
+[EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md). The sections below describe the design as
+phase 1 and 2 built it; where the engine's contract has moved on, the engine's document wins.)
 
 What the built loader does differently from the sketch above:
 - The engine range reads `>=0.7.0 <0.9.0` while the engine is 0.7.0-1 (a `-1` suffix is ignored by the comparison); it becomes
@@ -179,13 +185,16 @@ plain structs, `const char*` in UTF-8, and function pointers.
   - the ABI version and the engine version;
   - `log(level, msg)`;
   - `executableDir` and `extensionDir`, as strings (the same host struct serves one extension, so they are fields, not functions);
-  - `importModel(const AverExtModelArgs*, AverExtModelResult*)`, today's `fabric::Host::importModel` (parts and
-    notes are returned as arrays the host allocates and frees with `freeModelResult`);
+  - `getService(name, version)`, which returns a versioned table of functions or null. The Fabric Connector asks for
+    `"aver.asset.import-model"` version 1, the engine's model import, today's `fabric::Host::importModel` (parts and
+    notes are returned as arrays the host allocates and frees with the service's `freeResult`); the host no longer has
+    fixed model-import fields (ABI 1 did);
   - `progress(fraction, text)`.
 - `AverExtApi`, filled in by the extension:
   - `runCommand(name, argc, argv)`, which returns an exit code (`argv[0]` is the command's name, so the arguments are
     `argv[1..]`);
-  - `shutdown()`.
+  - `shutdown()`;
+  - `getInterface(name, version)`, for capabilities an extension offers others (the Fabric Connector offers none).
 - Every struct starts with its own size, so a field appended later is known by the side that has it.
 
 Runtime P/Invokes, such as today's `aver_gdext_*`, stay ordinary exports of the same DLL. The engine never calls them.
@@ -229,30 +238,35 @@ loads that extension and returns `runCommand`'s exit code. `AverAssetC fabric ..
 - picks a folder;
 - warns when the `detect` file is missing;
 - runs `AverAssetC <command> <in> <out>` on a worker thread, as today, showing its progress lines;
-- opens the result when `opensResult` is set.
+- opens the result when the command's result line names a file to open.
 
 No ImGui crosses the DLL boundary, so the editor never runs extension code in its own process for imports.
 
-**Status: the import dialog is built; the Extensions panel is phase 3.** What was built:
+**Status: the import dialog and the Extensions window are built (phase 3).** What was built:
 - `sandbox/src/FabricImport.*` is gone. `sandbox/src/ExtensionImport.*` reads the `importers` of every Ready extension through the
   loader (`ExtensionImporter::scan`) and draws one File menu item and one dialog per entry. The editor's own file mentions no
   extension. `sandbox/src/ProcessStream.*` is the child-process runner (argv, no shell, a callback per output line); the editor no
   longer compiles any Fabric source.
 - Everything that was Fabric's in the old dialog is data in `extension.json`, with a default for each when the manifest is silent.
-  It reads word for word as before: the menu text and title "Import Godot Project", the "Godot project" label, the `_Aver` output
-  suffix, the "Replace a project already converted there" and "Report only" checkboxes (flags `--overwrite` and `--dry-run`, in that
-  order on the command line), the Godot 3 refusal (`detectVersion`: `config_version=` of at least 5), the "Open converted project"
-  button, the notification titles and the summary line. Fields: see [EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md) in the engine repository, "The editor".
-- The summary the dialog reads is the command's closing `{"schemaVersion":1,"summary":true,"kind":"<command>",...}` line, parsed with
-  the engine's JSON reader instead of the old string search; `output`, `project`, `report` and `dryRun` are the keys it uses by name,
-  the rest feed the manifest's wording (`{converted}` ...).
-- Not word for word: the UI registry id of the menu item is `file.import.fabric` (was `file.importGodotProject`; nothing reads it),
-  and the log prefix and the open-failure line are the manifest's `logTag` (`Fabric`) and `[Editor]`.
-- Tests: `ExtensionImportTest` (engine, 43 checks: fake manifests through the loader, the input checks, the command line, the
-  summary, the importer on its worker thread against a fake tool) and `FabricImportTest` (the extension's, 36 checks: its manifest
-  through the loader, then the real `AverAssetC` converting `ConvertGame`). The dialog (the ImGui half) was never run (engine-run ban).
+  It keeps the menu text and title "Import Godot Project", the `_Aver` output default, and the "Replace a project already converted
+  there" and "Report only" checkboxes (flags `--overwrite` and `--dry-run`, in that order on the command line). Fields: see
+  [EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md) in the engine repository, "The editor".
+- **Revised with ABI 2: the dialog is neutral.** The first version of the dialog carried Fabric-shaped manifest fields (a `detectVersion`
+  check, notification titles, a summary text with `{converted}` placeholders, a log tag) and read the command's closing
+  `{"schemaVersion":1,"summary":true,"kind":"fabric",...}` line. They are gone. The command now prints the engine's standard protocol
+  (`aver_ext_protocol.h`): `{"aver":"progress",...}` lines and one `{"aver":"result","ok","open","report","warnings","errors","message"}`
+  line, which the dialog renders for any command (a progress bar, the log, the message, the warning count, Open and Report buttons).
+  `fabric` prints the same human log as before, and refuses a Godot 3 project itself (`ok:false`, "This is a Godot 3 project
+  (config_version 4). Fabric converts Godot 4.1 and later."); its message carries the counts the old summary text did, `warnings` is the
+  unsupported count, and `open` is `<out>/<Name>/<Name>.ocproject` (empty for `--dry-run`).
+- Not word for word: the UI registry id of the menu item is `file.import.godot-project` (was `file.importGodotProject`; nothing reads
+  it), and the notification titles are the menu text with "finished" or "failed".
+- Tests: `ExtensionImportTest` (engine: fake manifests through the loader, the input checks, the command line, the protocol lines,
+  the importer on its worker thread against a fake tool) and `FabricImportTest` (the extension's: its manifest through the loader, the
+  protocol lines, the Godot 3 refusal, then the real `AverAssetC` converting `ConvertGame`). The dialog (the ImGui half) was never run (engine-run ban).
 
-Extensions panel (Window > Extensions), phase 3, not built:
+Extensions window (Window > Extensions), phase 3, built (`sandbox/src/ExtensionsWindow.*` and `modules/extensions/.../Avext.hpp` in the engine;
+the install rules are in its EXTENSIONS.md, "Installing"; the window itself is a headed check):
 - It lists each extension with its name, version, source, licence and status (with the reason when it is refused).
 - **Install from file...** reads an `.avext` and shows its manifest and sha256 before anything is copied. It unpacks
   into `Extensions/<Name>/` and refuses an existing name unless the user asks to replace it. The old copy goes to the
@@ -359,8 +373,8 @@ directory:
   `AverExtHost`. It builds into `build/bin/Extensions/FabricConnector/native/<platform>/` with `extension.json` and
   `data/extension_api.json` beside it. The GDExtension host finds the API dump through the library's own location
   (`<library dir>/../../data`), so a game that carries the extension folder needs nothing beside its executable.
-- `AverAssetC` has no Fabric code. The model importer a converter needs is `AverExtHost::importModel`, which `AverAssetC`
-  implements with plain structs; every other subcommand it does not know goes to the loader.
+- `AverAssetC` has no Fabric code. The model importer a converter needs is the service `aver.asset.import-model` v1 (`AverExtHost::getService`),
+  which `AverAssetC` offers with plain structs; every other subcommand it does not know goes to the loader.
 - The `managed/Aver.Fabric.dll` the manifest lists is built by `extensions/FabricConnector/managed` (section 3.6). `Aver.Fabric` resolves its native library through `NativeResolver`
   (`scripting/csharp/Shared`), which now probes `<assembly dir>/../native/<platform>` first, then the executable folder, then
   each `Extensions/*/native/<platform>`.

@@ -14,9 +14,14 @@ managed/           Aver.Fabric (the runtime the host loads and converted scripts
 tests/             fabric (the converter end to end, the GDExtension host) and formats.godot, with their fixtures
 test-content/      the Aver-side levels and meshes the runtime tests load
 tools/             godot-dump: the converter checked against a headless Godot 4 (dump_scene.gd and runner scripts; see its README)
+scripts/           api-index.py (generates docs/api/Aver.Fabric.md), pack-avext.ps1 (builds the .avext package)
 third_party/       godot-gdextension: Godot's published GDExtension interface header and API dump (MIT)
 docs/              FABRIC.md (user guide), plans/ (design and contracts), api/Aver.Fabric.md
 ```
+
+## Install
+
+Download `FabricConnector-<version>.avext` from the releases page. In the Aver editor: **Window > Extensions > Install from file...**, pick the file, check the SHA-256 it shows against the release page, and confirm. The extension unpacks into `Extensions/FabricConnector/` beside the editor and **File > Import Godot Project...** is there; restart the editor to run converted projects' scripts. A newer package installs over it with **Replace** (the old folder goes to the Recycle Bin); **Uninstall** is in the same window. Or build it from source (next section) and, with `FABRIC_DEPLOY_TO`, let every build copy it into your engine build.
 
 ## Build
 
@@ -66,6 +71,16 @@ runs the C++ suites (`tests/fabric`, `tests/formats.godot`) and `FabricManagedTe
 
 ## Releases
 
-A release will be one `.avext` file per platform set (the extension folder zipped; `pack-avext.ps1` and the engine's Extensions panel are phase 3 of the plan, not built yet). Until then the build output above is the installable folder: copy `Extensions/FabricConnector/` next to an engine's executables.
+A release is one `FabricConnector-<version>.avext` holding the Windows, Linux and macOS builds (`native/win-x64`, `native/linux-x64`, `native/osx-arm64`). Versions so far are pre-releases (`0.1.0-alpha`).
+
+`scripts/pack-avext.ps1` (PowerShell 7, or Windows PowerShell 5.1) writes it from one or more built extension directories (what `FABRIC_DEPLOY_TO` copies, or `build/engine/bin/Extensions/FabricConnector`):
+
+```
+pwsh scripts/pack-avext.ps1 -ExtensionDir <dir> [<dir> ...] -OutDir dist
+```
+
+Several directories (one per platform) are merged into one package: `native/<platform>/` from the directory that built it, everything else from the first directory that has it. It keeps the runtime libraries only (no `.pdb`, `.ilk`, `.lib`, `.exp`), the managed assembly, the converter in `tools/` (without symbols), `data/`, `LICENSE` and `README.md`, and writes `FabricConnector-<version>.avext` and a `.sha256` file. The version is `extension.json`'s `version`.
+
+On a tag `v*` (or run by hand) `.github/workflows/release.yml` builds Release on the three runners, runs the tests, uploads each extension directory and merges them with that script into one package, uploaded as the `FabricConnector-avext` artifact. It does not create a GitHub release: a person downloads the artifact, installs it once in the editor, and creates the release.
 
 License: LGPL-2.1 (see `LICENSE`).

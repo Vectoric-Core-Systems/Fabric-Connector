@@ -1,0 +1,134 @@
+# Fabric Connector release package.
+#
+# On a tag v* (or by hand): Release builds on the three runners each upload their extension directory
+# (build/engine/bin/Extensions/FabricConnector), and a last job merges them with scripts/pack-avext.ps1 into one
+# FabricConnector-<version>.avext (native/win-x64, native/linux-x64, native/osx-arm64) and uploads it, with its SHA-256, as an artifact.
+#
+# THIS WORKFLOW DOES NOT CREATE A GITHUB RELEASE. It produces the package; a person downloads the artifact, installs it once through
+# Window > Extensions > Install from file in the editor, and creates the release. The normal CI (ci.yml) is unchanged and does not run on tags.
+#
+# The build steps repeat ci.yml's (the pinned engine, the same packages), for Release only. The tests run before the directory is uploaded: a
+# package built from a tree whose suites fail is not worth cutting.
+
+name: Release package
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Read-only token: nothing here writes to the repository or creates a release.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform }} Release build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.os == 'macos-15' && 180 || 120 }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: windows-2022, platform: win-x64 }
+          - { os: ubuntu-24.04, platform: linux-x64 }
+          - { os: macos-15, platform: osx-arm64 }
+    env:
+      VULKAN_SDK_VERSION: 1.4.363.0
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pin the .NET SDK global.json asks for
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+
+      - name: Linux packages (SDL's build dependencies, Ninja, software Vulkan)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev \
+            libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libdecor-0-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev \
+            libvulkan1 mesa-vulkan-drivers
+
+      - name: macOS packages (Ninja, SDL 3, and the LunarG SDK for MoltenVK, the loader and DXC)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja sdl3
+          curl -sSL -o vulkansdk.zip \
+            "https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_SDK_VERSION}.zip"
+          unzip -q vulkansdk.zip
+          app=$(ls -d *.app | head -1)
+          sudo "./${app}/Contents/MacOS/$(basename "${app}" .app)" \
+            --root "$HOME/VulkanSDK/${VULKAN_SDK_VERSION}" --accept-licenses --default-answer \
+            --confirm-command install com.lunarg.vulkan.core com.lunarg.vulkan.usr
+          echo "VULKAN_SDK=$HOME/VulkanSDK/${VULKAN_SDK_VERSION}/macOS" >> "$GITHUB_ENV"
+
+      - name: Configure (fetches the pinned engine and configures it with this extension)
+        shell: pwsh
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build
+
+      - name: Run the tests
+        shell: pwsh
+        run: ctest --test-dir build --output-on-failure -C Release
+
+      # The directory the engine's build deploys the extension to: extension.json, native/<platform>/, managed/, tools/, data/. The pack job
+      # keeps the runtime libraries of native/ and drops what only a developer wants (.pdb, .ilk, .lib, .exp).
+      - name: Upload the extension directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-${{ matrix.platform }}
+          path: build/engine/bin/Extensions/FabricConnector
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Pack FabricConnector .avext
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: extension-*
+          path: extension-dirs
+
+      # On a tag the tag names the version: v0.1.0-alpha is extension.json "0.1.0-alpha".
+      - name: The tag matches extension.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw extension.json | ConvertFrom-Json).version
+          $tag = '${{ github.ref_name }}'.Substring(1)
+          if ($version -ne $tag) { throw "tag $tag does not match extension.json version $version" }
+
+      - name: Merge the platform builds into one package
+        shell: pwsh
+        run: |
+          $dirs = Get-ChildItem extension-dirs -Directory | Sort-Object Name | ForEach-Object { $_.FullName }
+          $dirs
+          ./scripts/pack-avext.ps1 -ExtensionDir $dirs -OutDir dist
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: FabricConnector-avext
+          path: |
+            dist/*.avext
+            dist/*.sha256
+          if-no-files-found: error

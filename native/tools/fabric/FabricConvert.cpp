@@ -4,6 +4,7 @@
 
 #include "aver/core/ErrorCodes.hpp"
 #include "aver/core/Log.hpp"
+#include "aver/extensions/aver_ext_protocol.h"
 #include "aver/platform/FileSystem.hpp"
 
 #include <algorithm>
@@ -252,18 +253,40 @@ bool Converter::writeProjectManifest() {
 
 // ---- the run ---------------------------------------------------------------------------------------------------------------
 
+namespace {
+
+// The engine's command protocol (aver_ext_protocol.h): one JSON line each, for the tool that runs this command.
+void emitProgress(double fraction, const char* text) {
+    std::printf("{\"" AVER_EXT_MSG_KEY "\":\"" AVER_EXT_MSG_PROGRESS "\",\"fraction\":%.2f,\"text\":%s}\n", fraction, jsonString(text).c_str());
+    std::fflush(stdout);
+}
+
+void emitResult(bool ok, const std::string& open, const std::string& report, size_t warnings, size_t errors, const std::string& message) {
+    std::printf("{\"" AVER_EXT_MSG_KEY "\":\"" AVER_EXT_MSG_RESULT "\",\"ok\":%s,\"open\":%s,\"report\":%s,\"warnings\":%zu,\"errors\":%zu,\"message\":%s}\n",
+                ok ? "true" : "false", jsonString(open).c_str(), jsonString(report).c_str(), warnings, errors, jsonString(message).c_str());
+    std::fflush(stdout);
+}
+
+// A failed run: the log line people read, and the result line tools read.
+int failRun(const std::string& message) {
+    AVER_ERROR("fabric: {}", message);
+    emitResult(false, "", "", 0, 1, message);
+    return 1;
+}
+
+}  // namespace
+
 int Converter::run() {
     gd::GodotDiagnostics diag;
-    if (!fs_.open(godotDir_, diag)) {
-        AVER_ERROR("fabric: {}", diag.format());
-        return 1;
-    }
+    if (!fs_.open(godotDir_, diag)) return failRun(diag.format());
     if (!fs_.scan(diag)) AVER_WARN("fabric: scanning the project reported errors");
+    emitProgress(0.02, "reading the Godot project");
 
     gd::GodotDiagnostics pdiag;
     if (!gd::loadGodotProject(godotDir_, project_, pdiag)) {
-        AVER_ERROR("fabric: project.godot: {}", pdiag.format());
-        return 1;
+        if (project_.configVersion > 0 && project_.configVersion < 5)
+            return failRun("This is a Godot 3 project (config_version " + std::to_string(project_.configVersion) + "). Fabric converts Godot 4.1 and later.");
+        return failRun("project.godot: " + pdiag.format());
     }
 
     std::string folder = std::filesystem::path(godotDir_).filename().string();
@@ -282,15 +305,11 @@ int Converter::run() {
     fabricDir_ = projectDir_ + "/Fabric";
     const std::string jsonlPath = outDir_ + "/FabricReport.jsonl", mdPath = outDir_ + "/FabricReport.md";
 
-    if (!options_.scriptsOnly && !options_.overwrite && fileExists(projectDir_ + "/" + name_ + ".ocproject")) {
-        AVER_ERROR("fabric: {} already holds a converted project; pass --overwrite to replace it (or --scripts-only to convert only its scripts)", projectDir_);
-        return 1;
-    }
+    if (!options_.scriptsOnly && !options_.overwrite && fileExists(projectDir_ + "/" + name_ + ".ocproject"))
+        return failRun(projectDir_ + " already holds a converted project; pass --overwrite to replace it (or --scripts-only to convert only its scripts)");
     if (options_.scriptsOnly) {
-        if (!fileExists(projectDir_ + "/" + name_ + ".ocproject")) {
-            AVER_ERROR("fabric: --scripts-only needs a project converted before: {} has no {}.ocproject", projectDir_, name_);
-            return 1;
-        }
+        if (!fileExists(projectDir_ + "/" + name_ + ".ocproject"))
+            return failRun("--scripts-only needs a project converted before: " + projectDir_ + " has no " + name_ + ".ocproject");
         report_.readJsonl(jsonlPath);   // the earlier run's entries; the script step replaces its own
     }
 
@@ -308,15 +327,20 @@ int Converter::run() {
     createDirectories(fabricDir_);
     AVER_INFO("fabric: {} -> {}", godotDir_, options_.dryRun ? requestedOut + " (report only)" : projectDir_);
 
+    emitProgress(0.05, "registering scripts");
     registerScripts();
     bool ok = true;
     if (options_.scriptsOnly) {
         if (!fileExists(fabricDir_ + "/scripts.json")) writeScriptsManifest();
     } else {
+        emitProgress(0.10, "GDExtensions");
         convertExtensions();
+        emitProgress(0.15, "scenes");
         ok = convertScenes();
+        emitProgress(0.60, "resources");
         convertStandaloneResources();
         reportProjectFiles();
+        emitProgress(0.70, "project settings");
         convertInput();
         convertLocalization();
         ok = convertProject(startLevelAsset_) && ok;
@@ -332,6 +356,7 @@ int Converter::run() {
         writeShadersManifest();   // G6 SH2
     }
 
+    emitProgress(0.80, "report");
     const std::string reportTitle = project_.name.empty() ? name_ : project_.name;
     if (!report_.writeMarkdown(mdPath, reportTitle) || !report_.writeJsonl(jsonlPath)) {
         AVER_ERROR("fabric: could not write the report to {}", outDir_);
@@ -340,6 +365,7 @@ int Converter::run() {
 
     // Scripts last: the tool merges its entries into the report just written, and the final FabricReport.md is made from the merged file.
     if (!options_.scenesOnly) {
+        emitProgress(0.85, "converting scripts");
         ok = convertScripts() && ok;
         if (!report_.writeMarkdown(mdPath, reportTitle) || !report_.writeJsonl(jsonlPath)) {
             AVER_ERROR("fabric: could not write the report to {}", outDir_);
@@ -358,12 +384,14 @@ int Converter::run() {
     }
     AVER_INFO("fabric: {} converted, {} approximated, {} unsupported ({} level(s), {} prefab(s), {} script(s), {} GDExtension(s))", report_.count(Rating::Converted),
               report_.count(Rating::Approximated), report_.count(Rating::Unsupported), sceneLevels_.size(), prefabs_.size(), scripts_.size(), extensions_.size());
-    std::printf("{\"schemaVersion\":1,\"summary\":true,\"kind\":\"fabric\",\"input\":%s,\"output\":%s,\"project\":%s,\"levels\":%zu,\"converted\":%zu,"
-                "\"approximated\":%zu,\"unsupported\":%zu,\"scripts\":%zu,\"scriptsConverted\":%s,\"extensions\":%zu,\"report\":%s,\"dryRun\":%s,\"exitCode\":%d}\n",
-                jsonString(godotDir_).c_str(), jsonString(options_.dryRun ? reportOut : projectDir_).c_str(), jsonString(name_).c_str(), sceneLevels_.size(),
-                report_.count(Rating::Converted), report_.count(Rating::Approximated), report_.count(Rating::Unsupported), scripts_.size(),
-                scriptsRan_ ? "true" : "false", extensions_.size(), jsonString(reportOut + "/FabricReport.md").c_str(), options_.dryRun ? "true" : "false", ok ? 0 : 1);
-    std::fflush(stdout);
+    emitProgress(1.0, "done");
+    std::string message = std::to_string(report_.count(Rating::Converted)) + " converted, " + std::to_string(report_.count(Rating::Approximated)) + " approximated, " +
+                          std::to_string(report_.count(Rating::Unsupported)) + " unsupported; " + std::to_string(sceneLevels_.size()) + " level(s), " +
+                          std::to_string(scripts_.size()) + " script(s), " + std::to_string(extensions_.size()) + " GDExtension(s).";
+    if (!scripts_.empty() && !scriptsRan_) message += " The scripts were not converted; see the report.";
+    if (options_.dryRun) message += " (report only)";
+    emitResult(ok, options_.dryRun || !ok ? std::string() : projectDir_ + "/" + name_ + ".ocproject", reportOut + "/FabricReport.md", report_.count(Rating::Unsupported),
+               ok ? 0 : 1, ok ? message : "The conversion did not finish; see the report. " + message);
     return ok ? 0 : 1;
 }
 
@@ -389,6 +417,7 @@ int run(int argc, char** argv, const Host& host) {
         else if (a == "--overwrite") opt.overwrite = true;
         else if (a.rfind("--", 0) == 0) {
             AVER_ERROR("fabric: unknown option '{}'\n{}", a, kFabricUsage);
+            emitResult(false, "", "", 0, 1, "unknown option '" + a + "'");
             return exitCode(ExitCode::Usage);
         } else {
             positional.push_back(a);
@@ -396,6 +425,7 @@ int run(int argc, char** argv, const Host& host) {
     }
     if (positional.size() != 2 || (opt.scenesOnly && opt.scriptsOnly)) {
         AVER_ERROR("{}", kFabricUsage);
+        emitResult(false, "", "", 0, 1, "bad usage: fabric <godot-project-dir> <out-dir> [options]");
         return exitCode(ExitCode::Usage);
     }
     std::string in = positional[0], out = positional[1];

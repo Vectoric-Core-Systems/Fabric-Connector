@@ -156,14 +156,14 @@ int main() {
     const std::string out2 = (outRoot / "two").string();
 
     // ---- the run --------------------------------------------------------------------------------------------------------------
-    AVER_INFO("-- the converter runs and closes with its summary line --");
+    AVER_INFO("-- the converter runs and closes with its result line --");
     std::string log;
     // --scenes-only: the script step has its own tests (FabricE2ETest, Aver.Fabric.Tests); this one is about scenes, assets and the project.
     const int code = runCapture("\"" + exe.string() + "\" fabric \"" + dataDir + "\" \"" + out1 + "\" --scenes-only", log);
     check(code == 0, "it exits 0 (got " + std::to_string(code) + ")");
-    check(log.find("\"summary\":true") != std::string::npos && log.find("\"kind\":\"fabric\"") != std::string::npos &&
-              log.find("\"exitCode\":0") != std::string::npos && log.find("\"levels\":2") != std::string::npos,
-          "the final JSON line is the fabric summary with 2 levels");
+    check(log.find("{\"aver\":\"progress\"") != std::string::npos && log.find("{\"aver\":\"result\",\"ok\":true,\"open\":") != std::string::npos &&
+              log.find("ConvertGame.ocproject") != std::string::npos && log.find("2 level(s)") != std::string::npos && log.find("\"summary\":true") == std::string::npos,
+          "the final JSON line is the standard result (ok, the project to open, 2 levels) after progress lines; the old summary line is gone");
     if (code != 0) AVER_INFO("{}", log);
 
     const std::string proj = out1 + "/ConvertGame";
