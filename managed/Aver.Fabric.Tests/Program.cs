@@ -136,6 +136,7 @@ static class Program
         failures += ConverterBugTests.RunAll(); // converter bugs C1 to C20 of the parity plan: names, singletons, enums, coercions, base-typed receivers, packed arrays, utility functions
         failures += FabricApiTests.RunAll(); // wave 1 package API: the Godot members Aver.Fabric lacked (enums, singletons, files, threads, string / vector / variant methods)
         failures += GdextTests.RunAll();     // F5: the GDExtension host from C# (wire form always; the native host and test plugin when built)
+        failures += Wave5Tests.RunAll();     // wave 5: joints, SoftBody3D, primitive meshes, lines and points, shape owners, space parameters, Geometry helpers, physics interpolation
 
         Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
         return failures;

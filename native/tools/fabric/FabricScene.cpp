@@ -170,6 +170,21 @@ ClassChoice chooseClass(const std::string& t) {
         return c;
     }
     if (widgetClassChoice(t, c)) return c;   // G5 U2: the widgets
+    // Wave 5: the joint nodes and SoftBody3D.
+    if (t == "PinJoint3D" || t == "HingeJoint3D" || t == "SliderJoint3D" || t == "ConeTwistJoint3D" || t == "Generic6DOFJoint3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "built as a Jolt constraint once both bodies exist; its limits are measured from the bodies' pose when it is built, not from the joint's frame, and Godot's softness, bias and "
+                   "relaxation parameters are kept and ignored (Godot's own Jolt module ignores them too)";
+        return c;
+    }
+    if (t == "SoftBody3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "simulated by the engine's soft-body physics over the welded points of its mesh; stiffness, pressure and damping are mapped by formula, not by Godot's units, and need tuning by eye; "
+                   "a mesh that is only an imported file has no vertices to simulate and stays a plain mesh";
+        return c;
+    }
     if (supportedClasses().count(t)) { c.fabricClass = t; return c; }
     bool ext3D = false;
     if (isExtensionClass(t, &ext3D)) {
@@ -939,11 +954,22 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
         const Where pw{fn.reportFile, fn.reportPath, fn.type};
         if (fn.type == "GridMap" && pr.key == "mesh_library") { props.emplace_back(pr.key, makeNil()); continue; }   // geometryNode reads the library itself
         if (fn.type == "MultiplayerSpawner" && pr.key == "_spawnable_scenes") { props.emplace_back(pr.key, spawnableScenesValue(pr.value, fn, pr)); continue; }   // G6 NET2
+        // A soft body simulates the vertices of its mesh: a primitive mesh stays an Object(...) whose generator makes them at run time; any other mesh is an asset the
+        // runtime cannot read.
+        if (fn.type == "SoftBody3D" && pr.key == "mesh" && pr.doc) {
+            Var inlineMesh = inlinePrimitiveMesh(pr.value, *pr.doc, pw);
+            if (!inlineMesh.isNil()) { props.emplace_back(pr.key, std::move(inlineMesh)); continue; }
+            report_.add("property", fn.reportFile, fn.reportPath, fn.type, pr.key, Rating::Unsupported,
+                        "this mesh is an imported file whose vertices the runtime cannot read; the soft body stays an ordinary mesh", pr.line);
+        }
         Var cv = pr.doc ? convertValue(pr.value, *pr.doc, pw, pr.key) : pr.value;
         if (cv.isNil() && !pr.value.isNil()) continue;   // a resource that could not be converted; already reported
         // parameters/... (AnimationTree) and bones/... (Skeleton3D) are members the runtime classes read by their scene names.
         const bool dynamicKey = (fn.type == "AnimationTree" && pr.key.rfind("parameters/", 0) == 0) || (fn.type == "Skeleton3D" && pr.key.rfind("bones/", 0) == 0) ||
-                                (isControlClass(fn.type) && pr.key.rfind("theme_override_", 0) == 0) || isWidgetDynamicKey(fn.type, pr.key);
+                                (isControlClass(fn.type) && pr.key.rfind("theme_override_", 0) == 0) || isWidgetDynamicKey(fn.type, pr.key) ||
+                                (fn.type == "SoftBody3D" && pr.key.rfind("attachments/", 0) == 0) ||
+                                (cc.fabricClass == fn.type && (fn.type == "PinJoint3D" || fn.type == "HingeJoint3D" || fn.type == "SliderJoint3D" || fn.type == "ConeTwistJoint3D" ||
+                                                               fn.type == "Generic6DOFJoint3D"));
         if (pr.key.find('/') != std::string::npos && pr.key.rfind("surface_material_override/", 0) != 0 && !dynamicKey) {
             report_.add("property", fn.reportFile, fn.reportPath, fn.type, pr.key, Rating::Approximated,
                         "a path-style property is not a member of the runtime class; it is kept as node metadata", pr.line);

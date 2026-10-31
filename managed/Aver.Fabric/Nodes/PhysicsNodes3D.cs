@@ -22,7 +22,7 @@ public class PhysicsMaterial : Resource
 }
 
 /// <summary>Base of every node that takes part in physics (Godot's CollisionObject3D).</summary>
-public class CollisionObject3D : Node3D
+public partial class CollisionObject3D : Node3D
 {
     public new class SignalName : Node3D.SignalName
     {
@@ -206,7 +206,7 @@ public class CollisionObject3D : Node3D
     }
 }
 
-public class PhysicsBody3D : CollisionObject3D
+public partial class PhysicsBody3D : CollisionObject3D
 {
     private PhysicsMaterial? _material;
 
@@ -226,12 +226,16 @@ public class PhysicsBody3D : CollisionObject3D
         set { _material = value; if (Body.IsValid) ApplySurface(Body); }
     }
 
-    public bool AxisLockLinearX { get; set; }
-    public bool AxisLockLinearY { get; set; }
-    public bool AxisLockLinearZ { get; set; }
-    public bool AxisLockAngularX { get; set; }
-    public bool AxisLockAngularY { get; set; }
-    public bool AxisLockAngularZ { get; set; }
+    private bool _lockLX, _lockLY, _lockLZ, _lockAX, _lockAY, _lockAZ;
+    public bool AxisLockLinearX { get => _lockLX; set { _lockLX = value; PushLocks(); } }
+    public bool AxisLockLinearY { get => _lockLY; set { _lockLY = value; PushLocks(); } }
+    public bool AxisLockLinearZ { get => _lockLZ; set { _lockLZ = value; PushLocks(); } }
+    public bool AxisLockAngularX { get => _lockAX; set { _lockAX = value; PushLocks(); } }
+    public bool AxisLockAngularY { get => _lockAY; set { _lockAY = value; PushLocks(); } }
+    public bool AxisLockAngularZ { get => _lockAZ; set { _lockAZ = value; PushLocks(); } }
+
+    /// <summary>Gives the engine the axis locks: a rigid body does (its subclass overrides this); the other bodies keep them as flags.</summary>
+    internal virtual void PushLocks() { }
 
     internal void ApplySurface(PhysBody body)
     {
@@ -455,7 +459,63 @@ public class RigidBody3D : PhysicsBody3D
     public float GravityScale { get => _gravityScale; set { _gravityScale = value; if (Body.IsValid) Body.SetGravityFactor(value); } }
     public float LinearDamp { get => _linearDamp; set { _linearDamp = value; PushDamping(); } }
     public float AngularDamp { get => _angularDamp; set { _angularDamp = value; PushDamping(); } }
-    public bool CanSleep { get; set; } = true;
+
+    /// <summary>How the damping above joins the damping an area gives: Combine adds, Replace overrides it. Stored: the engine's areas pick their own mode.</summary>
+    public enum DampMode { Combine = 0, Replace = 1 }
+    public enum CenterOfMassModeEnum { Auto = 0, Custom = 1 }
+
+    public DampMode LinearDampMode { get; set; } = DampMode.Combine;
+    public DampMode AngularDampMode { get; set; } = DampMode.Combine;
+
+    private bool _canSleep = true, _continuousCd, _lockRotation;
+    private CenterOfMassModeEnum _comMode = CenterOfMassModeEnum.Auto;
+    private Vector3 _centerOfMass, _inertia;
+
+    /// <summary>Whether the body may fall asleep when it rests.</summary>
+    public bool CanSleep { get => _canSleep; set { _canSleep = value; if (Body.IsValid) Body.SetAllowSleeping(value); } }
+
+    /// <summary>Sweeps the body along its motion so a fast one cannot cross a thin wall between two steps.</summary>
+    public bool ContinuousCd { get => _continuousCd; set { _continuousCd = value; if (Body.IsValid) Body.SetCcd(value); } }
+
+    /// <summary>Stops the body turning on any axis (Godot's lock_rotation); it still moves.</summary>
+    public bool LockRotation { get => _lockRotation; set { _lockRotation = value; PushLocks(); } }
+
+    /// <summary>Auto takes the centre of mass from the shapes; Custom takes <see cref="CenterOfMass"/>. Changing it makes the body again.</summary>
+    public CenterOfMassModeEnum CenterOfMassMode { get => _comMode; set { _comMode = value; QueueRebuild(); } }
+
+    /// <summary>The centre of mass in the body's own space, in metres, when the mode is Custom.</summary>
+    public Vector3 CenterOfMass { get => _centerOfMass; set { _centerOfMass = value; if (_comMode == CenterOfMassModeEnum.Custom) QueueRebuild(); } }
+
+    /// <summary>The moment of inertia about each axis, kg m^2; all zero (the default) keeps the one the shapes and mass imply.</summary>
+    public Vector3 Inertia { get => _inertia; set { _inertia = value; PushInertia(); } }
+
+    // The six axis locks and lock_rotation as the engine's own lock, which also keeps the body from gaining motion along or about a locked axis.
+    // Godot's x, y, z are the engine's Y, Z, X.
+    internal override void PushLocks()
+    {
+        if (!Body.IsValid) return;
+        var axes = Aver.Physics.LockAxes.None;
+        if (AxisLockLinearX) axes |= Aver.Physics.LockAxes.TranslationY;
+        if (AxisLockLinearY) axes |= Aver.Physics.LockAxes.TranslationZ;
+        if (AxisLockLinearZ) axes |= Aver.Physics.LockAxes.TranslationX;
+        if (AxisLockAngularX || _lockRotation) axes |= Aver.Physics.LockAxes.RotationY;
+        if (AxisLockAngularY || _lockRotation) axes |= Aver.Physics.LockAxes.RotationZ;
+        if (AxisLockAngularZ || _lockRotation) axes |= Aver.Physics.LockAxes.RotationX;
+        // Locking all six is a static body to the engine; the velocity zeroing every step already holds that case.
+        if ((axes != Aver.Physics.LockAxes.None || Body.LockedAxes != Aver.Physics.LockAxes.None) && axes != (Aver.Physics.LockAxes.AllTranslation | Aver.Physics.LockAxes.AllRotation))
+            Body.SetLockedAxes(axes);
+    }
+
+    private void PushInertia()
+    {
+        if (!Body.IsValid) return;
+        if (_inertia.X > 0f && _inertia.Y > 0f && _inertia.Z > 0f)
+        {
+            const float k = FabricSpace.CmPerMetre * FabricSpace.CmPerMetre;
+            Body.SetInertia(new PhysFloat3(_inertia.Z * k, _inertia.X * k, _inertia.Y * k));   // about the engine's x, y, z = Godot's z, x, y
+        }
+        else if (Body.Inertia.IsOverride) Body.SetInertia(null);
+    }
 
     /// <summary>Holds the body in place (Static, or Kinematic to be moved by script and carry others) until unfrozen.</summary>
     public bool Freeze
@@ -575,6 +635,10 @@ public class RigidBody3D : PhysicsBody3D
         if (_angularVelocity != Vector3.Zero) body.SetAngularVelocity(ToPhysAngular(_angularVelocity));
         if (_contactMonitor) body.SetContactMonitor(true, Math.Max(_maxContacts, 1));
         if (_customIntegrator) body.SetCustomIntegrator(true);
+        if (!_canSleep) body.SetAllowSleeping(false);
+        if (_continuousCd) body.SetCcd(true);
+        PushLocks();
+        PushInertia();
         if (_integrates) body.SetIntegrateForces(IntegrateForcesCallback);
         _lastActive = body.IsActive;
     }

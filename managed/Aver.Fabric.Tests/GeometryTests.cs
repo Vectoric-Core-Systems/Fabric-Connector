@@ -179,12 +179,13 @@ static class GeometryTests
             MeshInstance3D.MeshAssetOf(strip);
             T.Check("a triangle strip is expanded to triangles with alternating winding", f.Surfaces.Count == 1 && f.Surfaces[1][0].Idx!.SequenceEqual(new uint[] { 0, 1, 2, 2, 1, 3 }));
 
-            // points and lines are kept, not drawn
+            // points and lines have no topology in the renderer: crossed quads of a fixed width stand for them
             var pts = new ArrayMesh();
             pts.AddSurfaceFromArrays(Mesh.PrimitiveType.Points, Arrays(Tri));
             MeshInstance3D.MeshAssetOf(pts);
-            T.Check("a point surface is held and not sent", pts.GetSurfaceCount() == 1 && f.Surfaces[2].Count == 0);
-            T.Check("with one warning that says why", T.Logs.Any(l => l.Level == Aver.Scripting.Log.Level.Warn && l.Message.Contains("only triangle surfaces are drawn")));
+            T.Check("a point surface is sent as three crossed squares a point (4 vertices and 12 indices each)",
+                pts.GetSurfaceCount() == 1 && f.Surfaces[2].Count == 1 && f.Surfaces[2][0].Pos.Length / 3 == 3 * 12 && f.Surfaces[2][0].Idx!.Length == 3 * 36);
+            T.Check("with nothing warned", !T.Logs.Any(l => l.Level == Aver.Scripting.Log.Level.Warn && l.Message.Contains("not drawn")));
 
             // materials: the surface's material is named by its file stem and re-sent when it changes
             var withMat = new ArrayMesh();

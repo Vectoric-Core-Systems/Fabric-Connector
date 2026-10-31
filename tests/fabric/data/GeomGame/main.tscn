@@ -5,6 +5,13 @@
 [ext_resource type="Material" path="res://materials/red.tres" id="3_red"]
 [ext_resource type="Material" path="res://materials/vcol.tres" id="4_vcol"]
 
+[sub_resource type="Curve3D" id="Curve3D_road"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0),
+"tilts": PackedFloat32Array(0, 0)
+}
+point_count = 2
+
 [sub_resource type="ArrayMesh" id="ArrayMesh_quad"]
 _surfaces = [{
 "aabb": AABB(0, 0, 0, 1, 1, 0),
@@ -102,3 +109,16 @@ collision_layer = 2
 data = {
 "cells": PackedInt32Array(0, 0, 0, 1, 0, 655360, 65536, 2, 1, 65535, 0, 0)
 }
+
+[node name="RoadPath" type="Path3D" parent="."]
+curve = SubResource("Curve3D_road")
+
+[node name="Road" type="CSGPolygon3D" parent="."]
+polygon = PackedVector2Array(-0.5, -0.25, 0.5, -0.25, 0.5, 0.25, -0.5, 0.25)
+mode = 2
+path_node = NodePath("../RoadPath")
+path_interval_type = 0
+path_interval = 1.0
+path_rotation = 1
+path_local = true
+path_joined = false

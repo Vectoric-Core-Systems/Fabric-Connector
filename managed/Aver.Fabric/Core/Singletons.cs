@@ -48,8 +48,25 @@ public static class Engine
         }
     }
 
-    /// <summary>The most physics steps one frame runs to catch up. Stored, not applied (approximated): the engine's own catch-up limit stays.</summary>
-    public static int MaxPhysicsStepsPerFrame { get; set; } = 8;
+    private static int s_maxSteps = 8;
+
+    /// <summary>The most physics steps one frame runs to catch up (the engine's PHYSICS.MAXSTEPS, 1 to 64; a larger value is held at 64).</summary>
+    public static int MaxPhysicsStepsPerFrame
+    {
+        get
+        {
+            try { if (Aver.Physics.Physics.Ready) return Aver.Physics.Physics.MaxSteps; }
+            catch (Exception ex) when (PhysicsClockNative.Missing(ex)) { }
+            return s_maxSteps;
+        }
+        set
+        {
+            if (value < 1) return;
+            s_maxSteps = Math.Min(value, 64);
+            try { Aver.Physics.Physics.SetMaxSteps(s_maxSteps); }
+            catch (Exception ex) when (PhysicsClockNative.Missing(ex)) { }
+        }
+    }
 
     /// <summary>The frame rate cap, 0 for none. Stored, not applied (approximated): the engine paces frames by the display's refresh (vsync) and the project's
     /// RENDER.FRAMEBUDGETMS, and has no hard cap a script can set.</summary>

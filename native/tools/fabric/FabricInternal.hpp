@@ -296,6 +296,8 @@ public:
     // A generated primitive mesh; the asset path or "".
     std::string primitiveMeshAsset(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc,
                                    const Where& w);
+    // A primitive mesh sub-resource kept as Object(PlaneMesh, ...) for a node that reads the vertices at run time (SoftBody3D); nil when the value is not one.
+    Var inlinePrimitiveMesh(const Var& value, const gd::GodotDocBase& doc, const Where& w);
     // An imported model file; the parts it produced (cached per file).
     const ModelResult* modelFor(const std::string& resPath, const Where& w);
     void applyRootScale(const std::string& resPath, ModelResult& r);   // the import's nodes/root_scale, onto the meshes and the parts

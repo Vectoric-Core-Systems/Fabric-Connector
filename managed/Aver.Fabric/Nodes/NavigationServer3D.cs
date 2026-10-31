@@ -64,7 +64,7 @@ public class NavigationPathQueryResult3D : RefCounted
 /// <summary>The navigation server: maps, regions, links, avoidance agents and obstacles, path queries and navigation mesh baking. Handles are
 /// <see cref="Rid"/>s. A query sees every change made before it (Godot applies changes at the next physics sync; <see cref="MapForceUpdate"/> exists and
 /// does the rebuild now). Without Aver.Nav.Abi beside the executable every call is a quiet no-op that answers empty.</summary>
-public static class NavigationServer3D
+public static partial class NavigationServer3D
 {
     private static Rid R(int id) => new((ulong)(uint)id);
     private static int I(Rid r) => (int)(uint)r.Id;

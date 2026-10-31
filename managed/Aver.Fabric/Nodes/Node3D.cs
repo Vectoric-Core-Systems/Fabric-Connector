@@ -345,6 +345,13 @@ public partial class Node3D : Node
     {
         base.OnEnteringTree();
         if (!_visible || ParentNode3D is { _visible: false }) OnVisibilityApplied(IsVisibleInTree());
+        ApplyInterpolation();
+    }
+
+    internal override void OnExitingTree()
+    {
+        base.OnExitingTree();
+        ForgetInterpolation();
     }
 
     // The values the node was spawned with are what the entity holds: reading them back returns the exact Godot numbers.

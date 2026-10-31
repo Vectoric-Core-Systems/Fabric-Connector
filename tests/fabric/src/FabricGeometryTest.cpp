@@ -238,6 +238,14 @@ int main() {
         check(near(volumeCm3(cut), expect, expect * 0.06), "sphere intersect slab: pi (r^2 h - h^3 / 12) m^3 within the sphere's facets");
         check(near(cut.boundsMax.x, 50, 0.5) && near(cut.boundsMin.x, -50, 0.5), "the slab cut the sphere to +-0.5 m along Godot Z (engine X)");
         check(w.placements[static_cast<usize>(cutIdx)].y == 500, "and the node keeps its own placement (x = 5 m is engine Y 500 cm)");
+
+        // A polygon swept along a Path3D (wave 5): 1 m by 0.5 m, four metres of straight curve, so 2 m^3 from the start of the path to its end.
+        fmt::OcMeshData road;
+        const int roadIdx = find(w, {"Main", "Road"});
+        check(roadIdx >= 0 && fmt::loadOcMesh(content + "/" + resourceProp(w, roadIdx, "mesh"), road, &err) && road.valid(), "a CSGPolygon3D in path mode has a baked mesh: " + err);
+        check(near(volumeCm3(road), 2.0e6, 2.0e4), "a 1 m by 0.5 m polygon along 4 m of path: 2 m^3");
+        check(near(road.boundsMin.y, 0, 0.5) && near(road.boundsMax.y, 400, 0.5), "from the path's start to its end along Godot X (engine Y)");
+        check(near(road.boundsMax.z - road.boundsMin.z, 50, 0.5), "the polygon's y is the height: 0.5 m (engine Z)");
     }
 
     // ---- Sprite3D / Label3D -------------------------------------------------------------------------------------------------------------
@@ -323,6 +331,7 @@ int main() {
         check(has("\"type\":\"TextMesh\"", "\"rating\":\"unsupported\"", "glyph"), "TextMesh is unsupported with the reason");
         check(has("\"node\":\"Csg\"", "\"rating\":\"approximated\"", "baked at convert time"), "the CSG root is approximated (baked)");
         check(has("\"node\":\"Csg/Base\"", "\"rating\":\"converted\"", "folded"), "CSG children are reported as folded");
+        check(has("\"node\":\"Road\"", "\"property\":\"path_node\"", "\"rating\":\"converted\""), "a polygon swept along its path reports the path properties converted");
         check(has("\"node\":\"Csg\"", "\"property\":\"use_collision\"", "_CSGCollision"), "use_collision is explained");
         check(has("\"node\":\"Label\"", "\"property\":\"text\"", "\"rating\":\"unsupported\""), "Label3D text is unsupported (not drawn)");
         check(has("\"node\":\"Grid\"", "\"rating\":\"approximated\"", "converted once") || has("\"node\":\"Grid\"", "\"rating\":\"approximated\"", "built once at convert time"), "the GridMap node is approximated (static)");

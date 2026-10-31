@@ -151,11 +151,81 @@ internal sealed class MeshSurface
         return new Aabb(lo, hi - lo);
     }
 
+    /// <summary>Lines and points have no topology in the engine's renderer. Each segment becomes two crossed quads a fixed width across, so it shows from any side without being
+    /// rebuilt for the camera, and each point three crossed squares of that width. Both faces are drawn. The width is <see cref="Mesh.ThinPrimitiveWidth"/> metres, not a pixel count,
+    /// so a line far away is thinner on screen than Godot's one-pixel line and a near one thicker.</summary>
+    private EngineSurface? ToEngineThin(out string why)
+    {
+        why = "";
+        int count = Indices?.Length ?? Vertices.Length;
+        int At(int i) => Indices != null ? Indices[i] : i;
+        float w = MathF.Max(Mesh.ThinPrimitiveWidth, 1e-5f), h = w * 0.5f;
+        var pos = new List<Vector3>(); var nrm = new List<Vector3>(); var uv = new List<Vector2>(); var col = new List<Color>(); var idx = new List<uint>();
+        Color ColorOf(int v) => Colors != null ? Colors[v] : new Color(1, 1, 1, 1);
+
+        void Quad(Vector3 a0, Vector3 a1, Vector3 b1, Vector3 b0, Vector3 n, Color ca, Color cb)
+        {
+            uint o = (uint)pos.Count;
+            pos.Add(a0); pos.Add(a1); pos.Add(b1); pos.Add(b0);
+            for (int k = 0; k < 4; k++) nrm.Add(n);
+            uv.Add(new Vector2(0, 0)); uv.Add(new Vector2(0, 1)); uv.Add(new Vector2(1, 1)); uv.Add(new Vector2(1, 0));
+            col.Add(ca); col.Add(ca); col.Add(cb); col.Add(cb);
+            idx.AddRange(new[] { o, o + 1, o + 2, o, o + 2, o + 3, o, o + 2, o + 1, o, o + 3, o + 2 });
+        }
+
+        if (Primitive == Mesh.PrimitiveType.Points)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                int v = At(i);
+                Vector3 p = Vertices[v];
+                Color c = ColorOf(v);
+                Quad(p + new Vector3(-h, -h, 0), p + new Vector3(-h, h, 0), p + new Vector3(h, h, 0), p + new Vector3(h, -h, 0), Vector3.Back, c, c);
+                Quad(p + new Vector3(0, -h, -h), p + new Vector3(0, h, -h), p + new Vector3(0, h, h), p + new Vector3(0, -h, h), Vector3.Right, c, c);
+                Quad(p + new Vector3(-h, 0, -h), p + new Vector3(-h, 0, h), p + new Vector3(h, 0, h), p + new Vector3(h, 0, -h), Vector3.Up, c, c);
+            }
+        }
+        else
+        {
+            int step = Primitive == Mesh.PrimitiveType.Lines ? 2 : 1;
+            for (int i = 0; i + 1 < count; i += step)
+            {
+                int va = At(i), vb = At(i + 1);
+                Vector3 a = Vertices[va], b = Vertices[vb], d = b - a;
+                if (d.LengthSquared() < 1e-12f) continue;
+                d = d.Normalized();
+                Vector3 p1 = d.Cross(MathF.Abs(d.Y) < 0.99f ? Vector3.Up : Vector3.Right).Normalized() * h;
+                Vector3 p2 = d.Cross(p1.Normalized()).Normalized() * h;
+                Color ca = ColorOf(va), cb = ColorOf(vb);
+                Quad(a - p1, a + p1, b + p1, b - p1, p2.Normalized(), ca, cb);
+                Quad(a - p2, a + p2, b + p2, b - p2, p1.Normalized(), ca, cb);
+            }
+        }
+        if (pos.Count == 0) { why = "the surface has no line or point to draw"; return null; }
+        var e = new EngineSurface { Pos = new float[pos.Count * 3], Nrm = new float[pos.Count * 3], Uv = new float[pos.Count * 2], Idx = idx.ToArray() };
+        for (int i = 0; i < pos.Count; i++)
+        {
+            Aver.Scene.Vec3 p = FabricSpace.ToAverPosition(pos[i]), n = FabricSpace.ToAverDirection(nrm[i]);
+            e.Pos[i * 3] = p.X; e.Pos[i * 3 + 1] = p.Y; e.Pos[i * 3 + 2] = p.Z;
+            e.Nrm[i * 3] = n.X; e.Nrm[i * 3 + 1] = n.Y; e.Nrm[i * 3 + 2] = n.Z;
+            e.Uv[i * 2] = uv[i].X; e.Uv[i * 2 + 1] = uv[i].Y;
+        }
+        if (Colors != null)
+        {
+            e.Col = new float[pos.Count * 4];
+            for (int i = 0; i < pos.Count; i++) { e.Col[i * 4] = col[i].R; e.Col[i * 4 + 1] = col[i].G; e.Col[i * 4 + 2] = col[i].B; e.Col[i * 4 + 3] = col[i].A; }
+        }
+        if (Material is { ResourcePath.Length: > 0 }) e.Material = System.IO.Path.GetFileNameWithoutExtension(Material.ResourcePath);
+        else if (Material is { ResourceName.Length: > 0 }) e.Material = Material.ResourceName;
+        return e;
+    }
+
     /// <summary>The surface in engine space, or null with why not (only triangle surfaces are drawn). Normals are left out when there are none (the engine computes
     /// smooth ones); a tangent needs a normal.</summary>
     internal EngineSurface? ToEngine(out string why)
     {
         why = "";
+        if (Primitive == Mesh.PrimitiveType.Lines || Primitive == Mesh.PrimitiveType.LineStrip || Primitive == Mesh.PrimitiveType.Points) return ToEngineThin(out why);
         if (Primitive != Mesh.PrimitiveType.Triangles && Primitive != Mesh.PrimitiveType.TriangleStrip)
         {
             why = "only triangle surfaces are drawn (" + Primitive + " has no counterpart)";
@@ -269,14 +339,40 @@ internal sealed class EngineMeshLink
 }
 
 /// <summary>A mesh built from arrays (Godot's ArrayMesh). Surfaces are added with <see cref="AddSurfaceFromArrays"/> in Godot's array layout (vertex, normal,
-/// tangent as 4 floats per vertex, colour, UV, UV2, bones, weights, index). Triangle and triangle-strip surfaces are drawn; points and lines are kept and not drawn.
-/// Custom arrays, bone weights, blend shapes and LODs are accepted and ignored.</summary>
+/// tangent as 4 floats per vertex, colour, UV, UV2, bones, weights, index). Triangle and triangle-strip surfaces are drawn; lines and points are drawn as crossed quads
+/// <see cref="Mesh.ThinPrimitiveWidth"/> metres wide (the renderer has no line topology). Custom arrays, bone weights, blend shapes and LODs are accepted and ignored.</summary>
 public class ArrayMesh : Mesh
 {
     private readonly List<MeshSurface> _surfaces = new();
     private readonly EngineMeshLink _link = new();
 
     public Aabb CustomAabb { get; set; }
+
+    /// <summary>Swaps the positions (and, when given, the normals) of a surface for new ones of the same count, keeping its indices, UVs and material: what a mesh that
+    /// moves every frame (a soft body) needs. False when the surface or the count does not match.</summary>
+    internal bool ReplaceSurfaceVertices(int surface, Vector3[] vertices, Vector3[]? normals)
+    {
+        if (surface < 0 || surface >= _surfaces.Count || _surfaces[surface].Vertices.Length != vertices.Length) return false;
+        if (normals != null && normals.Length != vertices.Length) return false;
+        _surfaces[surface].Vertices = vertices;
+        if (normals != null) _surfaces[surface].Normals = normals;
+        _link.Reset(_surfaces);
+        EmitChanged();
+        return true;
+    }
+
+    /// <summary>Every triangle of the triangle surfaces as three points, in order.</summary>
+    public override Vector3[] GetFaces()
+    {
+        var faces = new List<Vector3>();
+        foreach (MeshSurface s in _surfaces)
+        {
+            if (s.Primitive != PrimitiveType.Triangles) continue;
+            int n = s.Indices?.Length ?? s.Vertices.Length;
+            for (int i = 0; i < n; i++) faces.Add(s.Vertices[s.Indices != null ? s.Indices[i] : i]);
+        }
+        return faces.ToArray();
+    }
 
     public void AddSurfaceFromArrays(PrimitiveType primitive, Collections.Array arrays, Collections.Array<Collections.Array>? blendShapes = null, Collections.Dictionary? lods = null, ArrayFormat flags = 0)
     {
@@ -347,7 +443,7 @@ public class ArrayMesh : Mesh
 }
 
 /// <summary>A mesh a script fills every frame (Godot's ImmediateMesh): <see cref="SurfaceBegin"/>, the setters and <see cref="SurfaceAddVertex"/> for each vertex,
-/// <see cref="SurfaceEnd"/>. Triangle and triangle-strip surfaces are drawn; points and lines are kept and not drawn. Each end re-sends the surface, so build
+/// <see cref="SurfaceEnd"/>. Triangle and triangle-strip surfaces are drawn; lines and points as crossed quads <see cref="Mesh.ThinPrimitiveWidth"/> metres wide. Each end re-sends the surface, so build
 /// what you can once and clear only when it changes.</summary>
 public class ImmediateMesh : Mesh
 {
@@ -495,6 +591,18 @@ public class SurfaceTool : RefCounted
     public void SetColor(Color color) { _cur.C = color; _hasC = true; }
     public void SetUV(Vector2 uv) { _cur.Uv = uv; _hasUv = true; }
     public void SetUV2(Vector2 uv2) { _cur.Uv2 = uv2; _hasUv2 = true; }
+
+    /// <summary>Godot's custom-data formats for <see cref="SetCustomFormat"/>.</summary>
+    public enum CustomFormat { RgbaUnorm = 0, RgbaSnorm = 1, RgbaHalf = 2, RDouble = 3, RgHalf = 4, RgbHalf = 5, RFloat = 6, RgFloat = 7, RgbFloat = 8, RgbaFloat = 9, Max = 10 }
+
+    // Skin weights and custom channels are accepted so a script that sets them compiles and runs; a runtime mesh has no skin and no custom stream to put them in.
+    private readonly CustomFormat[] _customFormats = { CustomFormat.Max, CustomFormat.Max, CustomFormat.Max, CustomFormat.Max };
+    public void SetBones(int[] bones) { }
+    public void SetWeights(float[] weights) { }
+    public void SetCustom(int channelIndex, Color customColor) { }
+    public void SetCustomFormat(int channelIndex, CustomFormat format) { if (channelIndex >= 0 && channelIndex < 4) _customFormats[channelIndex] = format; }
+    public CustomFormat GetCustomFormat(int channelIndex) => channelIndex >= 0 && channelIndex < 4 ? _customFormats[channelIndex] : CustomFormat.Max;
+    public int GetSkinWeightCount() => 0;
 
     /// <summary>-1 makes the next vertices flat-shaded; 0 (the default) and above smooth with the vertices of the same group at the same position.</summary>
     public void SetSmoothGroup(uint index) => _cur.Smooth = unchecked((int)index);

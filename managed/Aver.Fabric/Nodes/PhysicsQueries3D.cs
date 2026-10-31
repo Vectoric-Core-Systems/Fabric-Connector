@@ -46,6 +46,9 @@ public class PhysicsRayQueryParameters3D : RefCounted
 public class PhysicsShapeQueryParameters3D : RefCounted
 {
     public Shape3D? Shape { get; set; }
+
+    /// <summary>The shape by its physics id (<see cref="Shape3D.GetRid"/>): setting it sets <see cref="Shape"/>; 0 when there is none.</summary>
+    public Rid ShapeRid { get => Shape?.GetRid() ?? default; set => Shape = Shape3D.FromRid(value); }
     public Transform3D Transform { get; set; } = Transform3D.Identity;
     /// <summary>How far past the surface counts as touching, in metres.</summary>
     public float Margin { get; set; }
@@ -58,7 +61,7 @@ public class PhysicsShapeQueryParameters3D : RefCounted
 }
 
 /// <summary>Asks the physics world what is where (Godot's PhysicsDirectSpaceState3D). Results are Godot's dictionaries.</summary>
-public class PhysicsDirectSpaceState3D : GodotObject
+public partial class PhysicsDirectSpaceState3D : GodotObject
 {
     private static List<PhysBody> Excluded(Collections.Array<Rid> exclude)
     {
@@ -94,7 +97,7 @@ public class PhysicsDirectSpaceState3D : GodotObject
             d["normal"] = CollisionObject3D.FromPhys(hit.Normal);
             AddCollider(d, hit.Collider);
             d["shape"] = hit.SubShape;
-            d["face_index"] = -1;
+            d["face_index"] = FabricPhysics.FaceIndexOf(hit.Collider, hit.SubShape);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
         return d;
@@ -177,7 +180,7 @@ public class PhysicsDirectSpaceState3D : GodotObject
 }
 
 /// <summary>A few of Godot's PhysicsServer3D calls, by the Rid of a collision object (<see cref="CollisionObject3D.GetRid"/>).</summary>
-public static class PhysicsServer3D
+public static partial class PhysicsServer3D
 {
     public enum BodyState { Transform = 0, LinearVelocity = 1, AngularVelocity = 2, Sleeping = 3, CanSleep = 4 }
 
@@ -307,7 +310,8 @@ public class RayCast3D : Node3D
     public int GetColliderShape() => _ray.IsColliding ? _ray.Result.SubShape : 0;
     public Vector3 GetCollisionPoint() => _ray.IsColliding ? FabricPhysics.FromPhysPosition(_ray.CollisionPoint) : Vector3.Zero;
     public Vector3 GetCollisionNormal() => _ray.IsColliding ? CollisionObject3D.FromPhys(_ray.CollisionNormal) : Vector3.Zero;
-    public int GetCollisionFaceIndex() => -1;
+    /// <summary>The triangle the ray hit when the collider is a ConcavePolygonShape3D (its index in the faces), else -1.</summary>
+    public int GetCollisionFaceIndex() => _ray.IsColliding ? FabricPhysics.FaceIndexOf(_ray.Collider, _ray.Result.SubShape) : -1;
 }
 
 /// <summary>Sweeps a shape along a line every physics step and lists what it touches (Godot's ShapeCast3D).</summary>

@@ -69,6 +69,9 @@ public class Viewport : Node
     /// <summary>The 3D world of this viewport: its physics space.</summary>
     public World3D World3D { get; set; } = new();
 
+    /// <summary>The 3D world this viewport draws and simulates in (Godot's find_world_3d, which walks up to the viewport that owns one).</summary>
+    public World3D FindWorld3D() => World3D;
+
     /// <summary>The camera that is drawn (the one made current last).</summary>
     public virtual Camera3D? GetCamera3D() => Camera3D.CurrentCamera;
 
@@ -583,6 +586,7 @@ public partial class SceneTree : GodotObject
         else
         {
             Gui.FrameUpdate(dt);   // G5 U1: layout, tooltips and Control drawing at the end of the idle frame
+            DrawCollisionOutline();
             RenderingServer.FrameEnding();
         }
     }
