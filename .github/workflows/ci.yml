@@ -103,6 +103,10 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build --output-on-failure -C ${{ matrix.config }}
 
+      - name: The generated API page is current (docs/api/Aver.Fabric.md)
+        if: runner.os == 'Linux' && matrix.config == 'Debug'
+        run: python3 -I scripts/api-index.py --engine build/_deps/averengine-src --check
+
       # Diagnostic: on Linux the managed suite has passed every check and still failed (a non-zero status after "All tests passed"). This
       # reruns it on its own and prints its exit status and, under gdb, a native backtrace if it aborts.
       - name: Managed suite exit status (Linux diagnostic)
