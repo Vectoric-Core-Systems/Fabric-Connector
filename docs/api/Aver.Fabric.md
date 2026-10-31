@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-716 public types and 7844 public members, read from `managed/Aver.Fabric/` (136 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+774 public types and 8378 public members, read from `managed/Aver.Fabric/` (148 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -74,6 +74,19 @@
 - `public static readonly StringName Canceled`
 - `public static readonly StringName CustomAction`
 
+### AimModifier3D
+
+`public class AimModifier3D : BoneConstraint3D` - Points a bone's forward axis at a reference (Godot's AimModifier3D).
+
+- `public void SetForwardAxis(int index, BoneAxis axis)`
+- `public BoneAxis GetForwardAxis(int index)`
+- `public void SetUseEuler(int index, bool on)`
+- `public bool IsUsingEuler(int index)`
+- `public void SetPrimaryRotationAxis(int index, Vector3.Axis axis)`
+- `public Vector3.Axis GetPrimaryRotationAxis(int index)`
+- `public void SetUseSecondaryRotation(int index, bool on)`
+- `public bool IsUsingSecondaryRotation(int index)`
+
 ### AnimatableBody3D
 
 `public class AnimatableBody3D : StaticBody3D` - A body moved by script or animation that pushes others (Godot's AnimatableBody3D).
@@ -84,6 +97,10 @@
 
 `public class Animation : Resource` - One animation: tracks of keys, a length and a loop mode (Godot's Animation).
 
+- `public void CopyTrack(int trackIdx, Animation toAnimation)` - Copies a track (path, type, interpolation, update mode, flags and every key with its transition, handles, arguments and offsets) to the end of another animation.
+- `public bool TrackIsCompressed(int trackIdx)` - Always false: tracks are stored plainly (compression only saves memory in Godot).
+- `public void Compress(uint pageSize = 8192, uint fps = 120, float splitTolerance = 4.0f)` - Godot packs the 3D tracks into pages to save memory and drops nothing visible; the values here are unchanged, so this does nothing.
+- `public void Optimize(float allowedVelocityErr = 0.01f, float allowedAngularErr = 0.01f, int precision = 3)` - Removes the keys of linear position, rotation and scale tracks that interpolation between their neighbours reproduces: within allowedVelocityErr (metres for position, a ratio for scale) or allowedAngularErr (radians for rotation).
 - `public Animation()`
 - `public override Resource Duplicate(bool subresources = false)`
 - `public void Clear()` - Removes every track and resets the length and loop mode.
@@ -91,6 +108,16 @@
 - `public LoopModeEnum LoopMode { get; set; }`
 - `public float Step { get; set; }`
 - `public bool CaptureIncluded { get; }` - True when a track is in capture update mode.
+- `public void AddMarker(StringName name, double time)` - Adds a marker at time seconds.
+- `public void RemoveMarker(StringName name)`
+- `public bool HasMarker(StringName name)`
+- `public double GetMarkerTime(StringName name)` - The time of a marker; 0 (with an error) when there is none of that name.
+- `public Color GetMarkerColor(StringName name)`
+- `public void SetMarkerColor(StringName name, Color color)`
+- `public string[] GetMarkerNames()` - The names of the markers, ordered by time.
+- `public StringName GetMarkerAtTime(double time)` - The marker at exactly time (within a microsecond), else an empty name.
+- `public StringName GetNextMarker(double time)` - The first marker after time, else an empty name.
+- `public StringName GetPrevMarker(double time)` - The last marker before time, else an empty name.
 - `public int GetTrackCount()`
 - `public int AddTrack(TrackType type, int atPosition = -1)`
 - `public void RemoveTrack(int trackIdx)`
@@ -416,6 +443,7 @@ Values: `Interpolated = 0`, `Discrete = 1`, `DiscreteCarry = 2`
 `public class AnimationNodeBlendTree : AnimationRootNode` - A graph of blend nodes wired from an output (Godot's AnimationNodeBlendTree).
 
 - `public const string OutputName = "output"`
+- `public event Action<StringName> NodeChanged` - Emitted with a node's name when it is added, removed, renamed (the new name) or has an input wired or unwired.
 - `public Vector2 GraphOffset { get; set; }`
 - `public AnimationNodeBlendTree()`
 - `public override string GetCaption()`
@@ -438,11 +466,32 @@ Values: `Interpolated = 0`, `Discrete = 1`, `DiscreteCarry = 2`
 
 Values: `Ok = 0`, `NoInput = 1`, `NoInputIndex = 2`, `NoOutput = 3`, `SameNode = 4`, `ConnectionExists = 5`
 
+### AnimationNodeBlendTree.SignalName
+
+`public new class SignalName : AnimationNode.SignalName`
+
+- `public static readonly StringName NodeChanged`
+
 ### AnimationNodeEndState
 
 `public class AnimationNodeEndState : AnimationRootNode` - The state that ends a machine: reaching it stops the playback (Godot's AnimationNodeEndState).
 
 - `public override string GetCaption()`
+
+### AnimationNodeExtension
+
+`public class AnimationNodeExtension : AnimationNode` - The base of a custom animation node written in script (Godot's AnimationNodeExtension).
+
+- `public override string GetCaption()`
+- `public virtual float[] _ProcessAnimationNode(double[] playbackInfo, bool testOnly)` - Overridden by scripts to process one pass; the result is not used.
+- `public static bool IsLooping(float[] nodeInfo)` - Whether the node info (the array a processing pass returns) says the node loops.
+- `public static float GetRemainingTime(float[] nodeInfo, bool breakLoop = false)` - The time left in the node, from its info array (length minus position).
+
+### AnimationNodeExtension.PlaybackInfoIndex
+
+`public enum PlaybackInfoIndex`
+
+Values: `Time = 0`, `Delta = 1`, `SeekTime = 2`, `IsExternalSeeking = 3`, `Looped = 4`, `Weight = 5`
 
 ### AnimationNodeOneShot
 
@@ -526,6 +575,8 @@ Values: `Root = 0`, `Nested = 1`, `Grouped = 2`
 
 `public class AnimationNodeStateMachinePlayback : Resource` - Where a state machine is and what it is doing; read and driven from scripts as parameters/playback (Godot's AnimationNodeStateMachinePlayback).
 
+- `public event Action<StringName> StateStarted` - Emitted with the state's name when it becomes the current one.
+- `public event Action<StringName> StateFinished` - Emitted with the state's name when the playback leaves it for another state or the end.
 - `public void Travel(StringName toNode, bool resetOnTeleport = true)` - Goes to a state through the transitions (the shortest way).
 - `public void Start(StringName node, bool reset = true)` - Starts playing at a state, at once on the next pass.
 - `public void Next()` - Takes the next transition now: the travel path's next step or the first automatic transition whose conditions hold.
@@ -536,6 +587,13 @@ Values: `Root = 0`, `Nested = 1`, `Grouped = 2`
 - `public float GetCurrentLength()`
 - `public StringName GetFadingFromNode()`
 - `public StringName[] GetTravelPath()` - The states travel() will pass through next, in order, ending at its target.
+
+### AnimationNodeStateMachinePlayback.SignalName
+
+`public new class SignalName : Resource.SignalName`
+
+- `public static readonly StringName StateStarted`
+- `public static readonly StringName StateFinished`
 
 ### AnimationNodeStateMachineTransition
 
@@ -638,6 +696,16 @@ Values: `Immediate = 0`, `Sync = 1`, `AtEnd = 2`
 - `public float GetPlayingSpeed()`
 - `public void Play(StringName? name = null, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)` - Plays an animation.
 - `public void PlayBackwards(StringName? name = null, double customBlend = -1)` - Plays an animation backwards from its end.
+- `public void PlaySection(StringName? name = null, double startTime = -1, double endTime = -1, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)` - Plays startTime to endTime of an animation (a negative time is the animation's start or end).
+- `public void PlaySectionBackwards(StringName? name = null, double startTime = -1, double endTime = -1, double customBlend = -1)`
+- `public void PlaySectionWithMarkers(StringName? name = null, StringName? startMarker = null, StringName? endMarker = null, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)` - Plays between two of the animation's markers (an empty marker name is the animation's start or end).
+- `public void PlaySectionWithMarkersBackwards(StringName? name = null, StringName? startMarker = null, StringName? endMarker = null, double customBlend = -1)`
+- `public void SetSection(double startTime = -1, double endTime = -1)` - Changes the section of the animation that is playing or assigned.
+- `public void SetSectionWithMarkers(StringName? startMarker = null, StringName? endMarker = null)`
+- `public void ResetSection()` - Plays the whole animation again.
+- `public bool HasSection()`
+- `public float GetSectionStartTime()`
+- `public float GetSectionEndTime()`
 - `public void PlayWithCapture(StringName? name = null, double duration = -1.0, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false, Tween.TransitionType transType = Tween.TransitionType.Linear, Tween.EaseType easeType = Tween.EaseType.In)` - Plays an animation after capturing the current values of its capture-mode tracks and fading from them over duration.
 - `public void Stop(bool keepState = false)`
 - `public void Pause()`
@@ -784,6 +852,7 @@ Values: `Disabled = 0`, `Combine = 1`, `CombineReplace = 2`, `Replace = 3`, `Rep
 `public class ArrayMesh : Mesh` - A mesh built from arrays (Godot's ArrayMesh).
 
 - `public Aabb CustomAabb { get; set; }`
+- `public override Vector3[] GetFaces()` - Every triangle of the triangle surfaces as three points, in order.
 - `public void AddSurfaceFromArrays(PrimitiveType primitive, Collections.Array arrays, Collections.Array<Collections.Array>? blendShapes = null, Collections.Dictionary? lods = null, ArrayFormat flags = 0)`
 - `public override int GetSurfaceCount()`
 - `public void ClearSurfaces()`
@@ -1889,6 +1958,45 @@ Values: `Disabled = 0`, `Alpha = 1`, `AlphaScissor = 2`, `AlphaHash = 3`, `Alpha
 - `public Skeleton3D? GetSkeleton()` - The skeleton it follows.
 - `public void OnSkeletonUpdate()` - Moves the node to the bone now.
 
+### BoneConstraint3D
+
+`public class BoneConstraint3D : SkeletonModifier3D` - The base of the modifiers that apply a bone from a reference bone or node, one setting per apply bone (Godot's BoneConstraint3D).
+
+- `public int SettingCount { get; set; }`
+- `public int GetSettingCount()`
+- `public void SetSettingCount(int count)`
+- `public void ClearSetting(int index)`
+- `public void SetAmount(int index, float amount)`
+- `public float GetAmount(int index)`
+- `public void SetApplyBoneName(int index, StringName name)`
+- `public StringName GetApplyBoneName(int index)`
+- `public void SetApplyBone(int index, int bone)`
+- `public int GetApplyBone(int index)`
+- `public void SetReferenceBoneName(int index, StringName name)`
+- `public StringName GetReferenceBoneName(int index)`
+- `public void SetReferenceBone(int index, int bone)`
+- `public int GetReferenceBone(int index)`
+- `public void SetReferenceNode(int index, NodePath path)`
+- `public NodePath GetReferenceNode(int index)`
+- `public override void _ProcessModification()`
+
+### BoneConstraint3D.ReferenceTypeEnum
+
+`public enum ReferenceTypeEnum`
+
+Values: `Bone = 0`, `Node = 1`
+
+### BoneConstraint3D.Setting
+
+`public class Setting` - One apply bone with its reference and amount; subclasses add their own fields.
+
+- `public string ApplyBone`
+- `public string ReferenceBone`
+- `public ReferenceTypeEnum ReferenceType`
+- `public NodePath ReferenceNode`
+- `public float Amount`
+- `public Dictionary<string, Variant> Extra`
+
 ### BoxContainer
 
 `public class BoxContainer : Container` - Lays children out in a row or a column (Godot's BoxContainer).
@@ -1905,9 +2013,12 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 
 ### BoxMesh
 
-`public class BoxMesh : Mesh` - A box mesh (Godot's BoxMesh), size in metres.
+`public class BoxMesh : PrimitiveMesh` - A box mesh (Godot's BoxMesh), size in metres.
 
 - `public Vector3 Size { get; set; }`
+- `public int SubdivideWidth { get; set; }`
+- `public int SubdivideHeight { get; set; }`
+- `public int SubdivideDepth { get; set; }`
 
 ### BoxOccluder3D
 
@@ -1922,6 +2033,7 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 `public class BoxShape3D : Shape3D`
 
 - `public Vector3 Size { get; set; }` - The full size of the box (not the half extents).
+- `public Vector3 Extents { get; set; }` - The half extents (Godot 3's name; Size is twice this).
 
 ### Button
 
@@ -2157,6 +2269,15 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 
 - `public static readonly StringName VisibilityChanged`
 
+### CapsuleMesh
+
+`public class CapsuleMesh : PrimitiveMesh` - A cylinder with a hemisphere on each end (Godot's CapsuleMesh); the height is the whole length.
+
+- `public float Radius { get; set; }`
+- `public float Height { get; set; }`
+- `public int RadialSegments { get; set; }`
+- `public int Rings { get; set; }`
+
 ### CapsuleShape3D
 
 `public class CapsuleShape3D : Shape3D`
@@ -2278,6 +2399,21 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public Rid GetRid()` - The object's id as a physics resource id (what query exclude lists and the physics server take).
 - `public void AddCollisionExceptionWith(Node body)` - Stops this object colliding with another one (Godot's add_collision_exception_with).
 - `public void RemoveCollisionExceptionWith(Node body)`
+- `public uint CreateShapeOwner(GodotObject owner)` - Makes an owner for shapes a script adds (Godot's create_shape_owner); returns its id.
+- `public void RemoveShapeOwner(uint ownerId)`
+- `public int[] GetShapeOwners()` - The ids of every owner: the CollisionShape3D children, then the ones made by CreateShapeOwner.
+- `public GodotObject? ShapeOwnerGetOwner(uint ownerId)`
+- `public void ShapeOwnerSetTransform(uint ownerId, Transform3D transform)`
+- `public Transform3D ShapeOwnerGetTransform(uint ownerId)`
+- `public void ShapeOwnerSetDisabled(uint ownerId, bool disabled)`
+- `public bool IsShapeOwnerDisabled(uint ownerId)`
+- `public void ShapeOwnerAddShape(uint ownerId, Shape3D shape)`
+- `public int ShapeOwnerGetShapeCount(uint ownerId)`
+- `public Shape3D? ShapeOwnerGetShape(uint ownerId, int shapeId)`
+- `public void ShapeOwnerRemoveShape(uint ownerId, int shapeId)`
+- `public void ShapeOwnerClearShapes(uint ownerId)`
+- `public int ShapeOwnerGetShapeIndex(uint ownerId, int shapeId)` - The index the body gives a shape of this owner (Godot's shape_owner_get_shape_index): the shapes count from the first child's.
+- `public uint ShapeFindOwner(int shapeIndex)` - The owner of the shape at this index of the body (Godot's shape_find_owner).
 
 ### CollisionObject3D.SignalName
 
@@ -2287,12 +2423,22 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public static readonly StringName MouseEntered`
 - `public static readonly StringName MouseExited`
 
+### CollisionPolygon3D
+
+`public class CollisionPolygon3D : CollisionShape3D` - A polygon in the node's XY plane extruded along Z, centred, as one collision shape (Godot's CollisionPolygon3D): a convex polygon makes a convex shape, any other a triangle mesh.
+
+- `public Vector2[] Polygon { get; set; }`
+- `public float Depth { get; set; }`
+- `public float Margin { get; set; }`
+
 ### CollisionShape3D
 
 `public class CollisionShape3D : Node3D` - A shape for the collision node above it (Godot's CollisionShape3D).
 
 - `public Shape3D? Shape { get; set; }`
 - `public bool Disabled { get; set; }` - A disabled shape is not part of its parent's body.
+- `public Color DebugColor { get; set; }` - The colour the shape is drawn in when the tree shows collisions (SceneTree.DebugCollisionsHint); (0, 0, 0, 0) takes the engine's own by body kind.
+- `public bool DebugFill { get; set; }` - Whether the debug drawing fills the shape.
 
 ### Color
 
@@ -2509,6 +2655,21 @@ Values: `HsvRectangle = 0`, `HsvWheel = 1`, `VhsCircle = 2`, `OkhslCircle = 3`, 
 `public class ConcavePolygonShape3D : Shape3D`
 
 - `public Vector3[] Data { get; set; }`
+- `public bool BackfaceCollision { get; set; }` - Whether a ray hits the back of a triangle.
+- `public Vector3[] GetFaces()` - The triangles as three points each (Godot's get_faces).
+
+### ConeTwistJoint3D
+
+`public class ConeTwistJoint3D : Joint3D` - A cone and a twist about the node's X axis (Godot's ConeTwistJoint3D).
+
+- `public void SetParam(Param param, float value)`
+- `public float GetParam(Param param)`
+
+### ConeTwistJoint3D.Param
+
+`public enum Param`
+
+Values: `SwingSpan = 0`, `TwistSpan = 1`, `Bias = 2`, `Softness = 3`, `Relaxation = 4`, `Max = 5`
 
 ### ConfigFile
 
@@ -2779,11 +2940,55 @@ Values: `ShrinkBegin = 0`, `Fill = 1`, `Expand = 2`, `ExpandFill = 3`, `ShrinkCe
 
 Values: `Inherited = 3`, `Auto = 0`, `Ltr = 1`, `Rtl = 2`
 
+### ConvertTransformModifier3D
+
+`public class ConvertTransformModifier3D : BoneConstraint3D` - Maps a value of the reference's transform onto a value of the bone's, through a range (Godot's ConvertTransformModifier3D).
+
+- `public void SetApplyTransformMode(int index, TransformMode mode)`
+- `public TransformMode GetApplyTransformMode(int index)`
+- `public void SetApplyAxis(int index, Vector3.Axis axis)`
+- `public Vector3.Axis GetApplyAxis(int index)`
+- `public void SetApplyRangeMin(int index, float v)`
+- `public float GetApplyRangeMin(int index)`
+- `public void SetApplyRangeMax(int index, float v)`
+- `public float GetApplyRangeMax(int index)`
+- `public void SetReferenceTransformMode(int index, TransformMode mode)`
+- `public TransformMode GetReferenceTransformMode(int index)`
+- `public void SetReferenceAxis(int index, Vector3.Axis axis)`
+- `public Vector3.Axis GetReferenceAxis(int index)`
+- `public void SetReferenceRangeMin(int index, float v)`
+- `public float GetReferenceRangeMin(int index)`
+- `public void SetReferenceRangeMax(int index, float v)`
+- `public float GetReferenceRangeMax(int index)`
+
+### ConvertTransformModifier3D.TransformMode
+
+`public enum TransformMode`
+
+Values: `Position = 0`, `Rotation = 1`, `Scale = 2`
+
 ### ConvexPolygonShape3D
 
 `public class ConvexPolygonShape3D : Shape3D`
 
 - `public Vector3[] Points { get; set; }`
+
+### CopyTransformModifier3D
+
+`public class CopyTransformModifier3D : BoneConstraint3D` - Copies a reference's position, rotation or scale onto a bone, per axis (Godot's CopyTransformModifier3D).
+
+- `public const int TransformFlagPosition`
+- `public const int AxisFlagX`
+- `public void SetCopyFlags(int index, int flags)`
+- `public int GetCopyFlags(int index)`
+- `public void SetAxisFlags(int index, int flags)`
+- `public int GetAxisFlags(int index)`
+- `public void SetInvertFlags(int index, int flags)`
+- `public int GetInvertFlags(int index)`
+- `public void SetRelative(int index, bool relative)`
+- `public bool IsRelative(int index)`
+- `public void SetAdditive(int index, bool additive)`
+- `public bool IsAdditive(int index)`
 
 ### Corner
 
@@ -2969,6 +3174,18 @@ Values: `Free = 0`, `Linear = 1`
 - `public Transform3D SampleBakedWithRotation(float offset, bool cubic = false, bool applyTilt = false)` - The position and the orientation (-Z along the path, Y the up vector) at offset.
 - `public Vector3 GetClosestPoint(Vector3 toPoint)` - The point of the baked curve nearest to toPoint.
 - `public float GetClosestOffset(Vector3 toPoint)` - How far along the baked curve the point nearest to toPoint is.
+
+### CylinderMesh
+
+`public class CylinderMesh : PrimitiveMesh` - A cylinder with its own top and bottom radius (Godot's CylinderMesh; a cone when one is 0).
+
+- `public float TopRadius { get; set; }`
+- `public float BottomRadius { get; set; }`
+- `public float Height { get; set; }`
+- `public int RadialSegments { get; set; }`
+- `public int Rings { get; set; }`
+- `public bool CapTop { get; set; }`
+- `public bool CapBottom { get; set; }`
 
 ### CylinderShape3D
 
@@ -3257,7 +3474,7 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 - `public static long GetPhysicsFrames()`
 - `public static double TimeScale { get; set; }`
 - `public static int PhysicsTicksPerSecond { get; set; }` - The physics step rate: 1 / the engine's fixed step (the project's PHYSICS.FIXEDSTEP, 60 when it states none).
-- `public static int MaxPhysicsStepsPerFrame { get; set; }` - The most physics steps one frame runs to catch up.
+- `public static int MaxPhysicsStepsPerFrame { get; set; }` - The most physics steps one frame runs to catch up (the engine's PHYSICS.MAXSTEPS, 1 to 64; a larger value is held at 64).
 - `public static int MaxFps { get; set; }` - The frame rate cap, 0 for none.
 - `public static double PhysicsJitterFix { get; set; }` - Godot's jitter fix for fixed steps.
 - `public static bool PrintErrorMessages { get; set; }` - Whether the engine prints errors from scripts.
@@ -3804,6 +4021,65 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 - `public static void SetMember(Variant target, string name, Variant value)`
 - `public static Variant CallMethod(Variant target, string method, params Variant[] args)` - A method call on a value whose type is not known: objects by name (Godot's or C#'s), and the common methods of the built-in types.
 
+### Generic6DOFJoint3D
+
+`public class Generic6DOFJoint3D : Joint3D` - Six axes, each locked, limited, sprung or driven (Godot's Generic6DOFJoint3D).
+
+- `public void SetParamX(Param param, float value)`
+- `public void SetParamY(Param param, float value)`
+- `public void SetParamZ(Param param, float value)`
+- `public float GetParamX(Param param)`
+- `public float GetParamY(Param param)`
+- `public float GetParamZ(Param param)`
+- `public void SetFlagX(Flag flag, bool value)`
+- `public void SetFlagY(Flag flag, bool value)`
+- `public void SetFlagZ(Flag flag, bool value)`
+- `public bool GetFlagX(Flag flag)`
+- `public bool GetFlagY(Flag flag)`
+- `public bool GetFlagZ(Flag flag)`
+
+### Generic6DOFJoint3D.Flag
+
+`public enum Flag`
+
+Values: `EnableLinearLimit = 0`, `EnableAngularLimit = 1`, `EnableAngularSpring = 2`, `EnableLinearSpring = 3`, `EnableLinearMotor = 4`, `EnableMotor = 5`, `Max = 6`
+
+### Generic6DOFJoint3D.Param
+
+`public enum Param`
+
+Values: `LinearLowerLimit = 0`, `LinearUpperLimit = 1`, `LinearLimitSoftness = 2`, `LinearRestitution = 3`, `LinearDamping = 4`, `LinearMotorTargetVelocity = 5`, `LinearMotorForceLimit = 6`, `LinearSpringStiffness = 7`, `LinearSpringDamping = 8`, `LinearSpringEquilibriumPoint = 9`, `AngularLowerLimit = 10`, `AngularUpperLimit = 11`, `AngularLimitSoftness = 12`, `AngularDamping = 13`, `AngularRestitution = 14`, `AngularForceLimit = 15`, `AngularErp = 16`, `AngularMotorTargetVelocity = 17`, `AngularMotorForceLimit = 18`, `AngularSpringStiffness = 19`, `AngularSpringDamping = 20`, `AngularSpringEquilibriumPoint = 21`, `Max = 22`
+
+### Geometry2D
+
+`public static class Geometry2D` - Godot's Geometry2D: polygon and segment helpers in the plane.
+
+- `public static bool IsPolygonClockwise(Vector2[] polygon)` - True when the points run clockwise in Godot's 2D (y down), which is a negative shoelace sum in y up.
+- `public static bool IsPointInPolygon(Vector2 point, Vector2[] polygon)`
+- `public static int[] TriangulatePolygon(Vector2[] polygon)` - The triangles of a simple polygon by ear clipping, as indices into it; empty when it is degenerate.
+- `public static Vector2[] ConvexHull(Vector2[] points)` - The convex hull of the points, counter-clockwise in y up, closed (the first point repeated at the end as Godot does).
+- `public static Vector2 GetClosestPointToSegment(Vector2 point, Vector2 s1, Vector2 s2)`
+- `public static Variant SegmentIntersectsSegment(Vector2 fromA, Vector2 toA, Vector2 fromB, Vector2 toB)` - The point where the segments cross, or nil.
+- `public static Variant LineIntersectsLine(Vector2 fromA, Vector2 dirA, Vector2 fromB, Vector2 dirB)` - The point where two lines (a point and a direction each) cross, or nil.
+
+### Geometry3D
+
+`public static class Geometry3D` - Godot's Geometry3D: intersection tests, planes of boxes, capsules and cylinders, and clipping.
+
+- `public static Variant RayIntersectsTriangle(Vector3 from, Vector3 dir, Vector3 a, Vector3 b, Vector3 c)` - The point where a ray meets the triangle (a, b, c), or nil.
+- `public static Variant SegmentIntersectsTriangle(Vector3 from, Vector3 to, Vector3 a, Vector3 b, Vector3 c)` - The point where the segment from→to meets the triangle, or nil.
+- `public static Vector3[] SegmentIntersectsSphere(Vector3 from, Vector3 to, Vector3 spherePosition, float sphereRadius)` - [point, normal] where the segment first enters the sphere, or an empty array.
+- `public static Vector3[] SegmentIntersectsCylinder(Vector3 from, Vector3 to, float height, float radius)` - [point, normal] where the segment first meets a cylinder along Y, centred on the origin, or an empty array.
+- `public static Vector3[] SegmentIntersectsConvex(Vector3 from, Vector3 to, Collections.Array<Plane> planes)` - [point, normal] where the segment first enters the convex shape bounded by the planes (normals point outward), or an empty array.
+- `public static Vector3 GetClosestPointToSegment(Vector3 point, Vector3 s1, Vector3 s2)` - The nearest point of the segment s1→s2 to the point.
+- `public static Vector3 GetClosestPointToSegmentUncapped(Vector3 point, Vector3 s1, Vector3 s2)` - The nearest point of the infinite line through s1 and s2 to the point.
+- `public static Vector3[] GetClosestPointsBetweenSegments(Vector3 p1, Vector3 p2, Vector3 q1, Vector3 q2)` - The nearest pair of points between two segments: [on p1→p2, on q1→q2].
+- `public static Vector3[] ClipPolygon(Vector3[] points, Plane plane)` - The polygon cut by the plane, keeping what is behind it (Godot's inside).
+- `public static Collections.Array<Plane> BuildBoxPlanes(Vector3 extents)` - The six planes of a box with these half extents, outward normals.
+- `public static Collections.Array<Plane> BuildCylinderPlanes(float radius, float height, int sides, Vector3.Axis axis = Vector3.Axis.Z)` - The planes of a cylinder: sides around its axis and a cap at each end.
+- `public static Collections.Array<Plane> BuildCapsulePlanes(float radius, float height, int sides, int lats, Vector3.Axis axis = Vector3.Axis.Z)` - The planes of a capsule: sides around its axis and lats latitude rings on each cap.
+- `public static Vector3[] ComputeConvexMeshPoints(Collections.Array<Plane> planes)` - The corner points of the convex shape the planes bound.
+
 ### GeometryInstance3D
 
 `public class GeometryInstance3D : VisualInstance3D`
@@ -4138,9 +4414,40 @@ Values: `Linear = 0`, `Constant = 1`, `Cubic = 2`
 
 `public class HBoxContainer : BoxContainer` - A row (Godot's HBoxContainer).
 
+### HeightMapShape3D
+
+`public class HeightMapShape3D : Shape3D` - A terrain made of a grid of heights (Godot's HeightMapShape3D): MapWidth points along X and MapDepth along Z, one metre apart, centred on the origin, MapData the heights row by row.
+
+- `public int MapWidth { get; set; }`
+- `public int MapDepth { get; set; }`
+- `public float[] MapData { get; set; }`
+- `public float GetMinHeight()` - The lowest and highest height (Godot's get_min_value, get_max_value).
+- `public float GetMaxHeight()`
+
 ### HFlowContainer
 
 `public class HFlowContainer : FlowContainer`
+
+### HingeJoint3D
+
+`public class HingeJoint3D : Joint3D` - A hinge about the node's Z axis (Godot's HingeJoint3D).
+
+- `public void SetParam(Param param, float value)`
+- `public float GetParam(Param param)`
+- `public void SetFlag(Flag flag, bool enabled)`
+- `public bool GetFlag(Flag flag)`
+
+### HingeJoint3D.Flag
+
+`public enum Flag`
+
+Values: `UseLimit = 0`, `EnableMotor = 1`, `Max = 2`
+
+### HingeJoint3D.Param
+
+`public enum Param`
+
+Values: `Bias = 0`, `LimitUpper = 1`, `LimitLower = 2`, `LimitBias = 3`, `LimitSoftness = 4`, `LimitRelaxation = 5`, `MotorTargetVelocity = 6`, `MotorMaxImpulse = 7`, `Max = 8`
 
 ### HorizontalAlignment
 
@@ -4550,6 +4857,16 @@ Values: `Single = 0`, `Multi = 1`, `Toggle = 2`
 - `public static readonly StringName MultiSelected`
 - `public static readonly StringName ItemActivated`
 
+### Joint3D
+
+`public abstract class Joint3D : Node3D` - Base of the joint nodes (Godot's Joint3D): two bodies named by path, a solver priority and whether the pair may touch.
+
+- `public NodePath NodeA { get; set; }` - The first body, a path from this node; empty for the world.
+- `public NodePath NodeB { get; set; }` - The second body, a path from this node; empty for the world.
+- `public int SolverPriority { get; set; }` - Kept for scenes: the solver's own order for joints is the engine's.
+- `public bool ExcludeNodesFromCollision { get; set; }` - Stops the two bodies colliding with each other while joined.
+- `public Rid GetRid()` - The joint as a physics id (0 until it is built).
+
 ### JoyAxis
 
 `public enum JoyAxis`
@@ -4861,6 +5178,36 @@ Values: `Disabled = 0`, `Subdiv4 = 1`, `Subdiv8 = 2`, `Subdiv16 = 3`, `Subdiv32 
 
 Values: `Always = 0`, `OnHover = 1`, `Never = 2`
 
+### LookAtModifier3D
+
+`public class LookAtModifier3D : SkeletonModifier3D` - Turns a bone to face a node (Godot's LookAtModifier3D).
+
+- `public NodePath TargetNode { get; set; }`
+- `public StringName BoneName { get; set; }`
+- `public BoneAxis ForwardAxis { get; set; }`
+- `public Vector3.Axis PrimaryRotationAxis { get; set; }`
+- `public bool UseSecondaryRotation { get; set; }`
+- `public OriginFromEnum OriginFrom { get; set; }`
+- `public StringName OriginBoneName { get; set; }`
+- `public NodePath OriginExternalNode { get; set; }`
+- `public Vector3 OriginOffset { get; set; }`
+- `public float OriginSafeMargin { get; set; }`
+- `public float Duration { get; set; }` - Seconds to turn to a new target (0: at once); approximated by exponential smoothing.
+- `public bool UseAngleLimitation { get; set; }`
+- `public float PrimaryLimitAngle { get; set; }` - The widest the bone may turn from its rest direction, radians (the symmetric primary limit).
+- `public bool SymmetryLimitation { get; set; }`
+- `public Tween.TransitionType TransitionType { get; set; }`
+- `public Tween.EaseType EaseType { get; set; }`
+- `public float GetInterpolationRemaining()`
+- `public bool IsInterpolating()`
+- `public override void _ProcessModification()`
+
+### LookAtModifier3D.OriginFromEnum
+
+`public enum OriginFromEnum`
+
+Values: `Self = 0`, `SpecificBone = 1`, `ExternalNode = 2`
+
 ### MarginContainer
 
 `public class MarginContainer : Container` - Insets its children by four margins (Godot's MarginContainer; the margins are theme constants margin_left, margin_top, ...).
@@ -5023,6 +5370,10 @@ Values: `Always = 0`, `OnHover = 1`, `Never = 2`
 - `public virtual Material? SurfaceGetMaterial(int surfIdx)`
 - `public virtual void SurfaceSetMaterial(int surfIdx, Material? material)`
 - `public virtual Aabb GetAabb()`
+- `public static float ThinPrimitiveWidth { get; set; }` - The width, in metres, a line or a point is drawn at: lines and points are drawn as crossed quads this wide (see MeshSurface).
+- `public virtual Vector3[] GetFaces()` - Every triangle as three points, in order (Godot's get_faces).
+- `public ConcavePolygonShape3D? CreateTrimeshShape()` - A shape that collides like the mesh: its triangles, hollow (Godot's create_trimesh_shape).
+- `public ConvexPolygonShape3D? CreateConvexShape()` - A solid convex shape around the mesh's points (Godot's create_convex_shape).
 
 ### Mesh.ArrayFormat
 
@@ -5078,6 +5429,14 @@ Values: `Points = 0`, `Lines = 1`, `LineStrip = 2`, `Triangles = 3`, `TriangleSt
 - `public int GetSurfaceOverrideMaterialCount()`
 - `public Material? GetSurfaceOverrideMaterial(int surface)`
 - `public void SetSurfaceOverrideMaterial(int surface, Material? material)`
+- `public NodePath SkeletonPath { get; set; }` - The path to the Skeleton3D that poses this mesh (default "..", the node's parent).
+- `public Skin? Skin { get; set; }`
+- `public SkinReference? GetSkinReference()`
+- `public int GetBlendShapeCount()`
+- `public int FindBlendShapeByName(StringName name)` - The index of a blend shape by name, or -1 (a name the node has not seen is not a blend shape of its mesh).
+- `public float GetBlendShapeValue(int blendShape)`
+- `public void SetBlendShapeValue(int blendShape, float value)`
+- `public string GetBlendShapeName(int blendShape)`
 
 ### MeshLibrary
 
@@ -5565,6 +5924,18 @@ Values: `RootNodeChildren = 0`, `GroupsWithChildren = 1`, `GroupsExplicit = 2`, 
 
 `public static class NavigationServer3D` - The navigation server: maps, regions, links, avoidance agents and obstacles, path queries and navigation mesh baking.
 
+- `public static void SetDebugEnabled(bool enabled)` - Whether the navigation debug drawing is on (Godot's set_debug_enabled).
+- `public static bool GetDebugEnabled()`
+- `public static float AgentGetRadius(Rid agent)`
+- `public static float AgentGetHeight(Rid agent)`
+- `public static float AgentGetMaxSpeed(Rid agent)`
+- `public static float AgentGetNeighborDistance(Rid agent)`
+- `public static int AgentGetMaxNeighbors(Rid agent)`
+- `public static float AgentGetTimeHorizonAgents(Rid agent)`
+- `public static float AgentGetTimeHorizonObstacles(Rid agent)`
+- `public static uint AgentGetAvoidanceLayers(Rid agent)`
+- `public static uint AgentGetAvoidanceMask(Rid agent)`
+- `public static float AgentGetAvoidancePriority(Rid agent)`
 - `public static event Action<Rid>? MapChanged` - Emitted when a map's polygons were rebuilt after a change (Godot's map_changed).
 - `public static void SetActive(bool active)` - Turns navigation processing on or off (Godot's set_active).
 - `public static Rid GetDefaultMapRid()` - The map the 3D world uses (NavigationMap): made on first use.
@@ -5807,7 +6178,6 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public void RemoveFromGroup(StringName group)`
 - `public bool IsInGroup(StringName group)`
 - `public Collections.Array<StringName> GetGroups()`
-- `public void ResetPhysicsInterpolation()` - Godot's reset_physics_interpolation.
 - `public void QueueFree()` - Frees the node and its descendants at the end of the frame (Godot's queue_free).
 - `public override void Free()` - Frees the node and its descendants now.
 - `public Node Duplicate(int flags = 15)` - Copies this node and its descendants: same class, name, properties and children; groups and signals as the flags say.
@@ -5819,6 +6189,10 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public Tween CreateTween()` - A tween bound to this node: it stops when the node is freed, waits while the node is out of the tree, and pauses with it.
 - `public bool IsInsideTree()`
 - `public bool IsNodeReady()` - Whether _Ready has run for this node.
+- `public PhysicsInterpolationModeEnum PhysicsInterpolationMode { get; set; }`
+- `public bool IsPhysicsInterpolated()` - True when this node's mode, or the first one above it that is not Inherit, is On (the tree's switch not asked).
+- `public bool IsPhysicsInterpolatedAndEnabled()` - True when IsPhysicsInterpolated and the tree's switch (PhysicsInterpolation) is on.
+- `public void ResetPhysicsInterpolation()` - The next position of the node is a teleport: it is drawn there at once instead of sliding from where it was (Godot's reset_physics_interpolation).
 
 ### Node.DuplicateFlags
 
@@ -5848,6 +6222,12 @@ Values: `Disabled = 0`, `Front = 1`, `Back = 2`
 - `public static readonly StringName RemoveChild`
 - `public static readonly StringName GetNode`
 - `public static readonly StringName GetParent`
+
+### Node.PhysicsInterpolationModeEnum
+
+`public enum PhysicsInterpolationModeEnum` - Whether a node is drawn between its last two physics steps: On, Off, or whatever its parent is (Godot's physics_interpolation_mode).
+
+Values: `Inherit = 0`, `On = 1`, `Off = 2`
 
 ### Node.ProcessModeEnum
 
@@ -5933,6 +6313,7 @@ Values: `Inherit = 0`, `Pausable = 1`, `WhenPaused = 2`, `Always = 3`, `Disabled
 - `public void Show()`
 - `public void Hide()`
 - `public bool IsVisibleInTree()` - True when this node and every Node3D ancestor are visible and the node is in the tree.
+- `public Transform3D GetGlobalTransformInterpolated()` - The global transform as it is drawn this frame, between the last two physics steps (Godot's get_global_transform_interpolated).
 
 ### Node3D.PropertyName
 
@@ -6285,6 +6666,56 @@ Values: `Region = 0`, `Link = 1`
 
 Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigationProcess = 3`, `MemoryStatic = 4`, `MemoryStaticMax = 5`, `MemoryMessageBufferMax = 6`, `ObjectCount = 7`, `ObjectResourceCount = 8`, `ObjectNodeCount = 9`, `ObjectOrphanNodeCount = 10`, `RenderTotalObjectsInFrame = 11`, `RenderTotalPrimitivesInFrame = 12`, `RenderTotalDrawCallsInFrame = 13`, `RenderVideoMemUsed = 14`, `RenderTextureMemUsed = 15`, `RenderBufferMemUsed = 16`, `Physics2DActiveObjects = 17`, `Physics2DCollisionPairs = 18`, `Physics2DIslandCount = 19`, `Physics3DActiveObjects = 20`, `Physics3DCollisionPairs = 21`, `Physics3DIslandCount = 22`, `AudioOutputLatency = 23`, `NavigationActiveMaps = 24`, `NavigationRegionCount = 25`, `NavigationAgentCount = 26`, `NavigationLinkCount = 27`, `NavigationPolygonCount = 28`, `NavigationEdgeCount = 29`, `NavigationEdgeMergeCount = 30`, `NavigationEdgeConnectionCount = 31`, `NavigationEdgeFreeCount = 32`, `NavigationObstacleCount = 33`, `PipelineCompilationsCanvas = 34`, `PipelineCompilationsMesh = 35`, `PipelineCompilationsSurface = 36`, `PipelineCompilationsDraw = 37`, `PipelineCompilationsSpecialization = 38`, `Navigation2DActiveMaps = 39`, `Navigation2DRegionCount = 40`, `Navigation2DAgentCount = 41`, `Navigation2DLinkCount = 42`, `Navigation2DPolygonCount = 43`, `Navigation2DEdgeCount = 44`, `Navigation2DEdgeMergeCount = 45`, `Navigation2DEdgeConnectionCount = 46`, `Navigation2DEdgeFreeCount = 47`, `Navigation2DObstacleCount = 48`, `Navigation3DActiveMaps = 49`, `Navigation3DRegionCount = 50`, `Navigation3DAgentCount = 51`, `Navigation3DLinkCount = 52`, `Navigation3DPolygonCount = 53`, `Navigation3DEdgeCount = 54`, `Navigation3DEdgeMergeCount = 55`, `Navigation3DEdgeConnectionCount = 56`, `Navigation3DEdgeFreeCount = 57`, `Navigation3DObstacleCount = 58`, `Max = 59`
 
+### PhysicalBone3D
+
+`public class PhysicalBone3D : PhysicsBody3D` - One bone of a ragdoll (Godot's PhysicalBone3D).
+
+- `public StringName BoneName { get; set; }`
+- `public JointTypeEnum JointType { get; set; }`
+- `public Transform3D JointOffset { get; set; }`
+- `public Transform3D BodyOffset { get; set; }`
+- `public float Mass { get; set; }`
+- `public float Friction { get; set; }`
+- `public float Bounce { get; set; }`
+- `public float GravityScale { get; set; }`
+- `public bool CanSleep { get; set; }`
+- `public bool CustomIntegrator { get; set; }`
+- `public DampMode LinearDampMode { get; set; }`
+- `public DampMode AngularDampMode { get; set; }`
+- `public float LinearDamp { get; set; }`
+- `public float AngularDamp { get; set; }`
+- `public Vector3 LinearVelocity { get; set; }`
+- `public Vector3 AngularVelocity { get; set; }`
+- `public Variant GetJointConstraint(string name)` - The joint's constraint values as the scene stores them (joint_constraints/swing_span and so on); the converter turns the ones the engine has into the .ocragdoll limits.
+- `public int GetBoneId()`
+- `public bool IsSimulatingPhysics()` - True while the skeleton's ragdoll is running.
+- `public bool GetSimulatePhysics()`
+- `public void ApplyCentralImpulse(Vector3 impulse)` - Pushes the bone's part; a bone the ragdoll has no part for passes it to the nearest ancestor part.
+- `public void ApplyImpulse(Vector3 impulse, Vector3 position = default)` - The engine applies an impulse at the part's centre, so the point is not used.
+
+### PhysicalBone3D.DampMode
+
+`public enum DampMode`
+
+Values: `Combine = 0`, `Replace = 1`
+
+### PhysicalBone3D.JointTypeEnum
+
+`public enum JointTypeEnum`
+
+Values: `None = 0`, `Pin = 1`, `Cone = 2`, `Hinge = 3`, `Slider = 4`, `Joint6Dof = 5`
+
+### PhysicalBoneSimulator3D
+
+`public class PhysicalBoneSimulator3D : SkeletonModifier3D` - The node that runs a skeleton's physical bones (Godot 4.3).
+
+- `public PhysicalBoneSimulator3D()`
+- `public void PhysicalBonesStartSimulation(Collections.Array<StringName>? bones = null)`
+- `public void PhysicalBonesStopSimulation()`
+- `public bool IsSimulatingPhysics()`
+- `public void PhysicalBonesAddCollisionException(Rid body)`
+- `public void PhysicalBonesRemoveCollisionException(Rid body)`
+
 ### PhysicalSkyMaterial
 
 `public class PhysicalSkyMaterial : SkyMaterial`
@@ -6312,6 +6743,7 @@ Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigat
 - `public bool AxisLockAngularX { get; set; }`
 - `public bool AxisLockAngularY { get; set; }`
 - `public bool AxisLockAngularZ { get; set; }`
+- `public bool TestMove(Transform3D from, Vector3 motion, KinematicCollision3D? collision = null, float safeMargin = 0.001f, bool recoveryAsCollision = false, int maxCollisions = 1)` - Whether the body would hit something if it moved by motion from from; the body stays where it is.
 
 ### PhysicsDirectBodyState3D
 
@@ -6349,6 +6781,7 @@ Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigat
 - `public float[] CastMotion(PhysicsShapeQueryParameters3D parameters)` - How far the shape can move along its Motion before it touches: [safe, unsafe] fractions of the motion, both 1 when nothing is in the way.
 - `public Collections.Array<Vector3> CollideShape(PhysicsShapeQueryParameters3D parameters, int maxResults = 32)` - The points where the shape touches things: pairs (on the shape, on the other object), as Godot returns them.
 - `public Collections.Dictionary GetRestInfo(PhysicsShapeQueryParameters3D parameters)` - The deepest contact of the shape: point, normal, rid, collider_id, shape and linear_velocity; empty when it touches nothing.
+- `public Collections.Array<Collections.Dictionary> IntersectPoint(PhysicsPointQueryParameters3D parameters, int maxResults = 32)` - The objects whose shape holds the point: a dictionary each with collider, collider_id, rid and shape.
 
 ### PhysicsMaterial
 
@@ -6358,6 +6791,16 @@ Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigat
 - `public bool Rough { get; set; }`
 - `public float Bounce { get; set; }`
 - `public bool Absorbent { get; set; }`
+
+### PhysicsPointQueryParameters3D
+
+`public class PhysicsPointQueryParameters3D : RefCounted` - A point query (Godot's PhysicsPointQueryParameters3D).
+
+- `public Vector3 Position { get; set; }`
+- `public uint CollisionMask { get; set; }`
+- `public bool CollideWithBodies { get; set; }`
+- `public bool CollideWithAreas { get; set; }`
+- `public Collections.Array<Rid> Exclude { get; set; }`
 
 ### PhysicsRayQueryParameters3D
 
@@ -6389,6 +6832,9 @@ Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigat
 - `public static uint BodyGetCollisionMask(Rid body)`
 - `public static void BodyAddCollisionException(Rid body, Rid exceptedBody)`
 - `public static void BodyRemoveCollisionException(Rid body, Rid exceptedBody)`
+- `public static void SpaceSetParam(Rid space, SpaceParameter param, float value)` - Sets one of the space's solver parameters (Godot's space_set_param).
+- `public static float SpaceGetParam(Rid space, SpaceParameter param)`
+- `public static bool BodyTestMotion(Rid body, PhysicsTestMotionParameters3D parameters, PhysicsTestMotionResult3D? result = null)` - Where a body would get to if it moved (Godot's body_test_motion): fills result and returns true when something is in the way.
 
 ### PhysicsServer3D.BodyState
 
@@ -6396,11 +6842,18 @@ Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigat
 
 Values: `Transform = 0`, `LinearVelocity = 1`, `AngularVelocity = 2`, `Sleeping = 3`, `CanSleep = 4`
 
+### PhysicsServer3D.SpaceParameter
+
+`public enum SpaceParameter`
+
+Values: `ContactRecycleRadius = 0`, `ContactMaxSeparation = 1`, `ContactMaxAllowedPenetration = 2`, `ContactDefaultBias = 3`, `BodyLinearVelocitySleepThreshold = 4`, `BodyAngularVelocitySleepThreshold = 5`, `BodyTimeToSleep = 6`, `SolverIterations = 7`
+
 ### PhysicsShapeQueryParameters3D
 
 `public class PhysicsShapeQueryParameters3D : RefCounted` - A shape query (Godot's PhysicsShapeQueryParameters3D).
 
 - `public Shape3D? Shape { get; set; }`
+- `public Rid ShapeRid { get; set; }` - The shape by its physics id (GetRid): setting it sets Shape; 0 when there is none.
 - `public Transform3D Transform { get; set; }`
 - `public float Margin { get; set; }` - How far past the surface counts as touching, in metres.
 - `public Vector3 Motion { get; set; }` - For CastMotion: where the shape is moving to, as a displacement.
@@ -6408,6 +6861,51 @@ Values: `Transform = 0`, `LinearVelocity = 1`, `AngularVelocity = 2`, `Sleeping 
 - `public Collections.Array<Rid> Exclude { get; set; }`
 - `public bool CollideWithBodies { get; set; }`
 - `public bool CollideWithAreas { get; set; }`
+
+### PhysicsTestMotionParameters3D
+
+`public class PhysicsTestMotionParameters3D : RefCounted` - The question for PhysicsServer3D.BodyTestMotion (Godot's PhysicsTestMotionParameters3D).
+
+- `public Transform3D From { get; set; }`
+- `public Vector3 Motion { get; set; }`
+- `public float Margin { get; set; }`
+- `public int MaxCollisions { get; set; }`
+- `public bool CollideSeparationRay { get; set; }`
+- `public bool RecoveryAsCollision { get; set; }`
+- `public Collections.Array<Rid> ExcludeBodies { get; set; }`
+- `public Collections.Array<ulong> ExcludeObjects { get; set; }`
+
+### PhysicsTestMotionResult3D
+
+`public class PhysicsTestMotionResult3D : RefCounted` - The answer of PhysicsServer3D.BodyTestMotion (Godot's PhysicsTestMotionResult3D).
+
+- `public Vector3 GetTravel()`
+- `public Vector3 GetRemainder()`
+- `public int GetCollisionCount()`
+- `public float GetCollisionSafeFraction()`
+- `public float GetCollisionUnsafeFraction()`
+- `public Vector3 GetCollisionPoint(int collisionIndex = 0)`
+- `public Vector3 GetCollisionNormal(int collisionIndex = 0)`
+- `public Vector3 GetColliderVelocity(int collisionIndex = 0)`
+- `public float GetCollisionDepth(int collisionIndex = 0)`
+- `public Rid GetColliderRid(int collisionIndex = 0)`
+- `public GodotObject? GetCollider(int collisionIndex = 0)`
+- `public ulong GetColliderId(int collisionIndex = 0)`
+- `public int GetColliderShape(int collisionIndex = 0)`
+- `public int GetCollisionLocalShape(int collisionIndex = 0)`
+
+### PinJoint3D
+
+`public class PinJoint3D : Joint3D` - A point two bodies share (Godot's PinJoint3D, a ball-and-socket).
+
+- `public void SetParam(Param param, float value)`
+- `public float GetParam(Param param)`
+
+### PinJoint3D.Param
+
+`public enum Param`
+
+Values: `Bias = 0`, `Damping = 1`, `ImpulseClamp = 2`
 
 ### Plane
 
@@ -6444,6 +6942,22 @@ Values: `Transform = 0`, `LinearVelocity = 1`, `AngularVelocity = 2`, `Sleeping 
 - `public override readonly bool Equals(object? obj)`
 - `public override readonly int GetHashCode()`
 - `public override readonly string ToString()`
+
+### PlaneMesh
+
+`public class PlaneMesh : PrimitiveMesh` - A flat rectangle in the XZ plane facing up by default (Godot's PlaneMesh).
+
+- `public Vector2 Size { get; set; }`
+- `public int SubdivideWidth { get; set; }`
+- `public int SubdivideDepth { get; set; }`
+- `public Vector3 CenterOffset { get; set; }`
+- `public OrientationEnum Orientation { get; set; }`
+
+### PlaneMesh.OrientationEnum
+
+`public enum OrientationEnum`
+
+Values: `FaceX = 0`, `FaceY = 1`, `FaceZ = 2`
 
 ### PolygonOccluder3D
 
@@ -6595,6 +7109,38 @@ Values: `Transform = 0`, `LinearVelocity = 1`, `AngularVelocity = 2`, `Sleeping 
 - `public static readonly StringName AboutToPopup`
 - `public static readonly StringName CloseRequested`
 
+### PrimBuilder
+
+`public sealed class PrimBuilder` - Collects the vertices and triangles of a generated mesh.
+
+- `public int Vertex(Vector3 p, Vector3 n, Vector2 uv)`
+- `public void Tri(int a, int b, int c)`
+- `public void Quad(int a, int b, int c, int d)`
+- `public void Face(Vector3 origin, Vector3 uEdge, Vector3 vEdge, Vector3 normal, int su, int sv, Vector2 uv0, Vector2 uv1)` - A flat grid of (su+1) by (sv+1) vertices from origin along two edges, facing normal, with UVs spanning the given rectangle.
+
+### PrimitiveMesh
+
+`public abstract class PrimitiveMesh : Mesh` - Base of the generated meshes (Godot's PrimitiveMesh): one triangle surface, built on demand.
+
+- `public Material? Material { get; set; }` - The material of the one surface.
+- `public bool FlipFaces { get; set; }` - Turns every triangle inside out.
+- `public override int GetSurfaceCount()`
+- `public override Material? SurfaceGetMaterial(int surfIdx)`
+- `public override void SurfaceSetMaterial(int surfIdx, Material? material)`
+- `public override Aabb GetAabb()`
+- `public Collections.Array GetMeshArrays()` - The surface's arrays in Godot's layout (vertex, normal, uv, index).
+- `public override Vector3[] GetFaces()` - Every triangle as three points, in order (Godot's get_faces).
+
+### PrismMesh
+
+`public class PrismMesh : PrimitiveMesh` - A triangular prism (Godot's PrismMesh): the apex sits LeftToRight of the width from the left edge.
+
+- `public float LeftToRight { get; set; }`
+- `public Vector3 Size { get; set; }`
+- `public int SubdivideWidth { get; set; }`
+- `public int SubdivideHeight { get; set; }`
+- `public int SubdivideDepth { get; set; }`
+
 ### ProceduralSkyMaterial
 
 `public class ProceduralSkyMaterial : SkyMaterial` - Godot's ProceduralSkyMaterial.
@@ -6687,6 +7233,12 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public PropertyTweener SetEase(Tween.EaseType ease)`
 - `public PropertyTweener SetDelay(double delay)` - Waits this long before the property starts to change.
 - `public PropertyTweener SetCustomInterpolator(Func<float, float> interpolator)` - Replaces the curve with a function of the progress (0 to 1) that returns the eased progress.
+
+### QuadMesh
+
+`public class QuadMesh : PlaneMesh` - A flat rectangle in the XY plane facing +Z by default (Godot's QuadMesh, a PlaneMesh that faces the viewer).
+
+- `public QuadMesh()`
 
 ### QuadOccluder3D
 
@@ -6806,7 +7358,7 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public int GetColliderShape()`
 - `public Vector3 GetCollisionPoint()`
 - `public Vector3 GetCollisionNormal()`
-- `public int GetCollisionFaceIndex()`
+- `public int GetCollisionFaceIndex()` - The triangle the ray hit when the collider is a ConcavePolygonShape3D (its index in the faces), else -1.
 
 ### RaycastWheelGodot
 
@@ -7203,7 +7755,14 @@ Values: `Never = 0`, `Always = 1`, `OnHover = 2`
 - `public float GravityScale { get; set; }`
 - `public float LinearDamp { get; set; }`
 - `public float AngularDamp { get; set; }`
-- `public bool CanSleep { get; set; }`
+- `public DampMode LinearDampMode { get; set; }`
+- `public DampMode AngularDampMode { get; set; }`
+- `public bool CanSleep { get; set; }` - Whether the body may fall asleep when it rests.
+- `public bool ContinuousCd { get; set; }` - Sweeps the body along its motion so a fast one cannot cross a thin wall between two steps.
+- `public bool LockRotation { get; set; }` - Stops the body turning on any axis (Godot's lock_rotation); it still moves.
+- `public CenterOfMassModeEnum CenterOfMassMode { get; set; }` - Auto takes the centre of mass from the shapes; Custom takes CenterOfMass.
+- `public Vector3 CenterOfMass { get; set; }` - The centre of mass in the body's own space, in metres, when the mode is Custom.
+- `public Vector3 Inertia { get; set; }` - The moment of inertia about each axis, kg m^2; all zero (the default) keeps the one the shapes and mass imply.
 - `public bool Freeze { get; set; }` - Holds the body in place (Static, or Kinematic to be moved by script and carry others) until unfrozen.
 - `public FreezeModeEnum FreezeMode { get; set; }`
 - `public bool ContactMonitor { get; set; }`
@@ -7226,6 +7785,18 @@ Values: `Never = 0`, `Always = 1`, `OnHover = 2`
 - `public int GetContactCount()`
 - `public Collections.Array<Node3D> GetCollidingBodies()` - The bodies this one touches now (needs ContactMonitor).
 - `public virtual void _IntegrateForces(PhysicsDirectBodyState3D state)` - Override to move the body yourself: called each physics step with the body's state, before the engine integrates it.
+
+### RigidBody3D.CenterOfMassModeEnum
+
+`public enum CenterOfMassModeEnum`
+
+Values: `Auto = 0`, `Custom = 1`
+
+### RigidBody3D.DampMode
+
+`public enum DampMode` - How the damping above joins the damping an area gives: Combine adds, Replace overrides it.
+
+Values: `Combine = 0`, `Replace = 1`
 
 ### RigidBody3D.FreezeModeEnum
 
@@ -7327,6 +7898,8 @@ Values: `Never = 0`, `Always = 1`, `OnChange = 2`
 - `public bool MultiplayerPoll { get; set; }` - Whether the tree polls its multiplayer APIs at the head of every process frame (Godot's multiplayer_poll).
 - `public MultiplayerApi GetMultiplayer(NodePath? forPath = null)` - The API for a path: the one set for the deepest ancestor path of it, else the default.
 - `public void SetMultiplayer(MultiplayerApi multiplayer, NodePath? rootPath = null)` - Gives a branch its own API.
+- `public bool PhysicsInterpolation { get; set; }` - Whether nodes are drawn between their last two physics steps (Godot's physics_interpolation, the project's physics/common/physics_interpolation until set).
+- `public bool DebugCollisionsHint { get; set; }` - Draws the physics shapes as lines over the scene (Godot's debug_collisions_hint).
 - `public event Action ProcessFrame`
 - `public event Action PhysicsFrame`
 - `public event Action<Node> NodeAdded`
@@ -7457,6 +8030,13 @@ Values: `Disabled = 0`, `Auto = 1`, `ShowAlways = 2`, `ShowNever = 3`, `Reserve 
 - `public bool TryWait()` - Lowers the count by one if it is above zero; false when it is zero.
 - `public void Post(int count = 1)` - Raises the count, waking waiting threads.
 
+### SeparationRayShape3D
+
+`public class SeparationRayShape3D : Shape3D` - A ray that pushes a body out of what it points at (Godot's SeparationRayShape3D), along the shape's local +Z.
+
+- `public float Length { get; set; }`
+- `public bool SlideOnSlope { get; set; }`
+
 ### Separator
 
 `public class Separator : Control` - Base of the separators (Godot's Separator).
@@ -7496,6 +8076,8 @@ Values: `Spatial = 0`, `CanvasItem = 1`, `Particles = 2`, `Sky = 3`, `Fog = 4`
 `public class Shape3D : Resource` - A collision shape resource (Godot's Shape3D).
 
 - `public float Margin { get; set; }`
+- `public new Rid GetRid()` - The shape's id, the same for as long as the shape lives (Godot's get_rid); what a query's shape_rid names.
+- `public ArrayMesh? GetDebugMesh()` - The outline of the shape as a mesh of lines (Godot's get_debug_mesh), for drawing it.
 
 ### ShapeCast3D
 
@@ -7575,6 +8157,12 @@ Values: `Left = 0`, `Top = 1`, `Right = 2`, `Bottom = 3`
 
 `public class Skeleton3D : Node3D` - A hierarchy of bones with rest and current poses (Godot's Skeleton3D).
 
+- `public void PhysicalBonesStartSimulation(Collections.Array<StringName>? bones = null)` - Makes the skeleton a ragdoll (Godot 4.2's Skeleton3D method; 4.3 moved it to PhysicalBoneSimulator3D).
+- `public void PhysicalBonesStopSimulation()`
+- `public void PhysicalBonesAddCollisionException(Rid body)` - Bodies the ragdoll never collides with; the engine's ragdoll parts never collide with each other, and exceptions against other bodies are not kept.
+- `public void PhysicalBonesRemoveCollisionException(Rid body)`
+- `public bool IsSimulatingPhysics()`
+- `public string EngineSkeletonAsset { get; }` - The content path of the engine skeleton (.ocskel) the imported model's skinned meshes are bound to; empty when the node is not bound.
 - `public event Action SkeletonUpdated`
 - `public event Action PoseUpdated`
 - `public event Action<long> BoneEnabledChanged`
@@ -7618,6 +8206,17 @@ Values: `Left = 0`, `Top = 1`, `Right = 2`, `Bottom = 3`
 - `public Variant GetBoneMeta(int boneIdx, StringName key)`
 - `public void ForceUpdateAllBoneTransforms()` - Recomputes the global poses now (they are otherwise recomputed when read) and tells followers.
 - `public void AdvanceModifiers(double delta)` - Runs the modifiers that are children of this skeleton, in order, then tells followers (BoneAttachment3D) the pose changed.
+- `public StringName[] GetBoneMetaList(int boneIdx)`
+- `public bool HasBoneMeta(int boneIdx, StringName key)`
+- `public StringName GetConcatenatedBoneNames()` - The bone names joined by commas, in bone order (Godot's get_concatenated_bone_names).
+- `public void UnparentBoneAndRest(int boneIdx)` - Takes the bone out of its parent's chain and keeps its place in the world: the rest becomes its global rest.
+- `public Skin CreateSkinFromRestTransforms()` - A skin whose binds are the inverses of the bones' global rest poses.
+- `public SkinReference RegisterSkin(Skin skin)` - The skin as bound to this skeleton.
+- `public void ForceUpdateBoneChildTransform(int boneIdx)` - Recomputes the global poses of the children of a bone; poses are always recomputed when read, so this only tells followers.
+- `public void Advance(double delta)` - Runs the modifiers once for delta seconds now (Godot's advance).
+- `public bool AnimatePhysicalBones { get; set; }` - Stored: physical bones follow the animation through the engine's ragdoll, which has no per-bone animation switch.
+- `public void SetAnimatePhysicalBones(bool enabled)`
+- `public bool GetAnimatePhysicalBones()`
 
 ### Skeleton3D.ModifierCallbackModeProcessEnum
 
@@ -7665,11 +8264,40 @@ Values: `Physics = 0`, `Idle = 1`
 - `public Skeleton3D? GetSkeleton()`
 - `public virtual void _ProcessModification()` - Overridden by modifiers: edit the skeleton's pose here.
 
+### SkeletonModifier3D.BoneAxis
+
+`public enum BoneAxis` - A direction along a bone's own axes (Godot's SkeletonModifier3D.BoneAxis).
+
+Values: `PlusX = 0`, `MinusX = 1`, `PlusY = 2`, `MinusY = 3`, `PlusZ = 4`, `MinusZ = 5`
+
 ### SkeletonModifier3D.SignalName
 
 `public new class SignalName : Node3D.SignalName`
 
 - `public static readonly StringName ModificationProcessed`
+
+### Skin
+
+`public class Skin : Resource` - The bones a mesh is bound to and their bind poses (Godot's Skin).
+
+- `public void SetBindCount(int count)`
+- `public int GetBindCount()`
+- `public void AddBind(int bone, Transform3D pose)`
+- `public void AddNamedBind(StringName name, Transform3D pose)`
+- `public void SetBindBone(int bindIndex, int bone)`
+- `public int GetBindBone(int bindIndex)`
+- `public void SetBindName(int bindIndex, StringName name)`
+- `public StringName GetBindName(int bindIndex)`
+- `public void SetBindPose(int bindIndex, Transform3D pose)`
+- `public Transform3D GetBindPose(int bindIndex)`
+- `public void ClearBinds()`
+
+### SkinReference
+
+`public class SkinReference : RefCounted` - A skin as bound to one skeleton (Godot's SkinReference).
+
+- `public Skin? GetSkin()`
+- `public Rid GetSkeleton()`
 
 ### Sky
 
@@ -7716,12 +8344,65 @@ Values: `Size32`, `Size64`, `Size128`, `Size256`, `Size512`, `Size1024`, `Size20
 - `public static readonly StringName DragStarted`
 - `public static readonly StringName DragEnded`
 
+### SliderJoint3D
+
+`public class SliderJoint3D : Joint3D` - A slider along the node's X axis (Godot's SliderJoint3D).
+
+- `public void SetParam(Param param, float value)`
+- `public float GetParam(Param param)`
+
+### SliderJoint3D.Param
+
+`public enum Param`
+
+Values: `LinearLimitUpper = 0`, `LinearLimitLower = 1`, `LinearLimitSoftness = 2`, `LinearLimitRestitution = 3`, `LinearLimitDamping = 4`, `LinearMotionSoftness = 5`, `LinearMotionRestitution = 6`, `LinearMotionDamping = 7`, `LinearOrthogonalSoftness = 8`, `LinearOrthogonalRestitution = 9`, `LinearOrthogonalDamping = 10`, `AngularLimitUpper = 11`, `AngularLimitLower = 12`, `AngularLimitSoftness = 13`, `AngularLimitRestitution = 14`, `AngularLimitDamping = 15`, `AngularMotionSoftness = 16`, `AngularMotionRestitution = 17`, `AngularMotionDamping = 18`, `AngularOrthogonalSoftness = 19`, `AngularOrthogonalRestitution = 20`, `AngularOrthogonalDamping = 21`, `Max = 22`
+
+### SoftBody3D
+
+`public class SoftBody3D : MeshInstance3D` - A mesh that deforms under physics (Godot's SoftBody3D).
+
+- `public int SimulationPrecision { get; set; }` - The solver's iterations a step (the engine's, 5 by default).
+- `public float TotalMass { get; set; }`
+- `public float LinearStiffness { get; set; }`
+- `public float PressureCoefficient { get; set; }`
+- `public float DampingCoefficient { get; set; }`
+- `public float DragCoefficient { get; set; }`
+- `public NodePath ParentCollisionIgnore { get; set; }`
+- `public bool RayPickable { get; set; }`
+- `public DisableModeEnum DisableMode { get; set; }`
+- `public uint CollisionLayer { get; set; }`
+- `public uint CollisionMask { get; set; }`
+- `public bool GetCollisionLayerValue(int layerNumber)`
+- `public void SetCollisionLayerValue(int layerNumber, bool value)`
+- `public bool GetCollisionMaskValue(int layerNumber)`
+- `public void SetCollisionMaskValue(int layerNumber, bool value)`
+- `public void SetPointPinned(int pointIndex, bool pinned, NodePath? attachmentPath = null, int insertAt = -1)` - Pins or frees a vertex of the mesh.
+- `public bool IsPointPinned(int pointIndex)`
+- `public Rid GetPhysicsRid()` - The body as a physics id (0 until it exists).
+- `public void AddCollisionExceptionWith(Node body)`
+- `public void RemoveCollisionExceptionWith(Node body)`
+- `public Collections.Array<PhysicsBody3D> GetCollisionExceptions()`
+- `public void ApplyImpulse(int pointIndex, Vector3 impulse)` - A push on one vertex's point, in newton seconds (Godot's apply_impulse).
+- `public void ApplyCentralImpulse(Vector3 impulse)` - A push on every point, in newton seconds, shared by the mass (Godot's apply_central_impulse).
+- `public void ApplyForce(int pointIndex, Vector3 force)` - A force on one vertex's point for one physics step.
+- `public void ApplyCentralForce(Vector3 force)` - A force on the whole body for one physics step.
+- `public Vector3 GetPointTransform(int pointIndex)` - Where a vertex's point is now, in global coordinates (Godot's get_point_transform); the mesh's rest place before the body exists.
+
+### SoftBody3D.DisableModeEnum
+
+`public enum DisableModeEnum`
+
+Values: `Remove = 0`, `KeepActive = 1`
+
 ### SphereMesh
 
-`public class SphereMesh : Mesh`
+`public class SphereMesh : PrimitiveMesh` - A sphere or a hemisphere (Godot's SphereMesh).
 
 - `public float Radius { get; set; }`
 - `public float Height { get; set; }`
+- `public int RadialSegments { get; set; }`
+- `public int Rings { get; set; }`
+- `public bool IsHemisphere { get; set; }`
 
 ### SphereOccluder3D
 
@@ -8253,6 +8934,12 @@ Values: `Disabled = 0`, `Once = 1`, `WhenVisible = 2`, `WhenParentVisible = 3`, 
 - `public void SetColor(Color color)`
 - `public void SetUV(Vector2 uv)`
 - `public void SetUV2(Vector2 uv2)`
+- `public void SetBones(int[] bones)`
+- `public void SetWeights(float[] weights)`
+- `public void SetCustom(int channelIndex, Color customColor)`
+- `public void SetCustomFormat(int channelIndex, CustomFormat format)`
+- `public CustomFormat GetCustomFormat(int channelIndex)`
+- `public int GetSkinWeightCount()`
 - `public void SetSmoothGroup(uint index)` - -1 makes the next vertices flat-shaded; 0 (the default) and above smooth with the vertices of the same group at the same position.
 - `public void SetMaterial(Material? material)`
 - `public void AddVertex(Vector3 vertex)`
@@ -8266,6 +8953,12 @@ Values: `Disabled = 0`, `Once = 1`, `WhenVisible = 2`, `WhenParentVisible = 3`, 
 - `public ArrayMesh? Commit(ArrayMesh? existing = null, Mesh.ArrayFormat flags = 0)` - Adds the surface to existing (or a new ArrayMesh) and returns the mesh.
 - `public void CreateFrom(Mesh existing, int surface)` - Starts from a surface of an ArrayMesh (the arrays, the primitive and the material).
 - `public void AppendFrom(Mesh existing, int surface, Transform3D transform)` - Appends a surface, transformed, to what is held.
+
+### SurfaceTool.CustomFormat
+
+`public enum CustomFormat` - Godot's custom-data formats for SetCustomFormat.
+
+Values: `RgbaUnorm = 0`, `RgbaSnorm = 1`, `RgbaHalf = 2`, `RDouble = 3`, `RgHalf = 4`, `RgbHalf = 5`, `RFloat = 6`, `RgFloat = 7`, `RgbFloat = 8`, `RgbaFloat = 9`, `Max = 10`
 
 ### SystemFont
 
@@ -8852,6 +9545,15 @@ Values: `Physics = 0`, `Idle = 1`
 
 `public sealed class ToolAttribute : Attribute` - Runs a script in the editor (no runtime effect).
 
+### TorusMesh
+
+`public class TorusMesh : PrimitiveMesh` - A torus (Godot's TorusMesh): Rings around the axis, RingSegments around the tube.
+
+- `public float InnerRadius { get; set; }`
+- `public float OuterRadius { get; set; }`
+- `public int Rings { get; set; }`
+- `public int RingSegments { get; set; }`
+
 ### Transform2D
 
 `public struct Transform2D : IEquatable<Transform2D>` - A 2D affine transform by columns X, Y and Origin (Godot's Transform2D).
@@ -9105,6 +9807,15 @@ Values: `Single = 0`, `Row = 1`, `Multi = 2`
 `public enum TreeCellMode`
 
 Values: `String = 0`, `Check = 1`, `Range = 2`, `Icon = 3`, `Custom = 4`
+
+### TriangleMesh
+
+`public class TriangleMesh : RefCounted` - A triangle soup that answers ray and segment queries (Godot's TriangleMesh), built from a list of faces, three points each.
+
+- `public bool CreateFromFaces(Vector3[] faces)`
+- `public Vector3[] GetFaces()`
+- `public Collections.Dictionary IntersectSegment(Vector3 begin, Vector3 end)` - The nearest hit of the segment: position, normal and face_index; empty when it hits nothing.
+- `public Collections.Dictionary IntersectRay(Vector3 begin, Vector3 dir)` - The nearest hit of the ray: position, normal and face_index; empty when it hits nothing.
 
 ### Tween
 
@@ -9881,6 +10592,7 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public bool GuiIsDragSuccessful()` - Whether the last drag ended with a control taking the data.
 - `public void GuiCancelDrag()`
 - `public World3D World3D { get; set; }` - The 3D world of this viewport: its physics space.
+- `public World3D FindWorld3D()` - The 3D world this viewport draws and simulates in (Godot's find_world_3d, which walks up to the viewport that owns one).
 - `public virtual Camera3D? GetCamera3D()` - The camera that is drawn (the one made current last).
 - `public virtual Vector2 GetMousePosition()` - The pointer in viewport pixels: the engine's reading every frame (the position the UI sees, before any content stretch), else where script-fed events last put it.
 - `public void SetInputAsHandled()` - Stops the input event being processed by anything further (Godot's set_input_as_handled).
