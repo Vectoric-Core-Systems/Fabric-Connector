@@ -13,6 +13,7 @@ native/            Aver.Fabric.Native, one SHARED library
 managed/           Aver.Fabric (the runtime the host loads and converted scripts compile against), Aver.Fabric.Convert (the script converter), Aver.Fabric.Tests
 tests/             fabric (the converter end to end, the GDExtension host) and formats.godot, with their fixtures
 test-content/      the Aver-side levels and meshes the runtime tests load
+tools/             godot-dump: the converter checked against a headless Godot 4 (dump_scene.gd and runner scripts; see its README)
 third_party/       godot-gdextension: Godot's published GDExtension interface header and API dump (MIT)
 docs/              FABRIC.md (user guide), plans/ (design and contracts), api/Aver.Fabric.md
 ```

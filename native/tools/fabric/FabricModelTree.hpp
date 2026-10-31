@@ -25,6 +25,10 @@ struct ModelTreeNode {
     bool skinned = false;             // a mesh node that is moved below its Skeleton3D (the node's own transform is dropped)
     std::vector<ModelBone> bones;     // Skeleton3D
     std::string boneName;             // BoneAttachment3D
+    // A CollisionShape3D made from the file's glTF physics (OMI_physics_body / OMI_physics_shape), in Godot's metres: BoxShape3D (size x y z), SphereShape3D (radius),
+    // CapsuleShape3D and CylinderShape3D (radius, height), ConvexPolygonShape3D (the points) or ConcavePolygonShape3D (the triangles' vertices, three numbers each).
+    std::string shapeClass;
+    std::vector<double> shapeNums;
 };
 
 struct ModelTree {

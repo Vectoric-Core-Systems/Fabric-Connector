@@ -196,6 +196,43 @@ target_compile_definitions(FabricGeometryTest PRIVATE
 set_target_properties(FabricGeometryTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricPlacedTest -- the placed visuals (the plain mesh placements a node's drawing rides on, so the editor shows it without playing) through the converter
+# on tests/fabric/data/PlacedGame. Runs the tool as a process, like FabricConvertTest.
+add_executable(FabricPlacedTest src/FabricPlacedTest.cpp)
+target_link_libraries(FabricPlacedTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricPlacedTest)
+target_compile_definitions(FabricPlacedTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricPlacedTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# FabricModelImportTest -- a model's own import settings (nodes/root_scale, a material the import replaces) and a glTF's physics extension (OMI_physics_body /
+# OMI_physics_shape: bodies and shapes) through the converter on tests/fabric/data/ModelGame.
+add_executable(FabricModelImportTest src/FabricModelImportTest.cpp)
+target_link_libraries(FabricModelImportTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricModelImportTest)
+target_compile_definitions(FabricModelImportTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricModelImportTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# FabricGodotCompareTest -- the converter checked against Godot itself (tools/godot-dump): a converted level mapped back to Godot space and compared with the
+# JSON dump_scene.gd writes. By itself it converts tests/fabric/data/PlacedGame and compares the level with what Godot says, written out by hand, and with that answer
+# made wrong in each way (no Godot needed). With the environment variable GODOT_EXE naming a Godot 4 editor binary it also runs Godot --headless on the fixture.
+# The same binary is the command line for a whole project: FabricGodotCompareTest compare --converted <dir> --godot <exe> --godot-project <dir>.
+add_executable(FabricGodotCompareTest src/FabricGodotCompareTest.cpp ${AVER_FABRIC_DIR}/native/tools/fabric/FabricProcess.cpp)
+target_link_libraries(FabricGodotCompareTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+target_include_directories(FabricGodotCompareTest PRIVATE ${AVER_FABRIC_DIR}/native/tools/fabric ${AVER_ENGINE_SOURCE_DIR}/modules/world/include)
+fabric_needs_converter(FabricGodotCompareTest)
+target_compile_definitions(FabricGodotCompareTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}"
+  AVER_GODOT_DUMP_SCRIPT="${AVER_FABRIC_DIR}/tools/godot-dump/dump_scene.gd")
+set_target_properties(FabricGodotCompareTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricAnimTest -- G5 A1 (AnimationPlayer) through the converter on tests/fabric/data/AnimGame: Animation sub-resources and an external .tres become
 # .ocanim files with property tracks (transform tracks through the axis map), the player node keeps its libraries, and every track is rated.
 add_executable(FabricAnimTest src/FabricAnimTest.cpp)

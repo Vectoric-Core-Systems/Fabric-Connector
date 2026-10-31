@@ -94,7 +94,7 @@ bool decodeArrayMeshSurface(const GodotVariant& d, GodotSurface& s, std::string*
         for (int i = 0; i < 4; ++i) uvScale[i] = f32(u->num(static_cast<usize>(i)));
     s.compressed = (s.format & kGdFlagCompressAttributes) != 0;
     if (s.formatVersion > 1) note("format version " + std::to_string(s.formatVersion) + " is newer than the layout this reads (version 1); the data may be misread");
-    if (s.formatVersion == 0) note("an old-format (Godot 4.0/4.1, no version bit) surface: read with the current layout; compressed attributes in it are not the same coding");
+    if (s.formatVersion == 0) note("an old-format (Godot 4.0/4.1, no version bit) surface: read in that format's interleaved layout; the tangent handedness is read from its alpha bits as Godot 4.1 writes them (not checked against a run)");
     s.hasLods = arr(d, "lods") != nullptr;
     s.hasBlendShapes = arr(d, "blend_shape_data") != nullptr;
     if (s.hasLods) note("the surface's LOD index buffers are dropped (the full-detail triangles are used)");
@@ -133,9 +133,20 @@ bool decodeArrayMeshSurface(const GodotVariant& d, GodotSurface& s, std::string*
     const u8* P = V.data();
     const u8* NT = V.data() + positionsBytes;
 
+    // ---- a Godot 4.0 / 4.1 surface (no version bit): one interleaved vertex buffer, per vertex the position, then the normal, then the tangent ----
+    // Bits 13 to 24 of such a format are the old per-array compress flags; a surface that sets any is not decoded. The normal and the tangent are 10-10-10-2
+    // unorm words (xyz mapped from 0..1 to -1..1; the tangent's handedness from the two alpha bits, 2 and 3 meaning +1: read as Godot 4.1 writes it).
+    const bool legacy = s.formatVersion == 0;
+    if (legacy && (s.format & 0x1FFE000ull)) return fail("a Godot 4.0/4.1 surface with compressed arrays is not decoded; re-save the mesh in Godot 4.2 or later");
+    const usize legacyStride = (d2 ? 8 : 12) + ((s.format & kGdArrayNormal) ? 4 : 0) + ((s.format & kGdArrayTangent) ? 4 : 0);
+    if (legacy && V.size() < legacyStride * n) return fail("vertex_data is " + std::to_string(V.size()) + " bytes; the old format needs " + std::to_string(legacyStride * n));
+
     // ---- positions ----
     s.pos.assign(usize(n) * 3, 0.0f);
-    if (d2) {
+    if (legacy) {
+        for (u32 i = 0; i < n; ++i)
+            for (int k = 0; k < (d2 ? 2 : 3); ++k) s.pos[usize(i) * 3 + usize(k)] = rdF(P + usize(i) * legacyStride + usize(k) * 4);
+    } else if (d2) {
         for (u32 i = 0; i < n; ++i) { s.pos[usize(i) * 3] = rdF(P + usize(i) * 8); s.pos[usize(i) * 3 + 1] = rdF(P + usize(i) * 8 + 4); }
     } else if (s.compressed) {
         for (u32 i = 0; i < n; ++i)
@@ -150,7 +161,22 @@ bool decodeArrayMeshSurface(const GodotVariant& d, GodotSurface& s, std::string*
     const bool hasN = (s.format & kGdArrayNormal) != 0, hasT = (s.format & kGdArrayTangent) != 0;
     if (hasN) s.nrm.assign(usize(n) * 3, 0.0f);
     if (hasT) s.tan.assign(usize(n) * 4, 0.0f);
-    for (u32 i = 0; i < n; ++i) {
+    if (legacy) {
+        const auto unorm3 = [](u32 w, f32* out) {
+            for (int k = 0; k < 3; ++k) out[k] = f32(double((w >> (10 * k)) & 1023) / 1023.0 * 2.0 - 1.0);
+            normalize3(out);
+        };
+        const usize nOff = d2 ? 8 : 12;
+        for (u32 i = 0; i < n; ++i) {
+            if (hasN) unorm3(rd32(P + usize(i) * legacyStride + nOff), &s.nrm[usize(i) * 3]);
+            if (hasT) {
+                const u32 w = rd32(P + usize(i) * legacyStride + nOff + (hasN ? 4 : 0));
+                unorm3(w, &s.tan[usize(i) * 4]);
+                s.tan[usize(i) * 4 + 3] = (w >> 30) >= 2 ? 1.0f : -1.0f;
+            }
+        }
+    }
+    for (u32 i = 0; i < n && !legacy; ++i) {
         if (s.compressed && !d2) {
             // The normal word is the rotation axis of the tangent frame; the position's fourth u16 is the angle (with the handedness in which half it falls).
             if (!hasN && !hasT) continue;

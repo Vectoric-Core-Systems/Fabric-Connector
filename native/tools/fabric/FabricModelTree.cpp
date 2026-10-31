@@ -5,11 +5,13 @@
 #include "aver/platform/FileSystem.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <functional>
 #include <map>
 #include <numeric>
 #include <set>
+#include <tuple>
 
 namespace aver::fabric {
 
@@ -51,6 +53,110 @@ Xform nodeLocal(const JsonValue& n, bool& has) {
     return x;
 }
 
+std::vector<u8> base64Decode(std::string_view s) {
+    std::vector<u8> out;
+    u32 acc = 0;
+    int bits = 0;
+    for (const char c : s) {
+        int v;
+        if (c >= 'A' && c <= 'Z') v = c - 'A';
+        else if (c >= 'a' && c <= 'z') v = c - 'a' + 26;
+        else if (c >= '0' && c <= '9') v = c - '0' + 52;
+        else if (c == '+') v = 62;
+        else if (c == '/') v = 63;
+        else continue;
+        acc = (acc << 6) | static_cast<u32>(v);
+        bits += 6;
+        if (bits >= 8) { bits -= 8; out.push_back(static_cast<u8>((acc >> bits) & 0xFF)); }
+    }
+    return out;
+}
+
+// The buffers of a glTF file (the GLB's binary chunk, a data URI, or a file beside the model), read when a physics shape needs a mesh's triangles.
+struct GltfBuffers {
+    const JsonValue* doc = nullptr;
+    std::string dir;
+    std::vector<u8> glbBin;
+    std::map<int, std::vector<u8>> cache;
+
+    const std::vector<u8>* get(int i) {
+        if (const auto it = cache.find(i); it != cache.end()) return &it->second;
+        const JsonValue& b = (*doc)["buffers"][static_cast<usize>(i < 0 ? 0 : i)];
+        if (i < 0 || !b.isObject()) return nullptr;
+        std::vector<u8> data;
+        const std::string uri(b["uri"].asString());
+        if (uri.empty()) data = glbBin;
+        else if (uri.rfind("data:", 0) == 0) {
+            const size_t comma = uri.find(',');
+            if (comma != std::string::npos) data = base64Decode(std::string_view(uri).substr(comma + 1));
+        } else {
+            std::string name;
+            for (size_t k = 0; k < uri.size(); ++k) {   // %20 and the like
+                if (uri[k] == '%' && k + 2 < uri.size() && std::isxdigit(static_cast<unsigned char>(uri[k + 1])) && std::isxdigit(static_cast<unsigned char>(uri[k + 2]))) {
+                    name += static_cast<char>(std::stoi(uri.substr(k + 1, 2), nullptr, 16));
+                    k += 2;
+                } else {
+                    name += uri[k];
+                }
+            }
+            if (!readFileBytes(dir + "/" + name, data)) return nullptr;
+        }
+        return &(cache[i] = std::move(data));
+    }
+
+    // An accessor's elements as doubles (`comps` per element); false when it cannot be read.
+    bool read(int acc, int comps, std::vector<double>& out) {
+        const JsonValue& a = (*doc)["accessors"][static_cast<usize>(acc < 0 ? 0 : acc)];
+        if (acc < 0 || !a.isObject() || !a.has("bufferView")) return false;
+        const JsonValue& bv = (*doc)["bufferViews"][static_cast<usize>(a["bufferView"].asInt(0))];
+        const std::vector<u8>* buf = get(static_cast<int>(bv["buffer"].asInt(0)));
+        if (!buf) return false;
+        const int ct = static_cast<int>(a["componentType"].asInt(0));
+        const size_t csz = ct == 5126 || ct == 5125 ? 4 : (ct == 5123 || ct == 5122 ? 2 : 1);
+        const size_t count = static_cast<size_t>(a["count"].asInt(0));
+        const size_t stride = bv.has("byteStride") ? static_cast<size_t>(bv["byteStride"].asInt(0)) : csz * static_cast<size_t>(comps);
+        const size_t base = static_cast<size_t>(bv["byteOffset"].asInt(0)) + static_cast<size_t>(a["byteOffset"].asInt(0));
+        if (count == 0 || base + (count - 1) * stride + csz * static_cast<size_t>(comps) > buf->size()) return false;
+        out.reserve(out.size() + count * static_cast<size_t>(comps));
+        for (size_t e = 0; e < count; ++e)
+            for (int c = 0; c < comps; ++c) {
+                const u8* p = buf->data() + base + e * stride + static_cast<size_t>(c) * csz;
+                double v;
+                if (ct == 5126) { f32 f; std::memcpy(&f, p, 4); v = f; }
+                else if (ct == 5125) { u32 u; std::memcpy(&u, p, 4); v = u; }
+                else if (ct == 5123) { u16 u; std::memcpy(&u, p, 2); v = u; }
+                else if (ct == 5122) { i16 u; std::memcpy(&u, p, 2); v = u; }
+                else v = *p;
+                out.push_back(v);
+            }
+        return true;
+    }
+
+    // The triangles of a mesh, three numbers per vertex, in file order (indexed triangle lists only).
+    bool triangles(int mesh, std::vector<double>& out) {
+        const JsonValue& prims = (*doc)["meshes"][static_cast<usize>(mesh < 0 ? 0 : mesh)]["primitives"];
+        if (mesh < 0 || prims.size() == 0) return false;
+        for (usize k = 0; k < prims.size(); ++k) {
+            const JsonValue& p = prims[k];
+            if (p["mode"].asInt(4) != 4) return false;
+            std::vector<double> pos, idx;
+            if (!read(static_cast<int>(p["attributes"]["POSITION"].asInt(-1)), 3, pos)) return false;
+            if (p.has("indices")) {
+                if (!read(static_cast<int>(p["indices"].asInt(-1)), 1, idx)) return false;
+            } else {
+                for (size_t i = 0; i < pos.size() / 3; ++i) idx.push_back(static_cast<double>(i));
+            }
+            for (size_t i = 0; i + 2 < idx.size(); i += 3)
+                for (int c = 0; c < 3; ++c) {
+                    const size_t v = static_cast<size_t>(idx[i + static_cast<size_t>(c)]);
+                    if (v * 3 + 2 >= pos.size()) return false;
+                    out.insert(out.end(), {pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]});
+                }
+        }
+        return !out.empty();
+    }
+};
+
 }  // namespace
 
 bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
@@ -66,9 +172,19 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
         if (le32(16) != 0x4E4F534Au || static_cast<size_t>(len) + 20 > bytes.size()) { why = "the GLB has no JSON chunk"; return false; }
         text = text.substr(20, len);
     }
+    GltfBuffers gb;
+    if (bytes.size() >= 20 && std::memcmp(bytes.data(), "glTF", 4) == 0) {   // the GLB's binary chunk follows the JSON chunk
+        const size_t after = 20 + text.size();
+        if (after + 8 <= bytes.size()) {
+            const size_t binLen = static_cast<size_t>(bytes[after]) | static_cast<size_t>(bytes[after + 1]) << 8 | static_cast<size_t>(bytes[after + 2]) << 16 | static_cast<size_t>(bytes[after + 3]) << 24;
+            if (after + 8 + binLen <= bytes.size()) gb.glbBin.assign(bytes.begin() + static_cast<std::ptrdiff_t>(after + 8), bytes.begin() + static_cast<std::ptrdiff_t>(after + 8 + binLen));
+        }
+    }
+    gb.dir = path.substr(0, path.find_last_of("/\\") == std::string::npos ? 0 : path.find_last_of("/\\"));
     JsonValue doc;
     if (!fmt::parseJson(text, doc, &why)) return false;
     if (!doc.isObject()) { why = "not a glTF document"; return false; }
+    gb.doc = &doc;
 
     const JsonValue& jn = doc["nodes"];
     const int N = static_cast<int>(jn.size());
@@ -194,6 +310,76 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
     std::map<int, std::vector<Xform>> boneWorld;    // skeleton -> each bone's rest pose in the skeleton's space
     bool foreignNode = false;
 
+    // ---- glTF physics (OMI_physics_body / OMI_physics_shape): Godot's importer makes a body of a node with a motion and a CollisionShape3D of a node with a collider ----
+    const JsonValue& shapeDefs = doc["extensions"]["OMI_physics_shape"]["shapes"];
+    bool physicsUsed = false, physicsUnread = false;
+    const auto shapeOn = [&](const JsonValue& collider, ModelTreeNode& tn) -> bool {
+        const int idx = static_cast<int>(collider["shape"].asInt(-1));
+        if (idx < 0 || static_cast<usize>(idx) >= shapeDefs.size()) return false;
+        const JsonValue& s = shapeDefs[static_cast<usize>(idx)];
+        const std::string type(s["type"].asString());
+        const JsonValue& d = s[type];
+        tn.shapeNums.clear();
+        if (type == "box") {
+            tn.shapeClass = "BoxShape3D";
+            const JsonValue& sz = d["size"];
+            tn.shapeNums = {sz.size() >= 3 ? sz[0].asDouble(1) : 1.0, sz.size() >= 3 ? sz[1].asDouble(1) : 1.0, sz.size() >= 3 ? sz[2].asDouble(1) : 1.0};
+        } else if (type == "sphere") {
+            tn.shapeClass = "SphereShape3D";
+            tn.shapeNums = {d["radius"].asDouble(0.5)};
+        } else if (type == "capsule" || type == "cylinder") {
+            tn.shapeClass = type == "capsule" ? "CapsuleShape3D" : "CylinderShape3D";
+            tn.shapeNums = {d["radius"].asDouble(0.5), d["height"].asDouble(2.0)};
+        } else if (type == "trimesh" || type == "convex") {
+            std::vector<double> tris;
+            if (!gb.triangles(static_cast<int>(d["mesh"].asInt(-1)), tris)) return false;
+            if (type == "trimesh") {
+                tn.shapeClass = "ConcavePolygonShape3D";
+                tn.shapeNums = std::move(tris);
+            } else {
+                tn.shapeClass = "ConvexPolygonShape3D";
+                std::set<std::tuple<double, double, double>> seenPoints;
+                for (size_t i = 0; i + 2 < tris.size(); i += 3)
+                    if (seenPoints.insert({tris[i], tris[i + 1], tris[i + 2]}).second) tn.shapeNums.insert(tn.shapeNums.end(), {tris[i], tris[i + 1], tris[i + 2]});
+            }
+        } else {
+            return false;
+        }
+        return true;
+    };
+    const auto physicsOf = [&](const JsonValue& jnode, int t) {
+        const JsonValue& body = jnode["extensions"]["OMI_physics_body"];
+        if (!body.isObject()) return;
+        physicsUsed = true;
+        const bool hasMesh = jnode.has("mesh");
+        bool isBody = false;
+        if (body.has("motion") && !hasMesh) {
+            const std::string_view mt = body["motion"]["type"].asString();
+            T.nodes[at(t)].type = mt == "dynamic" ? "RigidBody3D" : (mt == "kinematic" ? "AnimatableBody3D" : "StaticBody3D");
+            isBody = true;
+        } else if (body.has("motion")) {
+            physicsUnread = true;   // a body that is also a mesh: Godot makes a body with the mesh below it; not made here
+        }
+        if (body.has("trigger")) physicsUnread = true;
+        if (!body.has("collider")) return;
+        ModelTreeNode shape;
+        if (!shapeOn(body["collider"], shape)) { physicsUnread = true; return; }
+        int target = t;
+        if (isBody || hasMesh) {
+            target = static_cast<int>(T.nodes.size());
+            ModelTreeNode child;
+            child.name = siblingName(t, "CollisionShape3D");
+            child.type = "CollisionShape3D";
+            child.parent = t;
+            T.nodes.push_back(std::move(child));
+            T.nodes[at(t)].children.push_back(target);
+        } else {
+            T.nodes[at(t)].type = "CollisionShape3D";
+        }
+        T.nodes[at(target)].shapeClass = shape.shapeClass;
+        T.nodes[at(target)].shapeNums = std::move(shape.shapeNums);
+    };
+
     std::function<void(int, int, int)> gen;
     gen = [&](int n, int sceneParent, int depth) {
         if (depth > 4096 || seen[at(n)]) return;
@@ -246,6 +432,7 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
         T.nodes[at(t)].xf = nodeLocal(jnode, has);
         T.nodes[at(t)].gltfNode = n;
         treeOf[at(n)] = t;
+        physicsOf(jnode, t);
         if (jnode.has("camera") || (jnode.has("extensions") && jnode["extensions"].has("KHR_lights_punctual"))) foreignNode = true;
         for (const int c : kids[at(n)]) gen(c, t, depth + 1);
     };
@@ -294,6 +481,13 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
     if (doc["animations"].size() > 0) add(0, siblingName(0, "AnimationPlayer"), "AnimationPlayer");
 
     if (foreignNode) T.notes.push_back("a glTF camera or light node is kept as a plain Node3D; Godot would make a Camera3D or a light node");
+    if (physicsUsed)
+        T.notes.push_back(std::string("the model's glTF physics (OMI_physics_body / OMI_physics_shape) is made into bodies (a node with a motion) and CollisionShape3D nodes (a node with a collider), as Godot's importer does: box, sphere, capsule, cylinder, "
+                                      "convex and trimesh shapes, in the file's metres") +
+                          (physicsUnread ? "; a trigger, a body that is also a mesh, or a shape that could not be read is left out" : ""));
+    for (usize k = 0; k < ext.size(); ++k)
+        if (ext[k].asString() == "KHR_physics_rigid_bodies")
+            T.notes.push_back("the model uses KHR_physics_rigid_bodies: Godot's importer makes bodies and shapes from it; this converter does not, so those nodes stay plain Node3D and the model has no collision here");
     if (!groupJoints.empty())
         T.notes.push_back("a skeleton's bones are written as Skeleton3D bone properties (name, parent, rest pose); no skinned vertex follows them (see the Skeleton3D note)");
     return true;

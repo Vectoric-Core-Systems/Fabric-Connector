@@ -18,7 +18,7 @@ Every Godot node of the converted scene is an **entity (placement) in the `.ocwo
 **A. Class placement (the normal case, and the only one for a node with a script).** `PLACE none <x y z yaw pitch roll scale> class <ClassName>`.
 - `<ClassName>` is the **registry name of the C# type** that implements the node: the script class for a node with a script (`Player`, the converter's C# for `player.gd`; it derives from the node's Godot class), otherwise the Godot class itself (`Node3D`, `MeshInstance3D`, `RigidBody3D` ... the table in 1.4). An `[AverClass("Name")]` attribute on a script class overrides the name; without it the C# type name is the name. Two scripts must therefore not share a type name.
 - The framework spawns it (spawn batch, Godot's order, 1.3), the bridge binds a new instance of the type, and the node reads its values from the entity's Props (1.2).
-- The transform is the placement's transform (1.5). Other mesh/material tokens on the line are inert for a class placement; a mesh is the node's `mesh` property.
+- The transform is the placement's transform (1.5). Other mesh/material tokens on the line are inert for a class placement (the engine builds no mesh for it); a mesh is the node's `mesh` property, and the converter also writes it as a plain mesh placement below the node (`_placed`, G3_SCENES "Placed visuals") so the editor shows it without playing. The node adopts that entity instead of adding a second renderer, and it is not a child in the node tree.
 
 **B. Plain placement.** An ordinary placement (a mesh, or a bare `PLACE none ... nocollide` marker) that is not an actor. The converter uses this only for a node with no script and no behaviour of its own that it has already turned into engine content (typically a static mesh with an `.ocmesh`/`.ocmat` and a baked collider). `Node.FromEntity(entity)` wraps it lazily (a `Node3D`, cached, always "in the tree" and "ready", never ticking), so `GetNode("Crate")`, `GetParent()`, `GetChildren()` and `Position` work for it. A `COMPONENT Props` record may carry `_class=<Node3D-derived Godot class>` (e.g. `Marker3D`, `OmniLight3D`) and `_name=<name>`; the wrapper then has that type. A wrapper has no `_Ready`, no signals from the engine and no properties applied: if the converter needs any of that it must write a class placement.
 
@@ -44,6 +44,7 @@ Every Godot property of the node that is not the transform is written into **one
 | `_unique` | `1` | `unique_name_in_owner` (`%Name` lookups from inside the owner's scene). Writing the property `unique_name_in_owner = true` does the same. |
 | `_class` | Godot class | Plain placements only (1.1 B). |
 | `_persistent` | `1` | The node survives `Game.ChangeLevel` (an autoload). |
+| `_placed` | count | How many plain mesh placements below this node's placement draw it (G3_SCENES "Placed visuals"). Read before the other keys. |
 | `_connections` | Variant text of an array of dictionaries | The scene's `[connection]` lines whose `from` is this node; see 1.6. |
 
 - Other node-level settings are ordinary properties: `process_mode` (int), `process_priority`, `process_physics_priority`, `visible`, `top_level`, `scene_file_path`. Node3D: `position`, `rotation`, `rotation_degrees`, `scale`, `basis`, `transform` (use only when the placement line cannot say it, 1.5).

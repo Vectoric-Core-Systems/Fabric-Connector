@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://cmodelmain01"]
+
+[ext_resource type="PackedScene" path="res://models/tri.gltf" id="1_tri"]
+[ext_resource type="PackedScene" path="res://models/body.gltf" id="2_body"]
+
+[node name="Main" type="Node3D"]
+
+[node name="Model" parent="." instance=ExtResource("1_tri")]
+
+[node name="Physics" parent="." instance=ExtResource("2_body")]

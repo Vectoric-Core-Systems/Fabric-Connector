@@ -79,14 +79,96 @@ public class GeometryInstance3D : VisualInstance3D
 
     internal override void ApplyRenderMasks()
     {
-        base.ApplyRenderMasks();
-        if (!Self.IsValid || !NodeHost.Current.IsEngine || !Self.HasComponent(Component.MeshRenderer)) return;
+        if (!Self.IsValid || !NodeHost.Current.IsEngine) return;
         RangeFields r = ComputeRangeFields();
-        Self.SetFloat("CMeshRenderer.visBeginCm", r.BeginCm);
-        Self.SetFloat("CMeshRenderer.visEndCm", r.EndCm);
-        Self.SetFloat("CMeshRenderer.visBeginMarginCm", r.BeginMarginCm);
-        Self.SetFloat("CMeshRenderer.visEndMarginCm", r.EndMarginCm);
-        Self.SetInt("CMeshRenderer.visFade", r.FadeMode);
+        int layersInv = StoreMask(Layers);
+        foreach (Entity e in RenderEntities)
+        {
+            if (!e.HasComponent(Component.MeshRenderer)) continue;
+            e.SetInt("CMeshRenderer.layersInv", layersInv);
+            e.SetFloat("CMeshRenderer.visBeginCm", r.BeginCm);
+            e.SetFloat("CMeshRenderer.visEndCm", r.EndCm);
+            e.SetFloat("CMeshRenderer.visBeginMarginCm", r.BeginMarginCm);
+            e.SetFloat("CMeshRenderer.visEndMarginCm", r.EndMarginCm);
+            e.SetInt("CMeshRenderer.visFade", r.FadeMode);
+        }
+    }
+
+    // ---- the drawing the level placed ----
+    // The converter writes what a node draws as plain mesh placements below its class placement (the engine builds no mesh for a class placement, and
+    // the editor shows placements without playing). The Props key `_placed` counts them. At run time the node adopts those entities instead of giving its
+    // own entity a second mesh renderer: they carry the mesh, the material, the render masks and the visibility. They are not children in the node tree.
+    private List<Entity>? _placedEntities;
+    private HashSet<Entity>? _placedSet;
+    private bool _placedScanned, _entered;
+
+    /// <summary>The content path of the mesh the placed entities show (null while the node does not know its mesh yet).</summary>
+    internal virtual string? PlacedAsset => null;
+
+    /// <summary>The entities that draw this node: the placed ones when it adopted them, else its own entity.</summary>
+    internal IEnumerable<Entity> RenderEntities
+    {
+        get
+        {
+            if (_placedEntities is { Count: > 0 }) return _placedEntities;
+            return Self.IsValid ? new[] { Self } : System.Array.Empty<Entity>();
+        }
+    }
+
+    internal bool HasPlacedEntities => _placedEntities is { Count: > 0 };
+
+    /// <summary>True while the node knows the level placed its drawing but has not looked for it yet (it has no entity of its own to draw on until then).</summary>
+    internal bool PlacedPending => PlacedVisuals > 0 && !_placedScanned && Self.IsValid && NodeHost.Current.IsEngine;
+
+    internal override bool IsPlacedVisual(Entity child) => _placedSet != null && _placedSet.Contains(child);
+
+    // The level attaches the placed entities under their node after every class placement has spawned, so they are looked for when the node enters the tree.
+    internal override void AdoptPlacedVisuals()
+    {
+        if (_placedScanned || PlacedVisuals <= 0 || !Self.IsValid || !NodeHost.Current.IsEngine) return;
+        string? asset = PlacedAsset;
+        if (asset == null && !_entered) return;
+        List<Entity> found = new();
+        if (asset != null)
+        {
+            var kids = new List<(Entity Item, string Name, bool IsActor, bool HasMesh)>();
+            foreach (Entity c in Self.Children) kids.Add((c, c.Name, c.IsActor, c.HasComponent(Component.MeshRenderer)));
+            found = PlacedMatch.Find(asset, kids);
+        }
+        if (found.Count == 0 && !_entered) return;
+        _placedScanned = true;
+        if (found.Count == 0) return;   // none below it (a level edited since, or a node made from a PackedScene): the node draws with its own entity
+        _placedEntities = found;
+        _placedSet = new HashSet<Entity>(found);
+        OnPlacedAdopted(found);
+    }
+
+    /// <summary>The placed entities were found. A node that needs exactly the count it was written with (a MultiMesh) may give them up here.</summary>
+    internal virtual void OnPlacedAdopted(List<Entity> placed) { }
+
+    /// <summary>Gives the placed entities up and destroys them: the node draws with its own entity from now on.</summary>
+    internal void ReleasePlaced()
+    {
+        if (_placedEntities == null) return;
+        List<Entity> gone = _placedEntities;
+        _placedEntities = null;
+        _placedSet = null;
+        PlacedVisuals = 0;
+        foreach (Entity e in gone) if (e.IsAlive) e.Destroy();
+    }
+
+    internal override void OnEnteringTree()
+    {
+        base.OnEnteringTree();
+        _entered = true;
+        AdoptPlacedVisuals();
+    }
+
+    /// <summary>Shows or hides everything that draws this node.</summary>
+    internal void ApplyVisibleToRender(bool effective)
+    {
+        foreach (Entity e in RenderEntities)
+            if (e.IsValid && e.HasComponent(Component.MeshRenderer)) e.SetVisible(effective);
     }
 
     private Material? _materialOverride;
@@ -104,8 +186,13 @@ public class GeometryInstance3D : VisualInstance3D
     internal void PushMeshAndMaterial(string? assetPath)
     {
         if (!Self.IsValid || !NodeHost.Current.IsEngine || string.IsNullOrEmpty(assetPath)) return;
-        Self.SetMesh(assetPath);
-        if (MaterialOverride is { ResourcePath.Length: > 0 }) Self.SetMaterial(System.IO.Path.GetFileNameWithoutExtension(MaterialOverride.ResourcePath));
+        AdoptPlacedVisuals();
+        if (PlacedPending) return;   // the level's placements are attached when the node enters the tree, which applies the mesh again
+        foreach (Entity e in RenderEntities)
+        {
+            e.SetMesh(assetPath);
+            if (MaterialOverride is { ResourcePath.Length: > 0 }) e.SetMaterial(System.IO.Path.GetFileNameWithoutExtension(MaterialOverride.ResourcePath));
+        }
         ApplyRenderMasks();
     }
 
@@ -191,15 +278,27 @@ public class MeshInstance3D : GeometryInstance3D
 
     internal override void OnMaterialOverrideChanged() => ApplyMesh();
 
+    internal override string? PlacedAsset => MeshAssetOf(_mesh);
+
     internal override void OnEnteringTree()
     {
         base.OnEnteringTree();
         ApplyMesh();
     }
 
-    internal override void OnVisibilityApplied(bool effective)
+    internal override void OnVisibilityApplied(bool effective) => ApplyVisibleToRender(effective);
+}
+
+/// <summary>Finds the plain mesh placements a level holds below a node among the node's child entities (pure, so it runs without an engine).</summary>
+internal static class PlacedMatch
+{
+    /// <summary>The children that are the node's own drawing: no actor behind them, a mesh renderer, and the name a plain placement of <paramref name="asset"/> gets (its asset path), in order.</summary>
+    internal static List<T> Find<T>(string asset, IEnumerable<(T Item, string Name, bool IsActor, bool HasMesh)> children)
     {
-        if (Self.IsValid && Self.HasComponent(Component.MeshRenderer)) Self.SetVisible(effective);
+        var found = new List<T>();
+        foreach ((T item, string name, bool isActor, bool hasMesh) in children)
+            if (!isActor && hasMesh && name == asset) found.Add(item);
+        return found;
     }
 }
 

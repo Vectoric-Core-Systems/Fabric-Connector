@@ -337,8 +337,10 @@ public partial class Node : GodotObject
     private void EnsureChildren()
     {
         if (!Self.IsValid || !NodeHost.Current.IsEngine) return;
+        AdoptPlacedVisuals();
         foreach (Entity c in Self.Children)
         {
+            if (IsPlacedVisual(c)) continue;   // this node's own drawing, placed by the level: not a child in the node tree
             Node? n = FromEntity(c);
             if (n == null || n._parent == this) continue;
             if (n._parent == null)
@@ -349,6 +351,16 @@ public partial class Node : GodotObject
             }
         }
     }
+
+    /// <summary>How many plain mesh placements below this node's entity are its own drawing (the level's Props key <c>_placed</c>). The editor shows them without
+    /// playing; a mesh-drawing node adopts them at run time (GeometryInstance3D) instead of adding a second renderer.</summary>
+    internal int PlacedVisuals { get; set; }
+
+    /// <summary>True for a child entity this node adopted as its drawing, which the node tree leaves out.</summary>
+    internal virtual bool IsPlacedVisual(Entity child) => false;
+
+    /// <summary>Looks for the placed entities among the children once the level has attached them.</summary>
+    internal virtual void AdoptPlacedVisuals() { }
 
     // A node found through its entity (a level-loaded one) learns its parent the first time anything asks.
     private void EnsureLinked()

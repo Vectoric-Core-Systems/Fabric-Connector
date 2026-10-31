@@ -311,9 +311,12 @@ public class PackedScene : Resource
         if (node is Node3D n3) n3.Transform = d.LocalTransform();
         var values = new List<(string Key, string Text)>(d.Props);
         if (d.Class.Length == 0 && d.Asset != "none") values.Add(("mesh", $"Resource(\"{d.Asset}\")"));
+        // The plain mesh placements below a node (Props `_placed`) are how the editor sees what it draws; the node itself draws it from its mesh property.
+        bool placed = values.RemoveAll(v => v.Key == "_placed") > 0;
         node.PendingValues = values;
         foreach (string g in d.Groups) node.AddToGroup(g);
-        foreach (SceneNodeData c in d.Children) node.AddChild(Build(c));
+        foreach (SceneNodeData c in d.Children)
+            if (!(placed && c.Class.Length == 0 && c.Asset != "none")) node.AddChild(Build(c));
         return node;
     }
 }

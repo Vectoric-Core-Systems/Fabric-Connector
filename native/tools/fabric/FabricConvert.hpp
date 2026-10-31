@@ -20,6 +20,7 @@ struct ModelResult {
     std::string error;
     std::vector<ModelPart> parts;
     std::vector<std::string> notes;   // anything the importer dropped, for the report
+    double rootScale = 1.0;           // the import's nodes/root_scale when nodes/apply_root_scale is on: already applied to the meshes and the parts' positions; the node tree applies it to translations
 };
 
 // What the converter borrows from AverAssetC.cpp (the model importer lives in that file's anonymous namespace).

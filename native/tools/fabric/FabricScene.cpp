@@ -360,9 +360,10 @@ bool invertXform(const Xform& x, Xform& out) {
 }
 
 // A Skeleton3D's bones as the bones/N/... properties a scene stores (name, parent, rest, and the pose, which starts at the rest).
-void addBoneProps(FNode& f, const ModelTreeNode& tn) {
+void addBoneProps(FNode& f, const ModelTreeNode& tn, double rootScale) {
     for (size_t i = 0; i < tn.bones.size(); ++i) {
-        const ModelBone& b = tn.bones[i];
+        ModelBone b = tn.bones[i];
+        b.rest.pos = b.rest.pos * rootScale;
         const std::string k = "bones/" + std::to_string(i) + "/";
         Var rot;
         rot.type = VType::Quaternion;
@@ -399,13 +400,15 @@ void buildModelNodes(FNode& root, const ModelTree* tree, const ModelResult& mode
     std::function<void(int, FNode&, const Xform&, const Xform&, const std::string&)> make;
     make = [&](int idx, FNode& parentF, const Xform& parentActual, const Xform& parentTrue, const std::string& parentPath) {
         const ModelTreeNode& tn = tree->nodes[static_cast<size_t>(idx)];
-        const Xform trueWorld = parentTrue.composed(tn.xf);   // where Godot puts the node
+        Xform nodeXf = tn.xf;
+        nodeXf.pos = nodeXf.pos * model.rootScale;   // the import's root scale, applied to the translations
+        const Xform trueWorld = parentTrue.composed(nodeXf);   // where Godot puts the node
         Xform actualWorld = trueWorld;                        // where this node's transform puts it (differs for a mesh: see above)
         const ModelPart* part = nullptr;
         if (tn.type == "MeshInstance3D" && tn.gltfNode >= 0)
             if (const auto it = partOf.find(tn.gltfNode); it != partOf.end()) { part = it->second; placed.insert(tn.gltfNode); }
         if (part) actualWorld = partPosition(*part);
-        Xform local = tn.xf;
+        Xform local = nodeXf;
         Xform inv;
         if (invertXform(parentActual, inv)) local = inv.composed(actualWorld);
         else actualWorld = parentActual.composed(local);
@@ -422,7 +425,18 @@ void buildModelNodes(FNode& root, const ModelTree* tree, const ModelResult& mode
         f->xf = local;
         f->hasXform = true;
         if (part) f->props.push_back(Prop{"mesh", makeResource(part->meshAsset), nullptr, 0});
-        if (tn.type == "Skeleton3D") addBoneProps(*f, tn);
+        if (!tn.shapeClass.empty()) {   // the glTF physics shape, in Godot's form: Object(<Shape>, ...) in metres
+            const std::vector<double>& nums = tn.shapeNums;
+            const auto packed = [&] { Var v; v.type = VType::PackedVector3Array; v.nums = nums; return v; };
+            std::vector<std::pair<std::string, Var>> sp;
+            if (tn.shapeClass == "BoxShape3D" && nums.size() >= 3) sp.emplace_back("size", makeVector3(nums[0], nums[1], nums[2]));
+            else if (tn.shapeClass == "SphereShape3D" && nums.size() >= 1) sp.emplace_back("radius", makeFloat(nums[0]));
+            else if ((tn.shapeClass == "CapsuleShape3D" || tn.shapeClass == "CylinderShape3D") && nums.size() >= 2) { sp.emplace_back("radius", makeFloat(nums[0])); sp.emplace_back("height", makeFloat(nums[1])); }
+            else if (tn.shapeClass == "ConvexPolygonShape3D") sp.emplace_back("points", packed());
+            else if (tn.shapeClass == "ConcavePolygonShape3D") sp.emplace_back("data", packed());
+            f->props.push_back(Prop{"shape", makeObject(tn.shapeClass, std::move(sp)), nullptr, 0});
+        }
+        if (tn.type == "Skeleton3D") addBoneProps(*f, tn, model.rootScale);
         if (tn.type == "BoneAttachment3D") f->props.push_back(Prop{"bone_name", makeString(tn.boneName), nullptr, 0});
         FNode& ref = *f;
         parentF.children.push_back(std::move(f));
@@ -661,6 +675,106 @@ Var transformVariant(const Xform& x) {
     return v;
 }
 
+// A Godot local transform as a placement line's position, rotation and scale (the axis map). Float noise in a saved basis (a unit scale
+// stored as 0.99999994) is not authored scale.
+void setPlacementTransform(fmt::OcWorldPlacement& p, const Xform& local) {
+    V3 s = local.scale();
+    const auto snap = [](double v) { return std::fabs(v - 1.0) < 1e-5 ? 1.0 : (std::fabs(v + 1.0) < 1e-5 ? -1.0 : v); };
+    s = {snap(s.x), snap(s.y), snap(s.z)};
+    const auto clean = [](double v) { return v == 0.0 ? 0.0 : v; };   // no negative zero in the file
+    const Vec3 pos = fmt::axis::position(static_cast<f32>(local.pos.x), static_cast<f32>(local.pos.y), static_cast<f32>(local.pos.z));
+    const Q4 q = local.quaternion();
+    // The engine quaternion (the axis map's (z, -x, -y, w)) as roll, pitch and yaw, in double. world::eulerDegFromQuat pins the roll to zero within 0.256 degrees of
+    // straight up or down, which turns a rotation 0.17 degrees off vertical by up to a third of a degree: the full formulas hold until the angle is vertical.
+    const double qx = q.z, qy = -q.x, qz = -q.y, qw = q.w;
+    const double sinP = 2.0 * (qw * qy - qz * qx);
+    const double r2d = 180.0 / 3.14159265358979323846;
+    double eRoll, ePitch = std::asin(std::fmax(-1.0, std::fmin(1.0, sinP))) * r2d, eYaw;
+    if (std::fabs(sinP) > 1.0 - 1e-12) {
+        eRoll = 0.0;
+        eYaw = std::atan2(-2.0 * (qx * qy - qw * qz), 1.0 - 2.0 * (qx * qx + qz * qz)) * r2d;
+    } else {
+        eRoll = std::atan2(2.0 * (qw * qx + qy * qz), 1.0 - 2.0 * (qx * qx + qy * qy)) * r2d;
+        eYaw = std::atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz)) * r2d;
+    }
+    const Vec3 sc = fmt::axis::scale(static_cast<f32>(s.x), static_cast<f32>(s.y), static_cast<f32>(s.z));
+    p.x = clean(pos.x); p.y = clean(pos.y); p.z = clean(pos.z);
+    p.roll = clean(eRoll); p.pitch = clean(ePitch); p.yaw = clean(eYaw);
+    p.sx = clean(sc.x); p.sy = clean(sc.y); p.sz = clean(sc.z);
+}
+
+// Godot hides a node's whole subtree with `visible = false` on any Node3D above it.
+bool authoredHidden(const FNode& fn) {
+    for (const FNode* a = &fn; a; a = a->parent)
+        if (isNode3DClass(a->type))
+            for (const Prop& p : a->props)
+                if (p.key == "visible") { if (!boolOf(&p.value, true)) return true; break; }
+    return false;
+}
+
+const Var* findKey(const Var& obj, const char* key) {
+    for (size_t i = 0; i < obj.keys.size() && i < obj.items.size(); ++i)
+        if (obj.keys[i].asString() == key) return &obj.items[i];
+    return nullptr;
+}
+
+constexpr size_t kMaxPlacedInstances = 20000;   // beyond this a MultiMesh is left to the runtime bake: a placement per instance stops being a level the editor can edit
+
+// What a node draws, as plain mesh placements the editor shows without playing.
+struct PlacedVisual {
+    std::string mesh, material;
+    std::vector<Xform> instances;   // MultiMeshInstance3D: one transform per instance (Godot local space); a mesh node has one identity entry
+    size_t visibleCount = 0;        // instances shown; the rest are placed hidden
+};
+
+bool endsWithOcMesh(const std::string& s) { return s.size() > 7 && s.compare(s.size() - 7, 7, ".ocmesh") == 0; }
+
+// The mesh a node draws: a MeshInstance3D, a CSG root or a Sprite3D (their `mesh` Prop), or a MultiMeshInstance3D (one placement per instance of its table).
+// False when the node draws nothing the editor could place (no mesh, a mesh that was not converted, a table too large).
+bool planPlacedVisual(Report& report, const FNode& fn, const std::vector<std::pair<std::string, Var>>& props, PlacedVisual& out) {
+    const auto find = [&](const char* k) -> const Var* {
+        for (const auto& kv : props) if (kv.first == k) return &kv.second;
+        return nullptr;
+    };
+    if (const Var* mat = find("material_override"); mat && mat->type == VType::Resource) out.material = stemOf(mat->s);
+    if (fn.type == "MultiMeshInstance3D") {
+        const Var* mm = find("multimesh");
+        if (!mm || mm->type != VType::Object || mm->s != "MultiMesh") return false;
+        const Var* mesh = findKey(*mm, "mesh");
+        const Var* buf = findKey(*mm, "buffer");
+        if (!mesh || mesh->type != VType::Resource || !endsWithOcMesh(mesh->s) || !buf || buf->type != VType::PackedFloat32Array) return false;
+        const size_t count = static_cast<size_t>(std::max(0.0, numOf(findKey(*mm, "instance_count"), 0)));
+        const size_t stride = 12 + (boolOf(findKey(*mm, "use_colors"), false) ? 4 : 0) + (boolOf(findKey(*mm, "use_custom_data"), false) ? 4 : 0);
+        if (count == 0 || buf->nums.size() < count * stride) return false;
+        if (count > kMaxPlacedInstances) {
+            report.add("node", fn.reportFile, fn.reportPath, fn.type, "multimesh", Rating::Approximated,
+                       std::to_string(count) + " instances are more than a level can hold as placements (" + std::to_string(kMaxPlacedInstances) + "); the editor does not show them, the runtime bakes them into one mesh", fn.line);
+            return false;
+        }
+        out.mesh = mesh->s;
+        const double vis = numOf(findKey(*mm, "visible_instance_count"), -1);
+        out.visibleCount = vis < 0 ? count : std::min(count, static_cast<size_t>(vis));
+        out.instances.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            const double* b = &buf->nums[i * stride];
+            Xform x;
+            for (int r = 0; r < 3; ++r) {
+                for (int c = 0; c < 3; ++c) x.basis.m[r][c] = b[r * 4 + c];
+            }
+            x.pos = {b[3], b[7], b[11]};
+            out.instances.push_back(x);
+        }
+        return true;
+    }
+    if (fn.type != "MeshInstance3D" && fn.type != "Sprite3D" && !isCsgClass(fn.type)) return false;
+    const Var* mesh = find("mesh");
+    if (!mesh || mesh->type != VType::Resource || !endsWithOcMesh(mesh->s)) return false;
+    out.mesh = mesh->s;
+    out.instances.push_back(Xform{});
+    out.visibleCount = 1;
+    return true;
+}
+
 }  // namespace
 
 std::string viewportKeyOf(const std::string& level, const FNode& n) {
@@ -783,21 +897,7 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     p.parent = parent;
     const bool spatial = isNode3DClass(fn.type) || fn.type == "CollisionPolygon3D";
     Xform local = spatial ? fn.xf : Xform{};
-    V3 s = local.scale();
-    {
-        // Float noise in a saved basis (a unit scale stored as 0.99999994) is not authored scale.
-        const auto snap = [](double v) { return std::fabs(v - 1.0) < 1e-5 ? 1.0 : (std::fabs(v + 1.0) < 1e-5 ? -1.0 : v); };
-        s = {snap(s.x), snap(s.y), snap(s.z)};
-        const auto clean = [](double v) { return v == 0.0 ? 0.0 : v; };   // no negative zero in the file
-        const Vec3 pos = fmt::axis::position(static_cast<f32>(local.pos.x), static_cast<f32>(local.pos.y), static_cast<f32>(local.pos.z));
-        const Q4 q = local.quaternion();
-        const Quat eq = fmt::axis::rotation(static_cast<f32>(q.x), static_cast<f32>(q.y), static_cast<f32>(q.z), static_cast<f32>(q.w));
-        const Vec3 e = world::eulerDegFromQuat(eq);
-        const Vec3 sc = fmt::axis::scale(static_cast<f32>(s.x), static_cast<f32>(s.y), static_cast<f32>(s.z));
-        p.x = clean(pos.x); p.y = clean(pos.y); p.z = clean(pos.z);
-        p.roll = clean(e.x); p.pitch = clean(e.y); p.yaw = clean(e.z);
-        p.sx = clean(sc.x); p.sy = clean(sc.y); p.sz = clean(sc.z);
-    }
+    setPlacementTransform(p, local);
     const Xform worldXf = parentWorld.composed(local);
 
     // ---- the properties, converted ----
@@ -1138,6 +1238,11 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                     "the basis is sheared; the exact transform is written as a property and the placement line carries the nearest rotation and scale", fn.line);
     }
 
+    // ---- what the node draws, as plain mesh placements below it (G3_SCENES "Placed visuals") ----
+    PlacedVisual visual;
+    const bool placedVisual = !scan.prefabPass && planPlacedVisual(report_, fn, props, visual);
+    if (placedVisual) props.emplace_back("_placed", makeInt(static_cast<long long>(visual.instances.size())));
+
     // ---- the record ----
     fmt::OcPlacedComponent comp;
     comp.type = "Props";
@@ -1197,6 +1302,26 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     const int index = static_cast<int>(level.placements.size());
     if (fn.type == "SubViewport" && !scan.prefabPass) scan.viewports.emplace_back(viewportKeyOf(level.name, fn), index);
     level.placements.push_back(std::move(p));
+    if (placedVisual) {
+        // The engine builds no mesh for a class placement (its asset column is never read), so the mesh is an ordinary placement below the node. It is hidden
+        // when the node or an ancestor is, has no collision of its own (the collision nodes are the node's children) and sits at the node's origin.
+        const bool hidden = authoredHidden(fn);
+        size_t sheared = 0;
+        for (size_t i = 0; i < visual.instances.size(); ++i) {
+            fmt::OcWorldPlacement vis;
+            vis.asset = visual.mesh;
+            vis.material = visual.material;
+            vis.parent = index;
+            vis.collide = false;
+            vis.visible = !hidden && i < visual.visibleCount;
+            setPlacementTransform(vis, visual.instances[i]);
+            if (visual.instances[i].sheared()) ++sheared;
+            level.placements.push_back(std::move(vis));
+        }
+        if (sheared)
+            report_.add("node", fn.reportFile, fn.reportPath, fn.type, "multimesh", Rating::Approximated,
+                        std::to_string(sheared) + " instance(s) have a sheared basis; the placement carries the nearest rotation and scale", fn.line);
+    }
     emitting_ = outerEmitting;   // this node's properties are converted; its children set their own
     for (const auto& c : fn.children) {
         if (isCsgClass(fn.type) && isCsgClass(c->type)) {   // a CSG shape below another is part of its root's baked mesh

@@ -886,6 +886,10 @@ const ModelResult* Converter::modelFor(const std::string& resPath, const Where& 
         for (char& c : base) if (c == '/') c = '_';
         base = safeName(base, "model");
         r = host_.importModel(disk, contentDir_, "Meshes/" + rel, base);
+        if (r.ok) {
+            applyRootScale(resPath, r);
+            applyMaterialOverrides(resPath, r, base);
+        }
     }
     models_[resPath] = r;
     if (!r.ok) {
@@ -894,15 +898,108 @@ const ModelResult* Converter::modelFor(const std::string& resPath, const Where& 
     }
     for (const std::string& n : r.notes) report_.add("resource", resPath, "", "PackedScene", "", Rating::Approximated, n, 0);
     report_.add("resource", resPath, "", "PackedScene", "", Rating::Converted, std::to_string(r.parts.size()) + " mesh(es) imported", 0);
+    return &models_[resPath];
+}
 
-    // The model's own import settings: the root scale is the one that changes geometry.
+// The model's import settings can replace a material of the file with a material file of the project (`_subresources` > materials > <glTF material name> >
+// use_external/*): the engine's importer knows nothing of that, so a mesh's slot named for the file's material is renamed here to the converted project material.
+void Converter::applyMaterialOverrides(const std::string& resPath, ModelResult& r, const std::string& base) {
     gd::GodotImport imp;
     gd::GodotDiagnostics d;
-    if (fs_.loadImport(resPath, imp, d))
-        if (const Var* s = imp.param("nodes/root_scale"); s && std::fabs(numOf(s, 1.0) - 1.0) > 1e-9)
-            report_.add("resource", resPath, "", "PackedScene", "nodes/root_scale", Rating::Approximated,
-                        "the import's root scale is not applied to the converted meshes", 0);
-    return &models_[resPath];
+    if (!fs_.loadImport(resPath, imp, d)) return;
+    const Var* sub = imp.param("_subresources");
+    const Var* mats = sub && sub->type == VType::Dictionary ? sub->find("materials") : nullptr;
+    if (!mats || mats->type != VType::Dictionary) return;
+    std::map<std::string, std::string> remap;   // the slot name the importer wrote -> the converted material's name
+    for (size_t i = 0; i < mats->keys.size() && i < mats->items.size(); ++i) {
+        const Var& cfg = mats->items[i];
+        if (cfg.type != VType::Dictionary || !boolOf(cfg.find("use_external/enabled"), false)) continue;
+        const std::string name = mats->keys[i].asString();
+        const std::string uidOrPath = stringOf(cfg.find("use_external/path"));
+        std::string res = uidOrPath.empty() ? std::string{} : (gd::GodotProjectFs::isUid(uidOrPath) ? fs_.resolve(uidOrPath, "") : gd::GodotProjectFs::normalizeRes(uidOrPath));
+        if (res.empty()) {
+            const std::string fb = stringOf(cfg.find("use_external/fallback_path"));
+            if (!fb.empty()) res = gd::GodotProjectFs::normalizeRes(fb);
+        }
+        const Where w{resPath, "", "PackedScene"};
+        const gd::GodotResource* mr = res.empty() ? nullptr : resourceDoc(res);
+        if (!mr || !isMaterial3DType(mr->header.type)) {
+            report_.add("resource", resPath, "", "PackedScene", "_subresources/materials/" + name, Rating::Approximated,
+                        "the import replaces this material with " + (res.empty() ? std::string("a file that could not be found") : res + " (not a StandardMaterial3D or ORMMaterial3D)") + "; the model keeps the material of the file", 0);
+            continue;
+        }
+        const std::string asset = materialAsset(res, mr->header.type, mr->props, *mr, stemOf(res), w);
+        if (asset.empty()) continue;
+        remap[base + "_" + name] = stemOf(asset);
+        report_.add("resource", resPath, "", "PackedScene", "_subresources/materials/" + name, Rating::Converted, "the import uses the project material " + res + " (" + asset + ") in place of the file's", 0);
+    }
+    if (remap.empty()) return;
+    std::set<std::string> done;
+    for (const ModelPart& part : r.parts) {
+        if (!done.insert(part.meshAsset).second) continue;
+        fmt::OcMeshData m;
+        std::string err;
+        if (!fmt::loadOcMesh(contentDir_ + "/" + part.meshAsset, m, &err)) continue;
+        bool changed = false;
+        for (std::string& slot : m.materialSlots)
+            if (const auto it = remap.find(slot); it != remap.end()) { slot = it->second; changed = true; }
+        if (changed && !fmt::saveOcMesh(contentDir_ + "/" + part.meshAsset, m, &err))
+            report_.add("resource", resPath, "", "PackedScene", "_subresources/materials", Rating::Approximated, "the mesh " + part.meshAsset + " could not be written with the project's material: " + err, 0);
+    }
+}
+
+// The model's own import settings: the root scale is the one that changes geometry. With nodes/apply_root_scale (Godot's default) it is applied to the
+// meshes, the nodes' translations, the bones and the animations; the meshes and the parts' positions are scaled here, the node tree (buildModelNodes) scales
+// the translations. Skeletons and clips are written by the importer and not scaled. Without apply_root_scale Godot scales the imported root node, which the
+// instancing scene's own transform replaces.
+void Converter::applyRootScale(const std::string& resPath, ModelResult& r) {
+    gd::GodotImport imp;
+    gd::GodotDiagnostics d;
+    if (!fs_.loadImport(resPath, imp, d)) return;
+    const Var* sv = imp.param("nodes/root_scale");
+    const double s = numOf(sv, 1.0);
+    if (!sv || std::fabs(s - 1.0) <= 1e-9) return;
+    if (!boolOf(imp.param("nodes/apply_root_scale"), true)) {
+        report_.add("resource", resPath, "", "PackedScene", "nodes/root_scale", Rating::Approximated,
+                    "apply_root_scale is off: Godot scales the imported root node, whose transform the instancing scene replaces, so the scale is not applied", 0);
+        return;
+    }
+    size_t scaled = 0;
+    std::set<std::string> done;
+    for (ModelPart& part : r.parts) {
+        part.x *= s; part.y *= s; part.z *= s;
+        if (!done.insert(part.meshAsset).second) continue;
+        fmt::OcMeshData m;
+        std::string err;
+        if (!fmt::loadOcMesh(contentDir_ + "/" + part.meshAsset, m, &err)) {
+            report_.add("resource", resPath, "", "PackedScene", "nodes/root_scale", Rating::Approximated, "the mesh " + part.meshAsset + " could not be read to scale it: " + err, 0);
+            continue;
+        }
+        const f32 k = static_cast<f32>(s);
+        for (f32& v : m.positions) v *= k;
+        const auto scaleMeshlets = [k](std::vector<fmt::OcMeshMeshlet>& list) {
+            for (fmt::OcMeshMeshlet& ml : list) {
+                ml.sphereCenter = ml.sphereCenter * k;
+                ml.sphereRadius *= k;
+                ml.coneApex = ml.coneApex * k;
+            }
+        };
+        scaleMeshlets(m.meshlets);
+        for (fmt::OcMeshLod& lod : m.coarserLods) scaleMeshlets(lod.meshlets);
+        for (fmt::OcMorphTarget& t : m.morphTargets) {
+            for (f32& v : t.positionDeltas) v *= k;
+            t.finalize();
+        }
+        m.computeBounds();
+        if (!fmt::saveOcMesh(contentDir_ + "/" + part.meshAsset, m, &err)) {
+            report_.add("resource", resPath, "", "PackedScene", "nodes/root_scale", Rating::Approximated, "the scaled mesh " + part.meshAsset + " could not be written: " + err, 0);
+            continue;
+        }
+        ++scaled;
+    }
+    r.rootScale = s;
+    report_.add("resource", resPath, "", "PackedScene", "nodes/root_scale", Rating::Converted,
+                "the import's root scale " + std::to_string(s) + " is applied to " + std::to_string(scaled) + " mesh(es) and to the node translations (skeleton rest poses and animation clips the importer wrote are not scaled)", 0);
 }
 
 const ModelTree* Converter::modelTreeFor(const std::string& resPath, const Where& w) {

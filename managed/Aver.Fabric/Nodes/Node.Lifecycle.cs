@@ -313,10 +313,14 @@ public partial class Node
     {
         string? ownerPath = null;
         bool unique = false;
+        // Read first, whatever the file order: the mesh property below must know the level drew it already.
+        foreach ((string key, string text) in values)
+            if (key == "_placed" && int.TryParse(text, out int placed)) PlacedVisuals = placed;
         foreach ((string key, string text) in values)
         {
             switch (key)
             {
+                case "_placed": continue;   // the number of mesh placements below this node that draw it (Node.PlacedVisuals)
                 case "_name": SetNameInternal(PlainText(text)); continue;
                 case "_owner": ownerPath = PlainText(text); continue;
                 case "_unique": unique = text is "1" or "true"; continue;

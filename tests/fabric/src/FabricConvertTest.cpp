@@ -222,7 +222,13 @@ int main() {
     AVER_INFO("-- main.tscn -> Maps/main.ocworld --");
     fmt::OcWorldData w;
     check(fmt::loadOcworld(content + "/Maps/main.ocworld", w, &err), "the level loads: " + err);
-    check(w.placements.size() == 41, "one placement per node, instances flattened: 41 (got " + std::to_string(w.placements.size()) + ")");
+    {
+        // One class placement per node, instances flattened; the mesh a node draws is a plain placement below it (G3_SCENES "Placed visuals"): ten of them here.
+        size_t nodes = 0, visuals = 0;
+        for (const fmt::OcWorldPlacement& p : w.placements) (p.className.empty() ? visuals : nodes)++;
+        check(nodes == 41, "one placement per node, instances flattened: 41 (got " + std::to_string(nodes) + ")");
+        check(visuals == 10, "ten plain mesh placements, one per node that draws a mesh (got " + std::to_string(visuals) + ")");
+    }
     int roots = 0;
     for (const fmt::OcWorldPlacement& p : w.placements) roots += p.parent < 0;
     check(roots == 2, "two top-level nodes: the autoload and the scene root");
@@ -468,8 +474,10 @@ int main() {
     {
         fmt::OcWorldData crateLevel;
         check(fmt::loadOcworld(content + "/Maps/props/crate.ocworld", crateLevel, &err), "the sub-scene is a level of its own: " + err);
-        check(crateLevel.placements.size() == 4 && crateLevel.placements[0].name == "Crate" && crateLevel.placements[0].className == "RigidBody3D",
-              "crate.tscn: four nodes under a RigidBody3D");
+        size_t crateNodes = 0;
+        for (const fmt::OcWorldPlacement& p : crateLevel.placements) crateNodes += !p.className.empty();
+        check(crateLevel.placements.size() == 5 && crateNodes == 4 && crateLevel.placements[0].name == "Crate" && crateLevel.placements[0].className == "RigidBody3D",
+              "crate.tscn: four nodes under a RigidBody3D, and the Body's mesh as a plain placement");
         fmt::OcPrefabData prefab;
         check(fmt::loadOcPrefab(content + "/Prefabs/props/crate.ocprefab", prefab, &err), "the instanced scene was also written as a prefab: " + err);
         check(prefab.valid() && prefab.nodes.size() == 4 && prefab.nodes[0].name == "Crate" && prefab.nodes[0].className == "RigidBody3D" && prefab.nodes[1].parent == prefab.nodes[0].uid,

@@ -30,8 +30,14 @@ public class MultiMesh : Resource
     public Mesh? Mesh
     {
         get => _mesh;
-        set { _mesh = value; if (_id != 0) RuntimeMeshBackend.Current?.SetSource(_id, SourcePath() ?? ""); }
+        set { _mesh = value; if (_id != 0) RuntimeMeshBackend.Current?.SetSource(_id, SourcePath() ?? ""); Placed?.Release(); }
     }
+
+    /// <summary>The entities a level placed for the instances, when the node adopted them (MultiMeshInstance3D). Null otherwise.</summary>
+    internal IPlacedInstances? Placed { get; set; }
+
+    /// <summary>Whether <paramref name="placed"/> entities are exactly this table: same count, a 3D table, no colours or custom data (a placed entity has neither).</summary>
+    internal bool CanFollowPlaced(int placed) => placed == _count && _format == TransformFormatEnum.Transform3D && !_colors && !_customData;
 
     /// <summary>Godot's default is 2D; this runtime draws 3D tables only (a 2D table is stored and not drawn), so a script that forgets to set it still works.</summary>
     public TransformFormatEnum TransformFormat { get => _format; set => _format = value; }
@@ -39,13 +45,13 @@ public class MultiMesh : Resource
     public bool UseColors
     {
         get => _colors;
-        set { _colors = value; if (_id != 0) RuntimeMeshBackend.Current?.SetFlags(_id, _colors, _customData); }
+        set { _colors = value; if (_id != 0) RuntimeMeshBackend.Current?.SetFlags(_id, _colors, _customData); if (_colors) Placed?.Release(); }
     }
 
     public bool UseCustomData
     {
         get => _customData;
-        set { _customData = value; if (_id != 0) RuntimeMeshBackend.Current?.SetFlags(_id, _colors, _customData); }
+        set { _customData = value; if (_id != 0) RuntimeMeshBackend.Current?.SetFlags(_id, _colors, _customData); if (_customData) Placed?.Release(); }
     }
 
     public int InstanceCount
@@ -61,6 +67,7 @@ public class MultiMesh : Resource
             System.Array.Resize(ref _custom, value);
             for (int i = old; i < value; i++) { _xf[i] = Transform3D.Identity; _col[i] = new Color(1, 1, 1, 1); _custom[i] = new Color(0, 0, 0, 0); }
             if (_id != 0) RuntimeMeshBackend.Current?.SetCount(_id, value);
+            if (value != old) Placed?.Release();
         }
     }
 
@@ -68,7 +75,12 @@ public class MultiMesh : Resource
     public int VisibleInstanceCount
     {
         get => _visible;
-        set { _visible = value < 0 ? -1 : value; if (_id != 0) RuntimeMeshBackend.Current?.SetVisible(_id, _visible); }
+        set
+        {
+            _visible = value < 0 ? -1 : value;
+            if (_id != 0) RuntimeMeshBackend.Current?.SetVisible(_id, _visible);
+            Placed?.VisibleCountChanged();
+        }
     }
 
     public Aabb CustomAabb { get; set; }
@@ -77,6 +89,7 @@ public class MultiMesh : Resource
     {
         if ((uint)instance >= (uint)_count) { GD.PushError("MultiMesh.set_instance_transform: instance " + instance + " is out of range"); return; }
         _xf[instance] = transform;
+        Placed?.SetTransform(instance, transform);
         if (_id != 0)
         {
             var t = new float[12];
@@ -145,6 +158,7 @@ public class MultiMesh : Resource
                 if (_colors) { _col[i] = new Color(value[k], value[k + 1], value[k + 2], value[k + 3]); k += 4; }
                 if (_customData) _custom[i] = new Color(value[k], value[k + 1], value[k + 2], value[k + 3]);
             }
+            if (Placed is { } placed) for (int i = 0; i < _count; i++) placed.SetTransform(i, _xf[i]);
             if (_id != 0) PushAll();
         }
     }
@@ -207,14 +221,42 @@ public class MultiMesh : Resource
 public class MultiMeshInstance3D : GeometryInstance3D
 {
     private MultiMesh? _multimesh;
+    private bool _shown = true;
 
     public MultiMesh? Multimesh
     {
         get => _multimesh;
-        set { _multimesh = value; Apply(); }
+        set
+        {
+            if (_multimesh != null && ReferenceEquals(_multimesh.Placed, _adapter)) { _multimesh.Placed = null; ReleasePlaced(); }
+            _multimesh = value;
+            Apply();
+        }
     }
 
-    private void Apply() => PushMeshAndMaterial(_multimesh?.EngineAssetPath);
+    // The level placed one mesh entity per instance (index = instance). While they match the table they draw it, and the table's changes move them; a change they cannot
+    // follow (a different count, colours, custom data, another mesh) gives them up and the table is baked into one mesh, as for a MultiMesh a script made.
+    private void Apply()
+    {
+        if (PlacedPending) return;   // the level's instances are attached when the node enters the tree, which applies the table again
+        if (_multimesh != null && HasPlacedEntities) _multimesh.Placed = Adapter;
+        if (!HasPlacedEntities) PushMeshAndMaterial(_multimesh?.EngineAssetPath);
+        else
+        {
+            foreach (Entity e in RenderEntities)
+                if (MaterialOverride is { ResourcePath.Length: > 0 }) e.SetMaterial(System.IO.Path.GetFileNameWithoutExtension(MaterialOverride.ResourcePath));
+            ApplyRenderMasks();
+        }
+    }
+
+    internal override string? PlacedAsset => MeshInstance3D.MeshAssetOf(_multimesh?.Mesh);
+
+    internal override void OnPlacedAdopted(List<Entity> placed)
+    {
+        // Only a level the converter wrote matches its own table; anything else is baked.
+        if (_multimesh == null || !_multimesh.CanFollowPlaced(placed.Count)) ReleasePlaced();
+        else _multimesh.Placed = Adapter;
+    }
 
     internal override void OnMaterialOverrideChanged() => Apply();
 
@@ -226,8 +268,65 @@ public class MultiMeshInstance3D : GeometryInstance3D
 
     internal override void OnVisibilityApplied(bool effective)
     {
-        if (Self.IsValid && Self.HasComponent(Component.MeshRenderer)) Self.SetVisible(effective);
+        _shown = effective;
+        ShowPlaced();
     }
+
+    private void ShowPlaced()
+    {
+        if (!HasPlacedEntities) { ApplyVisibleToRender(_shown); return; }
+        int visible = _multimesh?.VisibleInstanceCount ?? -1;
+        int i = 0;
+        foreach (Entity e in RenderEntities)
+        {
+            if (e.IsAlive && e.HasComponent(Component.MeshRenderer)) e.SetVisible(_shown && (visible < 0 || i < visible));
+            i++;
+        }
+    }
+
+    // What the MultiMesh tells the placed entities reaches the node through this (an internal interface cannot be on a public class's base list).
+    private sealed class PlacedAdapter : IPlacedInstances
+    {
+        private readonly MultiMeshInstance3D _node;
+        public PlacedAdapter(MultiMeshInstance3D node) => _node = node;
+        public void SetTransform(int instance, Transform3D transform) => _node.MovePlaced(instance, transform);
+        public void VisibleCountChanged() => _node.ShowPlaced();
+        public void Release() => _node.GivePlacedUp();
+    }
+
+    private PlacedAdapter? _adapter;
+    private IPlacedInstances Adapter => _adapter ??= new PlacedAdapter(this);
+
+    private void MovePlaced(int instance, Transform3D transform)
+    {
+        if (!HasPlacedEntities) return;
+        int i = 0;
+        foreach (Entity e in RenderEntities)
+        {
+            if (i++ != instance) continue;
+            FabricSpace.ToAver(transform, out Aver.Scene.Vec3 pos, out Aver.Scene.Quat rot, out Aver.Scene.Vec3 scale);
+            e.SetLocalPosition(pos);
+            e.SetLocalRotation(rot);
+            e.SetLocalScale(scale);
+            return;
+        }
+    }
+
+    private void GivePlacedUp()
+    {
+        if (_multimesh != null) _multimesh.Placed = null;
+        ReleasePlaced();
+        Apply();
+    }
+}
+
+/// <summary>What a MultiMesh tells the entities a level placed for its instances (see MultiMeshInstance3D).</summary>
+internal interface IPlacedInstances
+{
+    void SetTransform(int instance, Transform3D transform);
+    void VisibleCountChanged();
+    /// <summary>A change the placed entities cannot follow: destroy them and bake the table.</summary>
+    void Release();
 }
 
 /// <summary>The items a <see cref="GridMap"/> places: a mesh, its transform and collision shapes per item id (Godot's MeshLibrary).</summary>
@@ -532,6 +631,8 @@ public class SpriteBase3D : GeometryInstance3D
 
     private void Apply() => PushMeshAndMaterial(MeshInstance3D.MeshAssetOf(_mesh));
 
+    internal override string? PlacedAsset => MeshInstance3D.MeshAssetOf(_mesh);
+
     internal override void OnMaterialOverrideChanged() => Apply();
 
     internal override void OnEnteringTree()
@@ -540,10 +641,7 @@ public class SpriteBase3D : GeometryInstance3D
         Apply();
     }
 
-    internal override void OnVisibilityApplied(bool effective)
-    {
-        if (Self.IsValid && Self.HasComponent(Component.MeshRenderer)) Self.SetVisible(effective);
-    }
+    internal override void OnVisibilityApplied(bool effective) => ApplyVisibleToRender(effective);
 }
 
 /// <summary>A textured quad in the world (Godot's Sprite3D), baked by the converter. The texture, frame and region properties are kept; changing them at run time does

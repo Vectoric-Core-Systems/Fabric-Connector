@@ -335,7 +335,45 @@ static void testGrid() {
     check(b99[0] == b0[0] && b99[4] == b0[4], "an index out of range answers the identity (Godot's answer)");
 }
 
+// A Godot 4.0 / 4.1 surface (no version bit): one interleaved vertex buffer, per vertex the position floats, a 10-10-10-2 normal word and a tangent word. The
+// layout was read from a real file of that age (the kinematic_character demo's cube.mesh), whose positions come out as a clean cube only when read this way.
+static void testLegacy() {
+    AVER_INFO("=== a Godot 4.0 / 4.1 surface ===");
+    const auto word = [](double x, double y, double z, u32 a) {
+        const auto q = [](double v) { return static_cast<u32>(std::lround((v * 0.5 + 0.5) * 1023.0)); };
+        return q(x) | (q(y) << 10) | (q(z) << 20) | (a << 30);
+    };
+    std::vector<u8> vd, ad, id;
+    const f32 pos[9] = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+    for (int i = 0; i < 3; ++i) {
+        for (int k = 0; k < 3; ++k) putF(vd, pos[i * 3 + k]);
+        put32(vd, word(0, 0, 1, 0));                    // normal (0, 0, 1)
+        put32(vd, word(1, 0, 0, i == 1 ? 0u : 3u));     // tangent (1, 0, 0); handedness - for vertex 1
+    }
+    const f32 uv[6] = {0, 0, 1, 0, 0, 1};
+    for (f32 f : uv) putF(ad, f);
+    put16(id, 0); put16(id, 1); put16(id, 2);
+    const i64 legacyFormat = kV | kN | kT | kU | kIdx;   // 0x1017, as the file has it
+    GodotVariant d = vDict({{"aabb", vAabb(0, 0, 0, 1, 1, 0)}, {"attribute_data", vBytes(ad)}, {"format", vInt(legacyFormat)}, {"index_count", vInt(3)}, {"index_data", vBytes(id)},
+                            {"primitive", vInt(3)}, {"vertex_count", vInt(3)}, {"vertex_data", vBytes(vd)}});
+    GodotSurface s;
+    std::string why;
+    std::vector<std::string> notes;
+    check(decodeArrayMeshSurface(d, s, &why, &notes), "it decodes: " + why);
+    check(s.formatVersion == 0 && !notes.empty(), "format version 0 is said");
+    check(s.pos.size() == 9 && near(s.pos[3], 1, 1e-6) && near(s.pos[4], 0, 1e-6) && near(s.pos[7], 1, 1e-6) && near(s.pos[8], 0, 1e-6), "positions are read at the interleaved stride");
+    check(s.nrm.size() == 9 && near(s.nrm[2], 1.0, 1e-3) && near(s.nrm[0], 0.0, 3e-3), "the normal word decodes to +Z");
+    check(s.tan.size() == 12 && near(s.tan[0], 1.0, 1e-3) && near(s.tan[3], 1.0, 1e-3) && near(s.tan[7], -1.0) && near(s.tan[11], 1.0), "the tangent word decodes to +X, its handedness from the alpha bits");
+    check(s.uv.size() == 6 && near(s.uv[2], 1, 1e-6) && near(s.uv[5], 1, 1e-6), "UVs come from the attribute buffer as floats");
+    // the same bits with the old per-array compress flag for vertices (bit 13): not decoded, and said so
+    GodotVariant c = vDict({{"aabb", vAabb(0, 0, 0, 1, 1, 0)}, {"attribute_data", vBytes(ad)}, {"format", vInt(legacyFormat | (1ll << 13))}, {"index_count", vInt(3)}, {"index_data", vBytes(id)},
+                            {"primitive", vInt(3)}, {"vertex_count", vInt(3)}, {"vertex_data", vBytes(vd)}});
+    GodotSurface s2;
+    check(!decodeArrayMeshSurface(c, s2, &why) && why.find("4.0/4.1") != std::string::npos, "a 4.0/4.1 surface with a compress flag is refused with a reason");
+}
+
 int main() {
+    testLegacy();
     testUncompressed();
     testIndexWidth();
     testCompressed();

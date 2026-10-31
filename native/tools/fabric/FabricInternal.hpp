@@ -298,6 +298,8 @@ public:
                                    const Where& w);
     // An imported model file; the parts it produced (cached per file).
     const ModelResult* modelFor(const std::string& resPath, const Where& w);
+    void applyRootScale(const std::string& resPath, ModelResult& r);   // the import's nodes/root_scale, onto the meshes and the parts
+    void applyMaterialOverrides(const std::string& resPath, ModelResult& r, const std::string& base);   // the import's use_external materials, onto the meshes' slots
     // The node tree Godot's importer makes for a glTF model (cached per file); null for other model formats and unreadable files.
     const ModelTree* modelTreeFor(const std::string& resPath, const Where& w);
     std::map<std::string, std::unique_ptr<ModelTree>> modelTrees_;
