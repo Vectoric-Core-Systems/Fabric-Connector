@@ -121,8 +121,8 @@ jobs:
           dotnet "$dll" > /tmp/managed.txt 2>&1; echo "exit status: $?"; tail -n 3 /tmp/managed.txt
           core="$(ls -1 /tmp/core.* 2>/dev/null | head -n 1)"
           echo "core: $core"
-          [ -n "$core" ] && gdb -q -batch -ex 'info sharedlibrary' -ex 'thread apply all bt 30' "$(command -v dotnet)" "$core" 2>&1 \
-            | grep -vE '^\[(New|Thread)|^warning: ' | grep -E 'Thread|^#|Aver|libgcc|libc|From|0x' | head -n 200
+          [ -n "$core" ] && gdb -q -batch -ex 'bt 60' -ex 'info registers rip rsp' -ex 'x/6gx $rsp' -ex 'info sharedlibrary' \
+            "$(command -v dotnet)" "$core" 2>&1 | grep -vE '^\[(New|Thread)|^warning: ' | head -n 160
           exit 0
 
       - name: Upload CTest output on failure
