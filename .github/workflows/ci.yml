@@ -121,8 +121,19 @@ jobs:
           dotnet "$dll" > /tmp/managed.txt 2>&1; echo "exit status: $?"; tail -n 3 /tmp/managed.txt
           core="$(ls -1 /tmp/core.* 2>/dev/null | head -n 1)"
           echo "core: $core"
-          [ -n "$core" ] && gdb -q -batch -ex 'bt 60' -ex 'info registers rip rsp' -ex 'x/6gx $rsp' -ex 'info sharedlibrary' \
-            "$(command -v dotnet)" "$core" 2>&1 | grep -vE '^\[(New|Thread)|^warning: ' | head -n 160
+          # The crash is a call from ld.so's _dl_fini to an unrelocated address: name the library whose fini was being run (a link_map's
+          # l_name is at offset 8, l_addr at 0) from frame 1's callee-saved registers.
+          cat > /tmp/fini.gdb <<'GDB'
+          bt 12
+          frame 1
+          info registers rbx rbp r12 r13 r14 r15
+          x/12i $pc-40
+          GDB
+          for r in rbx rbp r12 r13 r14 r15; do
+            printf 'echo \\n== %s\\n\nprint/x *(long*)$%s\nprint *(char**)($%s+8)\n' "$r" "$r" "$r" >> /tmp/fini.gdb
+          done
+          echo 'info proc mappings' >> /tmp/fini.gdb
+          [ -n "$core" ] && gdb -q -batch -x /tmp/fini.gdb "$(command -v dotnet)" "$core" 2>&1 | grep -vE '^\[(New|Thread)|^warning: ' | head -n 260
           exit 0
 
       - name: Upload CTest output on failure
