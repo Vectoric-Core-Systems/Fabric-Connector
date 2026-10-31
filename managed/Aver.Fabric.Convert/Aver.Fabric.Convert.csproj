@@ -2,8 +2,8 @@
 
   <!-- Aver.Fabric.Convert: the GodotSharp half of the Fabric Connector (docs/plans/fabric/G3_SCRIPTS.md).
 
-       A console tool, staged to bin/Tools beside averdesign and restored the same way: Microsoft.CodeAnalysis.CSharp 5.6.0 comes from
-       the vendored third_party/nuget folder (NuGet.config names it as the only source), so the restore needs no network. It has no
+       A console tool, staged to the extension's tools/ folder: Microsoft.CodeAnalysis.CSharp 5.6.0 comes from the engine's vendored
+       third_party/nuget folder (managed/Directory.Build.props adds it; managed/NuGet.config clears the rest), so the restore needs no network. It has no
        ProjectReference to the engine: it compiles the converted scripts against the Aver.Fabric.dll and Aver.Framework.dll it finds
        in a folder (bin/Scripting by default), so a tool built today still checks scripts against whatever runtime is staged.
 

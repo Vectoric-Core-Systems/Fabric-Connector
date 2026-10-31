@@ -1,0 +1,8 @@
+<Project>
+  <!-- Written by CMake at configure time as managed/fabric-build.props (ignored by git): where the last configured build's engine and bin/ are,
+       so `dotnet build` and `dotnet run` in managed/ work by hand. A -p: property or an AVER_ENGINE_DIR / AVER_BIN_DIR variable wins over it. -->
+  <PropertyGroup>
+    <AverEngineDir Condition="'$(AverEngineDir)' == ''">@AVER_ENGINE_SOURCE_DIR@</AverEngineDir>
+    <AverBinDir Condition="'$(AverBinDir)' == ''">@AVER_ENGINE_BUILD_DIR@/bin</AverBinDir>
+  </PropertyGroup>
+</Project>

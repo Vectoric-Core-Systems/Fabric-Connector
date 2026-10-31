@@ -47,12 +47,8 @@ static class ConvertScriptsTests
     private static ReportItem? Item(ConversionResult r, string type, string property) =>
         r.Items.FirstOrDefault(i => i.Type == type && i.Property == property);
 
-    private static string RepoRoot()
-    {
-        for (DirectoryInfo? d = new DirectoryInfo(T.DataDir()); d != null; d = d.Parent)
-            if (Directory.Exists(Path.Combine(d.FullName, "scripting", "csharp", "Aver.Framework"))) return d.FullName;
-        throw new DirectoryNotFoundException("the repository root was not found above tests/fabric/data");
-    }
+    // The Aver Engine checkout the converted Scripts.csproj files reference.
+    private static string RepoRoot() => T.EngineDir();
 
     private static string Temp(string what)
     {

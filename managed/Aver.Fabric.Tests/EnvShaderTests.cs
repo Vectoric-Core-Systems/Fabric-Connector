@@ -54,13 +54,8 @@ static class EnvShaderTests
 
     private static void ConverterOutput()
     {
-        string? exe = null;
-        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null && exe == null; d = d.Parent)
-        {
-            string p = Path.Combine(d.FullName, "build", "bin", OperatingSystem.IsWindows() ? "AverAssetC.exe" : "AverAssetC");
-            if (File.Exists(p)) exe = p;
-        }
-        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC is not built (build/bin/AverAssetC)"); return; }
+        string? exe = T.AssetCExe();
+        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC is not built (the build's bin/AverAssetC)"); return; }
         string output = Path.Combine(Path.GetTempPath(), "fabric_envshader_" + Guid.NewGuid().ToString("N"));
         var env = new FakeEnv();
         var parts = new FakeParams();

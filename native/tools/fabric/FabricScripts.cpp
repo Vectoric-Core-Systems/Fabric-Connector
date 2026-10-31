@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <string>
 
 namespace aver::fabric {
 
@@ -23,11 +25,21 @@ constexpr char kPathListSeparator = ';';
 constexpr char kPathListSeparator = ':';
 #endif
 
-// The engine checkout above the executable (a build tree inside a checkout), where Scripts.csproj's project references point.
+// The engine checkout, where Scripts.csproj's project references point: above the executable (a build tree inside a checkout), or the source
+// directory a CMake build tree above it was configured from (its CMakeCache.txt; a build tree anywhere else, as this extension's own build is).
 std::string engineCheckout() {
     std::error_code ec;
+    const auto isEngine = [&ec](const fsys::path& p) { return fsys::exists(p / "scripting" / "csharp" / "Aver.Framework" / "Aver.Framework.csproj", ec); };
+    const std::string homeKey = "CMAKE_HOME_DIRECTORY:INTERNAL=";
     for (fsys::path p = fsys::path(executableDir()); !p.empty(); p = p.parent_path()) {
-        if (fsys::exists(p / "scripting" / "csharp" / "Aver.Framework" / "Aver.Framework.csproj", ec)) return p.string();
+        if (isEngine(p)) return p.string();
+        std::ifstream cache(p / "CMakeCache.txt");
+        for (std::string line; std::getline(cache, line);) {
+            if (line.compare(0, homeKey.size(), homeKey) != 0) continue;
+            const fsys::path home(line.substr(homeKey.size()));
+            if (isEngine(home)) return home.string();
+            break;
+        }
         if (p == p.parent_path()) break;
     }
     return {};

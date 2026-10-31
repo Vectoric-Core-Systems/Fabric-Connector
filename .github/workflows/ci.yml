@@ -1,0 +1,114 @@
+# Fabric Connector CI.
+#
+# Builds the Aver Engine at the commit this repository pins (AVER_ENGINE_REF in cmake/Standalone.cmake, fetched from GitHub), with this
+# extension added to it, and runs the extension's tests: the C++ suites (tests/fabric, tests/formats.godot) and FabricManagedTests
+# (dotnet run in managed/Aver.Fabric.Tests). The toolchain and system packages are the engine's own CI (Aver-Engine .github/workflows/ci.yml),
+# without what only the editor needs.
+#
+# WHAT A GREEN TICK DOES NOT COVER
+#   * Nothing here opens a GPU device, a window or an audio device: no runner has one. The suites in this repository do not need one (the DXC
+#     halves of GodotShader*Test compile shaders and create no device); the engine's own GPU suites are not built here (its tests are off), and
+#     the engine's CI is where those skip (exit 77) on a runner without a device.
+#   * The editor's Import Godot Project dialog (the ImGui half) and the Extensions panel: not built here.
+#   * The Godot-side behaviour of a converted project: the read-back and Godot --headless checks come after this phase.
+#
+# The engine is built only as far as the extension needs it (no editor, no runtime host, no engine tests); the engine's own `all` is not built.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token: nothing here writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  # One run per ref: a long build is not worth doing twice for a branch someone is pushing to.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} ${{ matrix.config }} build + tests
+    runs-on: ${{ matrix.os }}
+    # macOS is the slowest runner (3 cores, 7 GB).
+    timeout-minutes: ${{ matrix.os == 'macos-15' && 180 || 120 }}
+    strategy:
+      # Both configurations on every platform, like the engine: Release compiles asserts out and generates different floating-point code,
+      # so neither build substitutes for the other.
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, macos-15]
+        config: [Debug, Release]
+    env:
+      VULKAN_SDK_VERSION: 1.4.363.0
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The managed projects build against the pinned engine's Aver.Framework, whose own global.json asks for the same SDK.
+      - name: Pin the .NET SDK global.json asks for
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+
+      - name: Linux packages (SDL's build dependencies, Ninja, software Vulkan)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev \
+            libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libdecor-0-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev \
+            libvulkan1 mesa-vulkan-drivers
+
+      - name: macOS packages (Ninja, SDL 3, and the LunarG SDK for MoltenVK, the loader and DXC)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja sdl3
+          curl -sSL -o vulkansdk.zip \
+            "https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_SDK_VERSION}.zip"
+          unzip -q vulkansdk.zip
+          app=$(ls -d *.app | head -1)
+          # `usr` copies the loader and MoltenVK into /usr/local, where a bare dlopen finds them.
+          sudo "./${app}/Contents/MacOS/$(basename "${app}" .app)" \
+            --root "$HOME/VulkanSDK/${VULKAN_SDK_VERSION}" --accept-licenses --default-answer \
+            --confirm-command install com.lunarg.vulkan.core com.lunarg.vulkan.usr
+          echo "VULKAN_SDK=$HOME/VulkanSDK/${VULKAN_SDK_VERSION}/macOS" >> "$GITHUB_ENV"
+
+      # pwsh on every OS (it is on every hosted runner): Git Bash's /usr/bin/link would shadow MSVC's link.exe on Windows.
+      # No AVER_ENGINE_DIR: the engine is fetched at AVER_ENGINE_REF. SDL 3 and, on Linux, DXC are fetched by the engine's CMake at configure time.
+      - name: Configure (fetches the pinned engine and configures it with this extension)
+        shell: pwsh
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build
+
+      # Every row is one executable ending in Test, or FabricManagedTests. A suite that cannot run on the machine exits 77 and ctest reports it as
+      # Skipped (the engine's registration sets that), which is how the engine's own GPU suites stay out of a runner's way.
+      - name: Run the tests
+        shell: pwsh
+        run: ctest --test-dir build --output-on-failure -C ${{ matrix.config }}
+
+      - name: Upload CTest output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-${{ matrix.os }}-${{ matrix.config }}
+          path: |
+            build/Testing/Temporary/
+            build/engine/Testing/Temporary/
+          if-no-files-found: ignore

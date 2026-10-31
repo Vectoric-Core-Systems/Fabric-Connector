@@ -1,0 +1,10 @@
+# Line endings for files whose BYTES are compared, not just their text.
+#
+# Copied from the Aver Engine's .gitattributes (the rules that apply here: the Aver format fixtures under tests/ and test-content/). A machine
+# with core.autocrlf=true rewrites checked-out files to CRLF; that is fine for source, but the tests compare the bytes of these files with the
+# bytes the converter writes, so a CRLF copy fails for a reason that has nothing to do with the code. Pinned to LF, the comparison means what
+# it says everywhere.
+*.ocgraph  text eol=lf
+*.ocmat    text eol=lf
+*.ocmap    text eol=lf
+*.ocproject text eol=lf

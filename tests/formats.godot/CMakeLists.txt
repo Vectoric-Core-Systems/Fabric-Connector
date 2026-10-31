@@ -1,6 +1,7 @@
 # FormatsGodotTest -- the Godot text-format reader (native/formats.godot) over the hand-written
 # fixtures in tests/fabric/data/. Core and Platform only: no device, no .NET, no engine.
-# Registered with ctest by the root aver_register_ctest_in walk (it ends in Test).
+# Registered with ctest by the root CMakeLists.txt's walk (aver_fabric_register_ctest_in: every target that ends in Test).
+# AVER_REPO_ROOT, where a test names it, is the Aver Engine checkout (its shaders and DXC), not this repository.
 set(AVER_FABRIC_TEST_DATA ${AVER_FABRIC_DIR}/tests/fabric/data)
 
 add_executable(FormatsGodotTest src/FormatsGodotTest.cpp)
@@ -27,7 +28,7 @@ set_target_properties(GodotBinaryTest PROPERTIES
 if(TARGET Aver.RHI)
   add_executable(GodotShaderTest src/GodotShaderTest.cpp)
   target_link_libraries(GodotShaderTest PRIVATE Aver.Formats.Godot Aver.RHI Aver.Platform Aver.Core)
-  target_compile_definitions(GodotShaderTest PRIVATE AVER_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(GodotShaderTest PRIVATE AVER_REPO_ROOT="${AVER_ENGINE_SOURCE_DIR}")
   set_target_properties(GodotShaderTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
@@ -37,7 +38,7 @@ endif()
 if(TARGET Aver.Render.PBR.Materials)
   add_executable(GodotShaderMaterialTest src/GodotShaderMaterialTest.cpp)
   target_link_libraries(GodotShaderMaterialTest PRIVATE Aver.Formats.Godot Aver.Render.PBR.Materials Aver.Formats Aver.RHI Aver.Platform Aver.Core)
-  target_compile_definitions(GodotShaderMaterialTest PRIVATE AVER_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+  target_compile_definitions(GodotShaderMaterialTest PRIVATE AVER_REPO_ROOT="${AVER_ENGINE_SOURCE_DIR}")
   set_target_properties(GodotShaderMaterialTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
@@ -47,6 +48,6 @@ endif()
 if(TARGET Aver.Render.PBR.Materials)
   add_executable(GodotShaderEnvTest src/GodotShaderEnvTest.cpp)
   target_link_libraries(GodotShaderEnvTest PRIVATE Aver.Formats.Godot Aver.Render.PBR.Materials Aver.Formats Aver.RHI Aver.Platform Aver.Core)
-  target_compile_definitions(GodotShaderEnvTest PRIVATE AVER_REPO_ROOT="${CMAKE_SOURCE_DIR}" AVER_FABRIC_DATA="${AVER_FABRIC_TEST_DATA}")
+  target_compile_definitions(GodotShaderEnvTest PRIVATE AVER_REPO_ROOT="${AVER_ENGINE_SOURCE_DIR}" AVER_FABRIC_DATA="${AVER_FABRIC_TEST_DATA}")
   set_target_properties(GodotShaderEnvTest PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()

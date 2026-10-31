@@ -21,12 +21,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\scripting\csharp\Aver.Framework\Aver.Framework.csproj" />
+    <!-- The engine is a checkout, not a sibling folder: AverEngineDir comes from managed/Directory.Build.props. -->
+    <ProjectReference Include="$(AverEngineDir)/scripting/csharp/Aver.Framework/Aver.Framework.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Loads Aver.Fabric.Native (the GDExtension host, in the extension's native/<platform> folder) for this assembly; one shared file, a resolver per assembly. -->
-    <Compile Include="../../../../scripting/csharp/Shared/NativeResolver.cs" Link="NativeResolver.cs" />
+    <Compile Include="$(AverEngineDir)/scripting/csharp/Shared/NativeResolver.cs" Link="NativeResolver.cs" />
   </ItemGroup>
 
   <ItemGroup>

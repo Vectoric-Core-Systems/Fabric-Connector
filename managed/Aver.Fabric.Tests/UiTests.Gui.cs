@@ -969,14 +969,8 @@ static partial class UiTests
 
     private static void ConverterOutput()
     {
-        string exeName = "AverAssetC" + (OperatingSystem.IsWindows() ? ".exe" : "");
-        string? exe = null;
-        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null && exe == null; d = d.Parent)
-        {
-            string p = Path.Combine(d.FullName, "build", "bin", exeName);
-            if (File.Exists(p)) exe = p;
-        }
-        if (exe == null) { Console.WriteLine("  SKIP: build/bin/AverAssetC was not found"); return; }
+        string? exe = T.AssetCExe();
+        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC was not found in the build's bin"); return; }
         string tmp = Path.Combine(Path.GetTempPath(), "aver-fabric-ui-conv-" + System.Environment.ProcessId);
         string src = Path.Combine(tmp, "UiGame");
         string outDir = Path.Combine(tmp, "out");

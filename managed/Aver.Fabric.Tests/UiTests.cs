@@ -131,11 +131,8 @@ static partial class UiTests
 
     private static string? FindBin(string file)
     {
-        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
-        {
-            string bin = Path.Combine(d.FullName, "build", "bin");
+        foreach (string bin in T.BinDirs())
             if (File.Exists(Path.Combine(bin, file))) return bin;
-        }
         return null;
     }
 

@@ -49,6 +49,51 @@ static class T
         throw new DirectoryNotFoundException("tests/fabric/data was not found above " + AppContext.BaseDirectory);
     }
 
+    private static string? BakedMetadata(string key) =>
+        typeof(T).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == key)?.Value;
+
+    /// <summary>The Aver Engine checkout this build uses: AVER_ENGINE_DIR, else the path the project file baked in (AverEngineDir).</summary>
+    public static string EngineDir()
+    {
+        string? dir = System.Environment.GetEnvironmentVariable("AVER_ENGINE_DIR");
+        if (string.IsNullOrEmpty(dir)) dir = BakedMetadata("AverEngineDir");
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(Path.Combine(dir, "scripting", "csharp", "Aver.Framework")))
+            throw new DirectoryNotFoundException("the Aver Engine checkout was not found (AVER_ENGINE_DIR, or AverEngineDir at build time): " + dir);
+        return dir;
+    }
+
+    /// <summary>The CMake build's bin folders to look in, best first: AVER_BIN_DIR, the AverBinDir the project file baked in, then a build/bin above the test's output folder.</summary>
+    public static IEnumerable<string> BinDirs()
+    {
+        string? env = System.Environment.GetEnvironmentVariable("AVER_BIN_DIR");
+        if (!string.IsNullOrEmpty(env)) yield return env;
+        string? baked = BakedMetadata("AverBinDir");
+        if (!string.IsNullOrEmpty(baked)) yield return baked;
+        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+            yield return Path.Combine(d.FullName, "build", "bin");
+    }
+
+    /// <summary>The engine's AverAssetC from the build's bin folder, or null when the build has none.</summary>
+    public static string? AssetCExe()
+    {
+        string name = "AverAssetC" + (OperatingSystem.IsWindows() ? ".exe" : "");
+        foreach (string bin in BinDirs())
+            if (File.Exists(Path.Combine(bin, name))) return Path.Combine(bin, name);
+        return null;
+    }
+
+    /// <summary>The extension's runtime test content (test-content/FabricRuntime/Content), found above the fixtures folder.</summary>
+    public static string TestContentDir()
+    {
+        for (DirectoryInfo? d = new DirectoryInfo(DataDir()); d != null; d = d.Parent)
+        {
+            string p = Path.Combine(d.FullName, "test-content", "FabricRuntime", "Content");
+            if (Directory.Exists(p)) return p;
+        }
+        throw new DirectoryNotFoundException("test-content/FabricRuntime/Content was not found above " + DataDir());
+    }
+
     public static bool Near(float a, float b, float eps = 1e-4f) => MathF.Abs(a - b) <= eps;
     public static bool Near(Vector3 a, Vector3 b, float eps = 1e-4f) => Near(a.X, b.X, eps) && Near(a.Y, b.Y, eps) && Near(a.Z, b.Z, eps);
     public static bool Near(Quaternion a, Quaternion b, float eps = 1e-4f) =>

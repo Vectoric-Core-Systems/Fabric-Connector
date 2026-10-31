@@ -1,0 +1,24 @@
+<Project>
+  <!-- The managed half builds against an Aver Engine checkout (it references Aver.Framework and compiles the engine's NativeResolver.cs).
+       AverEngineDir names it, first found of:
+         1. -p:AverEngineDir=<dir>   (what CMake passes)
+         2. the AVER_ENGINE_DIR environment variable
+         3. fabric-build.props, which CMake writes at configure time (the engine of the last configured build)
+         4. build/_deps/averengine-src, where a fetched engine is when the build directory is called build
+       AverBinDir is that build's bin/ (the engine's native libraries and AverAssetC, which some tests run), found the same way. -->
+  <PropertyGroup>
+    <AverEngineDir Condition="'$(AverEngineDir)' == ''">$(AVER_ENGINE_DIR)</AverEngineDir>
+    <AverBinDir Condition="'$(AverBinDir)' == ''">$(AVER_BIN_DIR)</AverBinDir>
+  </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)fabric-build.props" Condition="Exists('$(MSBuildThisFileDirectory)fabric-build.props')" />
+  <PropertyGroup>
+    <AverEngineDir Condition="'$(AverEngineDir)' == ''">$(MSBuildThisFileDirectory)../build/_deps/averengine-src</AverEngineDir>
+    <AverEngineDir>$([System.IO.Path]::GetFullPath('$(AverEngineDir)'))</AverEngineDir>
+    <!-- The engine's offline package source (Roslyn, for Aver.Fabric.Convert); NuGet.config clears the others. -->
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(AverEngineDir)/third_party/nuget</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+  <Target Name="AverEngineDirCheck" BeforeTargets="Restore;_GenerateRestoreGraph">
+    <Error Condition="!Exists('$(AverEngineDir)/scripting/csharp/Aver.Framework/Aver.Framework.csproj')"
+           Text="AverEngineDir '$(AverEngineDir)' is not an Aver Engine checkout. Pass -p:AverEngineDir=&lt;dir&gt;, set AVER_ENGINE_DIR, or configure the repository with CMake first." />
+  </Target>
+</Project>

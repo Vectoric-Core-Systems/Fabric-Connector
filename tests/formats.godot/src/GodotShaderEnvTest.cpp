@@ -56,7 +56,8 @@ static std::string stageShaders() {
     std::error_code ec;
     fs::remove_all(dst, ec);
     fs::create_directories(dst, ec);
-    for (const char* mod : {"rhi", "render.pbr", "render.voxi", "particles"}) {
+    // render.pt: voxi_rt.hlsli includes its aver_lights.hlsli, which a build that has not built the path tracer has not deployed to bin/shaders.
+    for (const char* mod : {"rhi", "render.pbr", "render.voxi", "render.pt", "particles"}) {
         for (const auto& e : fs::directory_iterator(root / mod / "shaders", ec)) {
             const std::string ext = e.path().extension().string();
             if (e.is_regular_file() && (ext == ".hlsl" || ext == ".hlsli")) fs::copy_file(e.path(), dst / e.path().filename(), fs::copy_options::overwrite_existing, ec);

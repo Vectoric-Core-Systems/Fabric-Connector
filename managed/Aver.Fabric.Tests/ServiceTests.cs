@@ -29,13 +29,8 @@ static class ServiceTests
     // converter (what it writes) and this runtime (what it reads). Skipped when the tool has not been built.
     private static void ConverterOutput()
     {
-        string? exe = null;
-        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null && exe == null; d = d.Parent)
-        {
-            string p = Path.Combine(d.FullName, "build", "bin", OperatingSystem.IsWindows() ? "AverAssetC.exe" : "AverAssetC");
-            if (File.Exists(p)) exe = p;
-        }
-        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC is not built (build/bin/AverAssetC)"); return; }
+        string? exe = T.AssetCExe();
+        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC is not built (the build's bin/AverAssetC)"); return; }
         string input = Path.Combine(T.DataDir(), "ConvertGame");
         string output = Path.Combine(Path.GetTempPath(), "fabric_runtime_" + Guid.NewGuid().ToString("N"));
         try
@@ -383,8 +378,8 @@ static class ServiceTests
         T.Check("that is remembered", tree.QuitRequested);
     }
 
-    // Level and mesh files live under the engine repository's test-content/ (SeparationTest allows game content nowhere else): five levels up from tests/fabric/data.
-    private static string Content() => Path.Combine(T.DataDir(), "..", "..", "..", "..", "..", "test-content", "FabricRuntime", "Content");
+    // Level and mesh files live under test-content/FabricRuntime, at the repository root.
+    private static string Content() => T.TestContentDir();
 
     private static void Loader()
     {

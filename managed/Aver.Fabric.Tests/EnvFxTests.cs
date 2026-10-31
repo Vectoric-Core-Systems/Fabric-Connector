@@ -261,13 +261,8 @@ static class EnvFxTests
     // scene converter writes (Props, an inline FogMaterial) and what these classes read. Skipped when the tool has not been built.
     private static void ConverterOutput()
     {
-        string? exe = null;
-        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null && exe == null; d = d.Parent)
-        {
-            string p = Path.Combine(d.FullName, "build", "bin", OperatingSystem.IsWindows() ? "AverAssetC.exe" : "AverAssetC");
-            if (File.Exists(p)) exe = p;
-        }
-        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC is not built (build/bin/AverAssetC)"); return; }
+        string? exe = T.AssetCExe();
+        if (exe == null) { Console.WriteLine("  SKIP: AverAssetC is not built (the build's bin/AverAssetC)"); return; }
         string output = Path.Combine(Path.GetTempPath(), "fabric_envvol_" + Guid.NewGuid().ToString("N"));
         Fake f = Install();
         string? savedRoot = ResourceLoader.ContentRootOverride;

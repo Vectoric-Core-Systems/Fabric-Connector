@@ -2,7 +2,8 @@
 # file it wrote read back with the engine's own loaders (.ocproject, .ocworld, .ocprefab, .ocinput, .ocmat, .ocmesh).
 # It runs the tool as a process, like AverAssetCTest, so it depends on that target; the tool reaches the converter through the extension loader
 # (bin/Extensions/FabricConnector, the Aver.Fabric.Native target). No device, no .NET, no engine run.
-# Registered with ctest by the root aver_register_ctest_in walk (it ends in Test).
+# Registered with ctest by the root CMakeLists.txt's walk (aver_fabric_register_ctest_in: every target that ends in Test).
+# The engine's tree (AVER_ENGINE_SOURCE_DIR) supplies AverAssetC, the extension loader and the editor's import-dialog sources FabricImportTest compiles.
 set(FABRIC_TEST_DATA ${AVER_FABRIC_DIR}/tests/fabric/data)
 set(FABRIC_CONVERTER_DIR ${AVER_FABRIC_DIR}/native/tools)   # holds fabric/FabricProcess.hpp (FabricE2ETest)
 
@@ -18,7 +19,7 @@ if(TARGET Aver.Formats.Material)
   target_compile_definitions(FabricConvertTest PRIVATE AVER_FABRIC_TEST_OCMAT=1)
 endif()
 fabric_needs_converter(FabricConvertTest)
-target_include_directories(FabricConvertTest PRIVATE ${CMAKE_SOURCE_DIR}/modules/world/include)
+target_include_directories(FabricConvertTest PRIVATE ${AVER_ENGINE_SOURCE_DIR}/modules/world/include)
 target_compile_definitions(FabricConvertTest PRIVATE
   AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
   AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
@@ -72,7 +73,7 @@ set_target_properties(GdextHostTest PROPERTIES
 # depends on those targets when they exist and skips (77) when dotnet or they are absent.
 add_executable(FabricE2ETest src/FabricE2ETest.cpp ${AVER_FABRIC_DIR}/native/tools/fabric/FabricProcess.cpp)
 target_link_libraries(FabricE2ETest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
-target_include_directories(FabricE2ETest PRIVATE ${FABRIC_CONVERTER_DIR} ${CMAKE_SOURCE_DIR}/modules/world/include)
+target_include_directories(FabricE2ETest PRIVATE ${FABRIC_CONVERTER_DIR} ${AVER_ENGINE_SOURCE_DIR}/modules/world/include)
 fabric_needs_converter(FabricE2ETest)
 add_dependencies(FabricE2ETest FabricTestExt)
 if(TARGET Aver.Fabric.Convert)
@@ -91,11 +92,11 @@ set_target_properties(FabricE2ETest PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_
 # ImGui): the importer read from the installed extension.json by the loader, folder checks, the command line, the converter's summary, and the
 # importer running the real AverAssetC on a worker thread. The generic logic has its own engine test (ExtensionImportTest).
 add_executable(FabricImportTest src/FabricImportTest.cpp
-  ${CMAKE_SOURCE_DIR}/sandbox/src/ExtensionImport.cpp
-  ${CMAKE_SOURCE_DIR}/sandbox/src/ProcessStream.cpp
-  ${CMAKE_SOURCE_DIR}/sandbox/src/EditorNotifications.cpp)
+  ${AVER_ENGINE_SOURCE_DIR}/sandbox/src/ExtensionImport.cpp
+  ${AVER_ENGINE_SOURCE_DIR}/sandbox/src/ProcessStream.cpp
+  ${AVER_ENGINE_SOURCE_DIR}/sandbox/src/EditorNotifications.cpp)
 target_link_libraries(FabricImportTest PRIVATE Aver.Extensions Aver.Formats Aver.Platform Aver.Core)
-target_include_directories(FabricImportTest PRIVATE ${CMAKE_SOURCE_DIR}/sandbox/src)
+target_include_directories(FabricImportTest PRIVATE ${AVER_ENGINE_SOURCE_DIR}/sandbox/src)
 fabric_needs_converter(FabricImportTest)
 if(TARGET Aver.Fabric.Convert)
   add_dependencies(FabricImportTest Aver.Fabric.Convert)

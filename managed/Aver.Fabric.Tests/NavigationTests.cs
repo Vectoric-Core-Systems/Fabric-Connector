@@ -63,11 +63,8 @@ static class NavigationTests
 
     private static string? FindBin(string file)
     {
-        for (DirectoryInfo? d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
-        {
-            string bin = IO.Path.Combine(d.FullName, "build", "bin");
+        foreach (string bin in T.BinDirs())
             if (File.Exists(IO.Path.Combine(bin, file))) return bin;
-        }
         return null;
     }
 

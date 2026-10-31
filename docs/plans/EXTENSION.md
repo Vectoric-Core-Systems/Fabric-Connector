@@ -6,7 +6,7 @@ names Godot or Fabric when the move is done. This is the design. **Phase 1 is do
 the neutral hooks, the general-feature renames, the loader (3.1 to 3.4), the editor's import dialog (3.5, the dialog
 only), the managed half (3.6), the packaging that reads `EXTENSION` lines (3.7) and the in-tree relocation (section 4)
 are built. Still to do: the Extensions panel and `.avext` install (phase 3), and the new repo (phase 2). The
-engine-facing description of what exists is [../../EXTENSIONS.md](../../EXTENSIONS.md).
+engine-facing description of what exists is [EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md) in the engine repository.
 
 ## 1. Where Fabric is today
 
@@ -242,7 +242,7 @@ No ImGui crosses the DLL boundary, so the editor never runs extension code in it
   It reads word for word as before: the menu text and title "Import Godot Project", the "Godot project" label, the `_Aver` output
   suffix, the "Replace a project already converted there" and "Report only" checkboxes (flags `--overwrite` and `--dry-run`, in that
   order on the command line), the Godot 3 refusal (`detectVersion`: `config_version=` of at least 5), the "Open converted project"
-  button, the notification titles and the summary line. Fields: see [../../EXTENSIONS.md](../../EXTENSIONS.md), "The editor".
+  button, the notification titles and the summary line. Fields: see [EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md) in the engine repository, "The editor".
 - The summary the dialog reads is the command's closing `{"schemaVersion":1,"summary":true,"kind":"<command>",...}` line, parsed with
   the engine's JSON reader instead of the old string search; `output`, `project`, `report` and `dryRun` are the keys it uses by name,
   the rest feed the manifest's wording (`{converted}` ...).

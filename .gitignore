@@ -1,0 +1,18 @@
+# Build trees (CMake) and the managed projects' output
+build/
+build-*/
+bin/
+obj/
+out/
+
+# Written by CMake at configure time: where the last configured build's engine and bin/ are (cmake/fabric-build.props.in)
+managed/fabric-build.props
+
+# IDE and OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db

@@ -3,7 +3,7 @@
 #   formats.godot  Aver.Formats.Godot   static; the Godot text/binary readers and the shading-language front end (Core + Platform only)
 #   gdext          Aver.Fabric.GDExt    static; the GDExtension host, linked by the headless GdextHostTest
 #   tools/fabric                        the converter (`AverAssetC fabric`), compiled into the library
-#   src                                 aver_extension_entry: the extension ABI (modules/extensions/include/aver/extensions/aver_ext.h)
+#   src                                 aver_extension_entry: the extension ABI (the engine's modules/extensions/include/aver/extensions/aver_ext.h)
 #
 # The library exports two things. aver_extension_entry is what the engine's loader calls: runCommand "fabric" runs the converter. The
 # aver_gdext_* functions (fabric_gdext_abi.h) are what Aver.Fabric's C# runtime P/Invokes to host a converted project's native plugins.
@@ -66,8 +66,8 @@ target_include_directories(Aver.Fabric.Native PRIVATE
   ${AVER_GDEXT_SRC_DIR}            # the host's private headers
   ${AVER_GDEXT_API_DIR}            # gdextension_interface.h
   ${AVER_FABRIC_CONVERTER_DIR}
-  ${CMAKE_SOURCE_DIR}/modules/world/include               # aver/world/LevelTransform.hpp (header-only)
-  ${CMAKE_SOURCE_DIR}/modules/extensions/include)         # aver_ext.h and nothing else of the loader
+  ${AVER_ENGINE_SOURCE_DIR}/modules/world/include         # aver/world/LevelTransform.hpp (header-only)
+  ${AVER_ENGINE_SOURCE_DIR}/modules/extensions/include)   # aver_ext.h and nothing else of the loader
 target_compile_features(Aver.Fabric.Native PRIVATE cxx_std_20)
 target_compile_definitions(Aver.Fabric.Native PRIVATE AVER_GDEXT_ABI_BUILD)
 target_link_libraries(Aver.Fabric.Native PRIVATE Aver.Formats.Godot Aver.Formats Aver.UI Aver.Formats.Audio Aver.Audio Aver.Platform Aver.Core)
@@ -77,7 +77,7 @@ if(TARGET Aver.Formats.Material)
   target_compile_definitions(Aver.Fabric.Native PRIVATE AVER_HAVE_MATERIAL_COMPILE=1)
   # ImportCook leaves the stb_image_write implementation to its executable; this library is one.
   target_sources(Aver.Fabric.Native PRIVATE src/StbImplementation.cpp)
-  target_include_directories(Aver.Fabric.Native PRIVATE ${CMAKE_SOURCE_DIR}/third_party/stb)
+  target_include_directories(Aver.Fabric.Native PRIVATE ${AVER_ENGINE_SOURCE_DIR}/third_party/stb)
 endif()
 # Aver.Fabric.Native.dll / .so / .dylib on every platform: the loader builds the name from the manifest (no "lib" prefix).
 set_target_properties(Aver.Fabric.Native PROPERTIES
