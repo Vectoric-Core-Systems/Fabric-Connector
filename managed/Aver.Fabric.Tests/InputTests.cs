@@ -20,6 +20,8 @@ static class InputTests
         T.Run("Input events reach _Input and _UnhandledInput in Godot's order, and set_input_as_handled stops them", Delivery);
         T.Run("The engine's events bridge to Godot's, and back", Bridge);
         T.Run("Input: the mouse mode and velocity", Mouse);
+        T.Run("Input: the wider key set, side buttons, wheel directions and pad extras bridge both ways", WiderSet);
+        T.Run("Input: touch events bridge, gamepads, rumble, cursor shape and sensors", Devices);
     });
 
     private static InputEventKey Key(Aver.Fabric.Key k, bool pressed, bool ctrl = false, bool echo = false) =>
@@ -295,19 +297,101 @@ static class InputTests
         T.Check("a handled mark reaches the engine event", one.Handled);
 
         T.Check("back: a key", InputBridgeProbe.ToFramework(Key(Aver.Fabric.Key.Space, true)) is Aver.Framework.InputEventKey { Key: Aver.Framework.Key.Space, IsPressed: true });
-        T.Check("back: the numpad enter is Enter, the unknown key is nothing", InputBridgeProbe.ToFramework(Key(Aver.Fabric.Key.KpEnter, true)) is Aver.Framework.InputEventKey { Key: Aver.Framework.Key.Enter } &&
-                                                                              InputBridgeProbe.ToFramework(Key(Aver.Fabric.Key.F5, true)) == null);
+        T.Check("back: the numpad enter has its own key now, a key the engine lacks is nothing", InputBridgeProbe.ToFramework(Key(Aver.Fabric.Key.KpEnter, true)) is Aver.Framework.InputEventKey { Key: Aver.Framework.Key.KpEnter } &&
+                                                                                                 InputBridgeProbe.ToFramework(Key(Aver.Fabric.Key.F5, true)) is Aver.Framework.InputEventKey { Key: Aver.Framework.Key.F5 } &&
+                                                                                                 InputBridgeProbe.ToFramework(Key(Aver.Fabric.Key.F13, true)) == null);
         T.Check("back: mouse button, wheel and pad button", InputBridgeProbe.ToFramework(new InputEventMouseButton { ButtonIndex = MouseButton.Middle, Pressed = true }) is Aver.Framework.InputEventMouseButton { Button: Aver.Framework.Key.MouseMiddle } &&
                                                            InputBridgeProbe.ToFramework(new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown, Pressed = true, Factor = 3f }) is Aver.Framework.InputEventMouseWheel { Delta: -3f } &&
                                                            InputBridgeProbe.ToFramework(new InputEventJoypadButton { ButtonIndex = JoyButton.Y, Pressed = true }) is Aver.Framework.InputEventJoypadButton { Button: Aver.Framework.GamepadButton.Y });
         T.Check("back: an action event has no engine twin", InputBridgeProbe.ToFramework(new InputEventAction { Action = "x" }) == null);
     }
 
+    private static void WiderSet()
+    {
+        // Every Aver key slot past the original set maps to a Godot key and back.
+        var pairs = new (Aver.Framework.Key A, Aver.Fabric.Key G)[]
+        {
+            (Aver.Framework.Key.F1, Aver.Fabric.Key.F1), (Aver.Framework.Key.F12, Aver.Fabric.Key.F12),
+            (Aver.Framework.Key.PageUp, Aver.Fabric.Key.Pageup), (Aver.Framework.Key.PageDown, Aver.Fabric.Key.Pagedown),
+            (Aver.Framework.Key.Home, Aver.Fabric.Key.Home), (Aver.Framework.Key.End, Aver.Fabric.Key.End),
+            (Aver.Framework.Key.Insert, Aver.Fabric.Key.Insert), (Aver.Framework.Key.Delete, Aver.Fabric.Key.Delete),
+            (Aver.Framework.Key.Backspace, Aver.Fabric.Key.Backspace), (Aver.Framework.Key.CapsLock, Aver.Fabric.Key.Capslock),
+            (Aver.Framework.Key.NumLock, Aver.Fabric.Key.Numlock), (Aver.Framework.Key.ScrollLock, Aver.Fabric.Key.Scrolllock),
+            (Aver.Framework.Key.Pause, Aver.Fabric.Key.Pause), (Aver.Framework.Key.PrintScreen, Aver.Fabric.Key.Print),
+            (Aver.Framework.Key.Menu, Aver.Fabric.Key.Menu), (Aver.Framework.Key.Meta, Aver.Fabric.Key.Meta),
+            (Aver.Framework.Key.Minus, Aver.Fabric.Key.Minus), (Aver.Framework.Key.Equal, Aver.Fabric.Key.Equal),
+            (Aver.Framework.Key.LBracket, Aver.Fabric.Key.Bracketleft), (Aver.Framework.Key.RBracket, Aver.Fabric.Key.Bracketright),
+            (Aver.Framework.Key.Backslash, Aver.Fabric.Key.Backslash), (Aver.Framework.Key.Semicolon, Aver.Fabric.Key.Semicolon),
+            (Aver.Framework.Key.Apostrophe, Aver.Fabric.Key.Apostrophe), (Aver.Framework.Key.Comma, Aver.Fabric.Key.Comma),
+            (Aver.Framework.Key.Period, Aver.Fabric.Key.Period), (Aver.Framework.Key.Slash, Aver.Fabric.Key.Slash),
+            (Aver.Framework.Key.Grave, Aver.Fabric.Key.Quoteleft), (Aver.Framework.Key.Kp0, Aver.Fabric.Key.Kp0), (Aver.Framework.Key.Kp9, Aver.Fabric.Key.Kp9),
+            (Aver.Framework.Key.KpAdd, Aver.Fabric.Key.KpAdd), (Aver.Framework.Key.KpSubtract, Aver.Fabric.Key.KpSubtract),
+            (Aver.Framework.Key.KpMultiply, Aver.Fabric.Key.KpMultiply), (Aver.Framework.Key.KpDivide, Aver.Fabric.Key.KpDivide),
+            (Aver.Framework.Key.KpDecimal, Aver.Fabric.Key.KpPeriod), (Aver.Framework.Key.KpEnter, Aver.Fabric.Key.KpEnter),
+        };
+        bool all = true;
+        foreach (var (a, g) in pairs)
+            all &= InputBridgeProbe.FromFramework(new Aver.Framework.InputEventKey(a, true)) is InputEventKey k && k.Keycode == g &&
+                   InputBridgeProbe.ToFramework(Key(g, true)) is Aver.Framework.InputEventKey { } back && back.Key == a;
+        T.Check("the appended keys bridge to Godot's codes and back", all);
+        // Each engine key slot of the keyboard has a Godot twin.
+        int unmapped = 0;
+        foreach (Aver.Framework.Key a in Enum.GetValues<Aver.Framework.Key>())
+        {
+            bool mouse = a is Aver.Framework.Key.MouseLeft or Aver.Framework.Key.MouseRight or Aver.Framework.Key.MouseMiddle or Aver.Framework.Key.MouseX1 or Aver.Framework.Key.MouseX2 or
+                         Aver.Framework.Key.MouseWheelUp or Aver.Framework.Key.MouseWheelDown or Aver.Framework.Key.MouseWheelLeft or Aver.Framework.Key.MouseWheelRight;
+            if (!mouse && InputBridgeProbe.FromFramework(new Aver.Framework.InputEventKey(a, true)) is InputEventKey { Keycode: Aver.Fabric.Key.None }) unmapped++;
+        }
+        T.Check("no engine keyboard key reaches a script as Key.None", unmapped == 0);
+
+        T.Check("the side buttons", InputBridgeProbe.FromFramework(new Aver.Framework.InputEventMouseButton(Aver.Framework.Key.MouseX1, true)) is InputEventMouseButton { ButtonIndex: MouseButton.Xbutton1 } &&
+                                    InputBridgeProbe.FromFramework(new Aver.Framework.InputEventMouseButton(Aver.Framework.Key.MouseX2, false)) is InputEventMouseButton { ButtonIndex: MouseButton.Xbutton2, Pressed: false });
+        T.Check("the sideways wheel", InputBridgeProbe.FromFramework(new Aver.Framework.InputEventMouseWheel(0f, 2f)) is InputEventMouseButton { ButtonIndex: MouseButton.WheelRight, Factor: 2f } &&
+                                     InputBridgeProbe.FromFramework(new Aver.Framework.InputEventMouseWheel(0f, -1f)) is InputEventMouseButton { ButtonIndex: MouseButton.WheelLeft });
+        T.Check("back: the side buttons and the sideways wheel", InputBridgeProbe.ToFramework(new InputEventMouseButton { ButtonIndex = MouseButton.Xbutton2, Pressed = true }) is Aver.Framework.InputEventMouseButton { Button: Aver.Framework.Key.MouseX2 } &&
+                                                              InputBridgeProbe.ToFramework(new InputEventMouseButton { ButtonIndex = MouseButton.WheelLeft, Pressed = true, Factor = 3f }) is Aver.Framework.InputEventMouseWheel { Delta: 0f, Horizontal: -3f });
+        T.Check("pad extras", InputBridgeProbe.FromFramework(new Aver.Framework.InputEventJoypadButton(Aver.Framework.GamepadButton.Touchpad, true, 2)) is InputEventJoypadButton { ButtonIndex: JoyButton.Touchpad, Device: 2 } &&
+                             InputBridgeProbe.FromFramework(new Aver.Framework.InputEventJoypadButton(Aver.Framework.GamepadButton.Paddle3, true)) is InputEventJoypadButton { ButtonIndex: JoyButton.Paddle3 } &&
+                             InputBridgeProbe.FromFramework(new Aver.Framework.InputEventJoypadButton(Aver.Framework.GamepadButton.Guide, true)) is InputEventJoypadButton { ButtonIndex: JoyButton.Guide });
+        T.Check("back: a pad extra and the device number", InputBridgeProbe.ToFramework(new InputEventJoypadButton { ButtonIndex = JoyButton.Misc1, Pressed = true, Device = 1 }) is Aver.Framework.InputEventJoypadButton { Button: Aver.Framework.GamepadButton.Misc1, Pad: 1 });
+        // Godot's numbers.
+        T.Check("Godot's numbers for the new enum members", (long)Aver.Fabric.Key.Kp5 == 4194443 && (long)Aver.Fabric.Key.Menu == 4194370 && (long)Aver.Fabric.Key.Quoteleft == 96 &&
+                                                          (int)JoyButton.Paddle1 == 16 && (int)JoyButton.Touchpad == 20 && (long)Aver.Fabric.Key.F24 == 4194355);
+    }
+
+    private static void Devices()
+    {
+        T.Check("a touch event arrives as a screen touch", InputBridgeProbe.FromFramework(new Aver.Framework.InputEventTouch(3, true, 10f, 20f)) is InputEventScreenTouch { Index: 3, Pressed: true } t0 && t0.Position == new Vector2(10, 20));
+        T.Check("a finger moving as a screen drag", InputBridgeProbe.FromFramework(new Aver.Framework.InputEventTouchMotion(1, 12f, 20f, 2f, 0f)) is InputEventScreenDrag { Index: 1 } d0 && d0.Position == new Vector2(12, 20) && d0.Relative == new Vector2(2, 0));
+        T.Check("back: touch and drag", InputBridgeProbe.ToFramework(new InputEventScreenTouch { Index = 2, Pressed = false, Position = new Vector2(5, 6) }) is Aver.Framework.InputEventTouch { Finger: 2, IsPressed: false, X: 5f, Y: 6f } &&
+                                       InputBridgeProbe.ToFramework(new InputEventScreenDrag { Index = 4, Position = new Vector2(1, 2), Relative = new Vector2(3, 4) }) is Aver.Framework.InputEventTouchMotion { Finger: 4, RelativeX: 3f, RelativeY: 4f });
+
+        T.Check("a desktop with no engine has no pads and no names", Input.GetConnectedJoypads().Count == 0 && Input.GetJoyName(0) == "" && !Input.IsJoyKnown(0) && Input.GetJoyInfo(0).Count == 0);
+        Input.StartJoyVibration(1, 0.25f, 2f, 1.5f);
+        T.Check("a rumble is kept as asked, clamped", Input.GetJoyVibrationStrength(1) == new Vector2(0.25f, 1f) && Input.GetJoyVibrationDuration(1) == 1.5f);
+        Input.StopJoyVibration(1);
+        T.Check("and stopped", Input.GetJoyVibrationStrength(1) == Vector2.Zero);
+        T.Check("the pointer's cursor shape is kept", Input.GetCurrentCursorShape() == Input.CursorShape.Arrow);
+        Input.SetDefaultCursorShape(Input.CursorShape.PointingHand);
+        T.Check("and changes", Input.GetCurrentCursorShape() == Input.CursorShape.PointingHand);
+        Input.SetDefaultCursorShape();
+        T.Check("the motion sensors read zero", Input.GetAccelerometer() == Vector3.Zero && Input.GetGravity() == Vector3.Zero && Input.GetGyroscope() == Vector3.Zero && Input.GetMagnetometer() == Vector3.Zero);
+        Input.EmulateTouchFromMouse = true;
+        T.Check("touch emulation is a switch", Input.EmulateTouchFromMouse);
+        Input.EmulateTouchFromMouse = false;
+        T.Check("the touch screen is absent on a desktop", !DisplayServer.IsTouchscreenAvailable());
+        int seen = 0;
+        Input.JoyConnectionChanged += (_, _) => seen++;
+        T.Check("the object that carries Input's signals exists", Input.Singleton != null);
+        T.Check("no connection change without a pad", seen == 0);
+    }
+
     private static void Mouse()
     {
-        T.Check("the mouse is captured by default (a game takes the pointer)", Input.MouseMode == Input.MouseModeEnum.Captured);
+        T.Check("the mouse starts visible, as in Godot", Input.MouseMode == Input.MouseModeEnum.Visible);
+        Input.MouseMode = Input.MouseModeEnum.Captured;
+        T.Check("mouse_mode is settable", Input.MouseMode == Input.MouseModeEnum.Captured);
         Input.MouseMode = Input.MouseModeEnum.Visible;
-        T.Check("mouse_mode is settable", Input.MouseMode == Input.MouseModeEnum.Visible);
         Input.ParseInputEvent(new InputEventMouseMotion { Relative = new Vector2(10, 0), Velocity = new Vector2(600, 0), Position = new Vector2(100, 50) });
         T.Check("the last motion's velocity is kept", Input.GetLastMouseVelocity() == new Vector2(600, 0));
         T.Check("and the viewport reports the pointer position", SceneTree.Instance.Root.GetMousePosition() == new Vector2(100, 50));

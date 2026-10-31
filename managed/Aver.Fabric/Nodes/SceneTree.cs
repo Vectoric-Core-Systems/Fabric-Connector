@@ -12,11 +12,24 @@ namespace Aver.Fabric;
 /// <summary>A rendering/input area (Godot's Viewport). Here it carries the input-handled switch, the screen size and the 3D world.</summary>
 public class Viewport : Node
 {
+    public new class SignalName : Node.SignalName
+    {
+        public static readonly StringName SizeChanged = "size_changed";
+    }
+
+    /// <summary>Raised when the viewport's size changes (Godot's size_changed): a window the player resizes, or a script setting <see cref="Size"/>.</summary>
+    public event Action SizeChanged { add => Connect(SignalName.SizeChanged, Callable.From(value)); remove => Disconnect(SignalName.SizeChanged, Callable.From(value)); }
+
     /// <summary>The size in pixels. Defaults to the project's window size (WINDOW.SIZE) or 1280 by 720.</summary>
     public virtual Vector2I Size
     {
         get => _size ?? ProjectWindowSize();
-        set => _size = value;
+        set
+        {
+            bool changed = Size != value;
+            _size = value;
+            if (changed) EmitSignal(SignalName.SizeChanged);
+        }
     }
 
     /// <summary>The picture this viewport draws as a texture. A <see cref="SubViewport"/> has one (a render-to-texture view, G4_RENDER.md R5); the
@@ -72,8 +85,9 @@ public class Viewport : Node
     /// <summary>The camera that is drawn (the one made current last).</summary>
     public virtual Camera3D? GetCamera3D() => Camera3D.CurrentCamera;
 
-    /// <summary>The pointer in viewport pixels. The engine gives no absolute pointer position yet: this is where script-fed events last put it.</summary>
-    public Vector2 GetMousePosition() => Input.MousePosition;
+    /// <summary>The pointer in viewport pixels: the engine's reading every frame (the position the UI sees, before any content stretch), else where
+    /// script-fed events last put it. Unverified at run time with no Control in the scene.</summary>
+    public virtual Vector2 GetMousePosition() => Input.MousePosition;
 
     /// <summary>Stops the input event being processed by anything further (Godot's set_input_as_handled).</summary>
     public void SetInputAsHandled()
@@ -94,7 +108,82 @@ public class Window : Viewport
 
     public enum ContentScaleStretchEnum { Fractional = 0, Integer = 1 }
 
-    public string Title { get; set; } = "";
+    /// <summary>The window's title bar text. The shipped game retitles its window.</summary>
+    public string Title
+    {
+        get => _title ?? WindowControl.GetTitle();
+        set { _title = value; WindowControl.SetTitle(value); }
+    }
+
+    private string? _title;
+
+    /// <summary>Godot's Window.Mode.</summary>
+    public enum ModeEnum { Windowed = 0, Minimized = 1, Maximized = 2, Fullscreen = 3, ExclusiveFullscreen = 4 }
+
+    /// <summary>The window's mode: windowed, minimized, maximized or fullscreen. Exclusive fullscreen is borderless fullscreen here (approximated, said once in
+    /// the log): Aver never takes over the display mode.</summary>
+    public ModeEnum Mode
+    {
+        get => WindowControl.GetMode();
+        set => WindowControl.SetMode(value);
+    }
+
+    /// <summary>The window's top-left in screen pixels.</summary>
+    public Vector2I Position
+    {
+        get => WindowControl.GetPosition();
+        set => WindowControl.SetPosition(value);
+    }
+
+    /// <summary>No frame or title bar.</summary>
+    public bool Borderless
+    {
+        get => WindowControl.GetFlag(DisplayServer.WindowFlags.Borderless);
+        set => WindowControl.SetFlag(DisplayServer.WindowFlags.Borderless, value);
+    }
+
+    public bool AlwaysOnTop
+    {
+        get => WindowControl.GetFlag(DisplayServer.WindowFlags.AlwaysOnTop);
+        set => WindowControl.SetFlag(DisplayServer.WindowFlags.AlwaysOnTop, value);
+    }
+
+    /// <summary>The player cannot resize the window.</summary>
+    public bool Unresizable
+    {
+        get => WindowControl.GetFlag(DisplayServer.WindowFlags.ResizeDisabled);
+        set => WindowControl.SetFlag(DisplayServer.WindowFlags.ResizeDisabled, value);
+    }
+
+    /// <summary>Kept as set (approximated): the engine's window is opaque.</summary>
+    public bool Transparent
+    {
+        get => WindowControl.GetFlag(DisplayServer.WindowFlags.Transparent);
+        set => WindowControl.SetFlag(DisplayServer.WindowFlags.Transparent, value);
+    }
+
+    /// <summary>Kept as set (approximated): the engine's window takes focus as any window does.</summary>
+    public bool Unfocusable
+    {
+        get => WindowControl.GetFlag(DisplayServer.WindowFlags.NoFocus);
+        set => WindowControl.SetFlag(DisplayServer.WindowFlags.NoFocus, value);
+    }
+
+    /// <summary>Whether the window has the keyboard focus.</summary>
+    public bool HasFocus() => WindowControl.Focused;
+
+    private Vector2I? _lastEngineSize;
+
+    // Called once a frame by Input.BeginFrame with the engine: raises size_changed when the window's real size moved (the player resized it, a request
+    // was applied), and not before the game has published a size.
+    internal void PollEngineSize()
+    {
+        Vector2I now = WindowControl.GetSize();
+        if (_lastEngineSize is { } last && last != now) EmitSignal(SignalName.SizeChanged);
+        _lastEngineSize = now;
+    }
+
+    public override Vector2 GetMousePosition() => WindowToContent(Input.MousePosition);
 
     private ContentScaleModeEnum? _mode;
     private ContentScaleAspectEnum? _aspect;
@@ -156,10 +245,18 @@ public class Window : Viewport
         set { _factor = Math.Max(0.01f, value); ContentChanged(); }
     }
 
+    /// <summary>The window's pixel size: the shipped game's, as it published it (the player may have resized the window), else the one a script set, else the
+    /// project's WINDOW.SIZE. Setting it asks the game to resize the window; size_changed is raised when the window's size really moves (here at once, with
+    /// no engine).</summary>
     public override Vector2I Size
     {
-        get => base.Size;
-        set { base.Size = value; ContentChanged(); }
+        get => NodeHost.Current.IsEngine ? WindowControl.GetSize() : base.Size;
+        set
+        {
+            if (NodeHost.Current.IsEngine) WindowControl.SetSize(value);
+            else base.Size = value;
+            ContentChanged();
+        }
     }
 
     // The window's size in device pixels: the engine's UI rectangle when there is one, else the window's size.
@@ -291,6 +388,7 @@ public partial class SceneTree : GodotObject
         Gui.ResetForTests();
         ThemeDB.ResetForTests();
         Input.ResetForTests();
+        WindowControl.ResetForTests();
         Camera3D.ResetCurrent();
         DirectionalLight3D.ResetSun();
     }

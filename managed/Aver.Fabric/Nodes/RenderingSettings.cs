@@ -77,10 +77,4 @@ public static partial class RenderingServer
     internal static ShadowQuality PositionalSoftShadowFilter => s_positionalFilter;
 }
 
-/// <summary>Godot's DisplayServer singleton, as far as game scripts use it to ask what device they run on.</summary>
-public static class DisplayServer
-{
-    /// <summary>Whether the device has a touch screen. Aver's input chain has no touch source yet, so this is false; a script that turns its on-screen
-    /// controls on only for a touch screen leaves them off.</summary>
-    public static bool IsTouchscreenAvailable() => false;
-}
+// DisplayServer lives in DisplayServer.cs.
