@@ -12,7 +12,7 @@
 set(AVER_ENGINE_DIR "" CACHE PATH "A local Aver Engine checkout to build against (empty: fetch AVER_ENGINE_REF)")
 set(AVER_ENGINE_REPO "https://github.com/Vectoric-Core-Systems/Aver-Engine.git" CACHE STRING "Where the pinned engine is fetched from")
 # THE PIN: the Aver Engine commit this extension is built and tested against. Change this one line to move to another engine.
-set(AVER_ENGINE_REF "abf79f62a12b7cec27168243c9f1ca785fc57e16" CACHE STRING "The Aver Engine commit (or tag) to fetch when AVER_ENGINE_DIR is empty")
+set(AVER_ENGINE_REF "21e62ac428ee49c0f7e1f12bb5e57bb4cf20bdb4" CACHE STRING "The Aver Engine commit (or tag) to fetch when AVER_ENGINE_DIR is empty")
 set(AVER_ENGINE_CMAKE_ARGS "" CACHE STRING "More options for the engine's configure, as a ;-separated list of -D... arguments")
 option(AVER_FABRIC_BUILD_TESTS "Build and register the extension's tests" ON)
 # Opt-in: after each build, copy the built extension folder to <FABRIC_DEPLOY_TO>/Extensions/FabricConnector. Point it at the bin folder of your own
