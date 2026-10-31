@@ -26,21 +26,30 @@ public class Mesh : Resource
     public virtual void SurfaceSetMaterial(int surfIdx, Material? material) { }
     public virtual Aabb GetAabb() => default;
 
+    /// <summary>The width, in metres, a line or a point is drawn at: lines and points are drawn as crossed quads this wide (see MeshSurface).</summary>
+    public static float ThinPrimitiveWidth { get; set; } = 0.02f;
+
+    /// <summary>Every triangle as three points, in order (Godot's get_faces). Empty for a mesh whose triangles are not held in memory.</summary>
+    public virtual Vector3[] GetFaces() => System.Array.Empty<Vector3>();
+
+    /// <summary>A shape that collides like the mesh: its triangles, hollow (Godot's create_trimesh_shape). Null when the mesh has none readable.</summary>
+    public ConcavePolygonShape3D? CreateTrimeshShape()
+    {
+        Vector3[] faces = GetFaces();
+        return faces.Length == 0 ? null : new ConcavePolygonShape3D { Data = faces };
+    }
+
+    /// <summary>A solid convex shape around the mesh's points (Godot's create_convex_shape). Null when the mesh has none readable.</summary>
+    public ConvexPolygonShape3D? CreateConvexShape()
+    {
+        Vector3[] faces = GetFaces();
+        if (faces.Length == 0) return null;
+        return new ConvexPolygonShape3D { Points = faces.Distinct().ToArray() };
+    }
+
     /// <summary>The asset path an entity draws this mesh by when the engine holds it as a runtime mesh ("@rtmesh/..."), else null (a file mesh is named by
     /// <see cref="Resource.ResourcePath"/>).</summary>
     internal virtual string? EngineAssetPath => null;
-}
-
-/// <summary>A box mesh (Godot's BoxMesh), size in metres.</summary>
-public class BoxMesh : Mesh
-{
-    public Vector3 Size { get; set; } = Vector3.One;
-}
-
-public class SphereMesh : Mesh
-{
-    public float Radius { get; set; } = 0.5f;
-    public float Height { get; set; } = 1f;
 }
 
 public class Material : Resource
@@ -286,17 +295,97 @@ public class Texture2D : Resource
 public class Shape3D : Resource
 {
     public float Margin { get; set; } = 0.04f;
+
+    private static readonly Dictionary<ulong, WeakReference<Shape3D>> s_byRid = new();
+    private static ulong s_nextRid = 1UL << 40;   // far above the body ids, so a shape's Rid is never taken for a body's
+    private ulong _rid;
+    private ArrayMesh? _debug;
+
+    /// <summary>The shape's id, the same for as long as the shape lives (Godot's get_rid); what a query's shape_rid names.</summary>
+    public new Rid GetRid()
+    {
+        if (_rid == 0)
+        {
+            lock (s_byRid) { _rid = s_nextRid++; s_byRid[_rid] = new WeakReference<Shape3D>(this); }
+        }
+        return new Rid(_rid);
+    }
+
+    /// <summary>The shape an id named by <see cref="GetRid"/> belongs to, or null.</summary>
+    internal static Shape3D? FromRid(Rid rid)
+    {
+        lock (s_byRid) return s_byRid.TryGetValue(rid.Id, out var w) && w.TryGetTarget(out Shape3D? s) ? s : null;
+    }
+
+    /// <summary>Adds the shape's wireframe as pairs of points (a line each) in the shape's own space, metres. A shape with no drawn form adds none.</summary>
+    protected virtual void DebugLines(List<Vector3> lines) { }
+
+    /// <summary>The outline of the shape as a mesh of lines (Godot's get_debug_mesh), for drawing it. Lines are drawn as thin crossed quads
+    /// (<see cref="Mesh.ThinPrimitiveWidth"/>). Null when the shape has no outline.</summary>
+    public ArrayMesh? GetDebugMesh()
+    {
+        if (_debug != null) return _debug;
+        var pts = new List<Vector3>();
+        DebugLines(pts);
+        if (pts.Count == 0) return null;
+        var arrays = new Collections.Array();
+        for (int i = 0; i < (int)Mesh.ArrayType.Max; i++) arrays.Add(default);
+        arrays[(int)Mesh.ArrayType.Vertex] = (Variant)pts.ToArray();
+        _debug = new ArrayMesh();
+        _debug.AddSurfaceFromArrays(Mesh.PrimitiveType.Lines, arrays);
+        return _debug;
+    }
+
+    // Helpers for the outlines.
+    internal static void Circle(List<Vector3> l, Vector3 centre, Vector3 u, Vector3 v, float r, int n = 32)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            float a = MathF.Tau * i / n, b = MathF.Tau * (i + 1) / n;
+            l.Add(centre + (u * MathF.Cos(a) + v * MathF.Sin(a)) * r);
+            l.Add(centre + (u * MathF.Cos(b) + v * MathF.Sin(b)) * r);
+        }
+    }
+
+    internal static void Arc(List<Vector3> l, Vector3 centre, Vector3 u, Vector3 v, float r, float from, float to, int n = 16)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            float a = from + (to - from) * i / n, b = from + (to - from) * (i + 1) / n;
+            l.Add(centre + (u * MathF.Cos(a) + v * MathF.Sin(a)) * r);
+            l.Add(centre + (u * MathF.Cos(b) + v * MathF.Sin(b)) * r);
+        }
+    }
 }
 
 public class BoxShape3D : Shape3D
 {
     /// <summary>The full size of the box (not the half extents).</summary>
     public Vector3 Size { get; set; } = Vector3.One;
+
+    /// <summary>The half extents (Godot 3's name; <see cref="Size"/> is twice this).</summary>
+    public Vector3 Extents { get => Size * 0.5f; set => Size = value * 2f; }
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        Vector3 h = Size * 0.5f;
+        Vector3 Corner(int k) => new((k & 1) == 0 ? -h.X : h.X, (k & 2) == 0 ? -h.Y : h.Y, (k & 4) == 0 ? -h.Z : h.Z);
+        for (int i = 0; i < 8; i++)
+            foreach (int bit in new[] { 1, 2, 4 })
+                if ((i & bit) == 0) { l.Add(Corner(i)); l.Add(Corner(i | bit)); }
+    }
 }
 
 public class SphereShape3D : Shape3D
 {
     public float Radius { get; set; } = 0.5f;
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        Circle(l, Vector3.Zero, Vector3.Right, Vector3.Up, Radius);
+        Circle(l, Vector3.Zero, Vector3.Right, Vector3.Back, Radius);
+        Circle(l, Vector3.Zero, Vector3.Up, Vector3.Back, Radius);
+    }
 }
 
 public class CapsuleShape3D : Shape3D
@@ -304,25 +393,129 @@ public class CapsuleShape3D : Shape3D
     public float Radius { get; set; } = 0.5f;
     /// <summary>The whole height, including both caps.</summary>
     public float Height { get; set; } = 2f;
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        float half = MathF.Max(Height * 0.5f - Radius, 0f);
+        var top = new Vector3(0, half, 0);
+        Circle(l, top, Vector3.Right, Vector3.Back, Radius);
+        Circle(l, -top, Vector3.Right, Vector3.Back, Radius);
+        Arc(l, top, Vector3.Right, Vector3.Up, Radius, 0, MathF.PI);
+        Arc(l, top, Vector3.Back, Vector3.Up, Radius, 0, MathF.PI);
+        Arc(l, -top, Vector3.Right, Vector3.Down, Radius, 0, MathF.PI);
+        Arc(l, -top, Vector3.Back, Vector3.Down, Radius, 0, MathF.PI);
+        foreach (Vector3 side in new[] { Vector3.Right, Vector3.Left, Vector3.Back, Vector3.Forward }) { l.Add(top + side * Radius); l.Add(-top + side * Radius); }
+    }
 }
 
 public class CylinderShape3D : Shape3D
 {
     public float Radius { get; set; } = 0.5f;
     public float Height { get; set; } = 2f;
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        var top = new Vector3(0, Height * 0.5f, 0);
+        Circle(l, top, Vector3.Right, Vector3.Back, Radius);
+        Circle(l, -top, Vector3.Right, Vector3.Back, Radius);
+        foreach (Vector3 side in new[] { Vector3.Right, Vector3.Left, Vector3.Back, Vector3.Forward }) { l.Add(top + side * Radius); l.Add(-top + side * Radius); }
+    }
 }
 
 public class WorldBoundaryShape3D : Shape3D
 {
     public Plane Plane { get; set; } = new(0, 1, 0, 0);
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        Vector3 n = Plane.Normal.Normalized(), u = n.Cross(MathF.Abs(n.Y) < 0.99f ? Vector3.Up : Vector3.Right).Normalized(), v = n.Cross(u);
+        Vector3 c = n * Plane.D;
+        for (int i = -2; i <= 2; i++)
+        {
+            l.Add(c + u * i - v * 2f); l.Add(c + u * i + v * 2f);
+            l.Add(c + v * i - u * 2f); l.Add(c + v * i + u * 2f);
+        }
+        l.Add(c); l.Add(c + n);
+    }
 }
 
 public class ConvexPolygonShape3D : Shape3D
 {
     public Vector3[] Points { get; set; } = System.Array.Empty<Vector3>();
+
+    // The corners of the box around the points: a hull's real edges would need its faces, which the engine keeps.
+    protected override void DebugLines(List<Vector3> l)
+    {
+        if (Points.Length == 0) return;
+        Vector3 lo = Points[0], hi = Points[0];
+        foreach (Vector3 p in Points) { lo = lo.Min(p); hi = hi.Max(p); }
+        Vector3 centre = (lo + hi) * 0.5f, h = (hi - lo) * 0.5f;
+        Vector3 Corner(int k) => centre + new Vector3((k & 1) == 0 ? -h.X : h.X, (k & 2) == 0 ? -h.Y : h.Y, (k & 4) == 0 ? -h.Z : h.Z);
+        for (int i = 0; i < 8; i++)
+            foreach (int bit in new[] { 1, 2, 4 })
+                if ((i & bit) == 0) { l.Add(Corner(i)); l.Add(Corner(i | bit)); }
+    }
 }
 
 public class ConcavePolygonShape3D : Shape3D
 {
     public Vector3[] Data { get; set; } = System.Array.Empty<Vector3>();
+
+    /// <summary>Whether a ray hits the back of a triangle. Stored: a mesh body takes back-face hits from the query, as Godot's does by default.</summary>
+    public bool BackfaceCollision { get; set; }
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        for (int i = 0; i + 2 < Data.Length; i += 3)
+        {
+            l.Add(Data[i]); l.Add(Data[i + 1]);
+            l.Add(Data[i + 1]); l.Add(Data[i + 2]);
+            l.Add(Data[i + 2]); l.Add(Data[i]);
+        }
+    }
+
+    /// <summary>The triangles as three points each (Godot's get_faces).</summary>
+    public Vector3[] GetFaces() => (Vector3[])Data.Clone();
+}
+
+/// <summary>A terrain made of a grid of heights (Godot's HeightMapShape3D): <see cref="MapWidth"/> points along X and <see cref="MapDepth"/> along Z, one metre
+/// apart, centred on the origin, <see cref="MapData"/> the heights row by row. The engine holds it as a triangle mesh; scale the node to space the points.</summary>
+public class HeightMapShape3D : Shape3D
+{
+    private int _w = 2, _d = 2;
+    private float[] _data = new float[4];
+
+    public int MapWidth { get => _w; set { _w = Math.Max(value, 1); Resize(); } }
+    public int MapDepth { get => _d; set { _d = Math.Max(value, 1); Resize(); } }
+    public float[] MapData { get => _data; set => _data = value ?? System.Array.Empty<float>(); }
+
+    private void Resize()
+    {
+        if (_data.Length != _w * _d) System.Array.Resize(ref _data, _w * _d);
+    }
+
+    /// <summary>The lowest and highest height (Godot's get_min_value, get_max_value).</summary>
+    public float GetMinHeight() => _data.Length == 0 ? 0f : _data.Min();
+    public float GetMaxHeight() => _data.Length == 0 ? 0f : _data.Max();
+
+    protected override void DebugLines(List<Vector3> l)
+    {
+        for (int z = 0; z < _d; z++)
+            for (int x = 0; x < _w; x++)
+            {
+                var p = new Vector3(x - (_w - 1) * 0.5f, _data[z * _w + x], z - (_d - 1) * 0.5f);
+                if (x + 1 < _w) { l.Add(p); l.Add(new Vector3(x + 1 - (_w - 1) * 0.5f, _data[z * _w + x + 1], p.Z)); }
+                if (z + 1 < _d) { l.Add(p); l.Add(new Vector3(p.X, _data[(z + 1) * _w + x], z + 1 - (_d - 1) * 0.5f)); }
+            }
+    }
+}
+
+/// <summary>A ray that pushes a body out of what it points at (Godot's SeparationRayShape3D), along the shape's local +Z. The engine's version is a thin solid
+/// capsule, so the body stops with the tip on the surface and slides along the contact normal; <see cref="SlideOnSlope"/> is stored.</summary>
+public class SeparationRayShape3D : Shape3D
+{
+    public float Length { get; set; } = 1f;
+    public bool SlideOnSlope { get; set; }
+
+    protected override void DebugLines(List<Vector3> l) { l.Add(Vector3.Zero); l.Add(new Vector3(0, 0, Length)); }
 }

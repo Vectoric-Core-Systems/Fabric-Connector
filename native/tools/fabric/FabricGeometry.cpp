@@ -185,8 +185,10 @@ struct CsgCtx {
     Converter& c;
     std::vector<std::string> slots;
     Where where;
-    bool pathUnsupported = false;
+    bool pathUnsupported = false;   // a path-mode polygon that could not be swept
     int shapes = 0;
+    std::string pathReason;         // why, or the caveat of one that was
+    bool pathUsed = false;          // some polygon was swept along a path
 };
 
 int slotOfMaterial(CsgCtx& ctx, const FNode& n) {
@@ -198,6 +200,99 @@ int slotOfMaterial(CsgCtx& ctx, const FNode& n) {
     for (size_t i = 0; i < ctx.slots.size(); ++i) if (ctx.slots[i] == name) return static_cast<int>(i);
     ctx.slots.push_back(name);
     return static_cast<int>(ctx.slots.size() - 1);
+}
+
+// A path from a node ("../Path3D", "Road/Path3D") to another in the same scene, null when a step does not exist.
+const FNode* resolveNodePath(const FNode& from, const std::string& path) {
+    const FNode* cur = &from;
+    size_t i = 0;
+    while (cur && i <= path.size()) {
+        size_t j = path.find('/', i);
+        if (j == std::string::npos) j = path.size();
+        const std::string seg = path.substr(i, j - i);
+        if (seg == "..") cur = cur->parent;
+        else if (!seg.empty() && seg != ".") cur = cur->findChild(seg);
+        i = j + 1;
+    }
+    return cur;
+}
+
+// A Curve3D resource's points flattened to a polyline (3 doubles per point): each cubic segment between two points cut into `perSegment`
+// pieces (0: by `step` metres of its control polygon). Godot's `_data.points` are (in, out, position) triples.
+std::vector<double> flattenCurve3D(const Var& points, double step, int perSegment) {
+    std::vector<double> out;
+    const size_t count = points.nums.size() / 9;
+    if (count == 0) return out;
+    const auto pos = [&](size_t k) { return V3{points.nums[k * 9 + 6], points.nums[k * 9 + 7], points.nums[k * 9 + 8]}; };
+    const auto handle = [&](size_t k, size_t which) { return V3{points.nums[k * 9 + which * 3], points.nums[k * 9 + which * 3 + 1], points.nums[k * 9 + which * 3 + 2]}; };
+    out.insert(out.end(), {pos(0).x, pos(0).y, pos(0).z});
+    for (size_t k = 0; k + 1 < count; ++k) {
+        const V3 p0 = pos(k), p3 = pos(k + 1);
+        const V3 p1 = p0 + handle(k, 1), p2 = p3 + handle(k + 1, 0);
+        int n = perSegment;
+        if (n <= 0) {
+            const double len = (p1 - p0).length() + (p2 - p1).length() + (p3 - p2).length();
+            n = std::max(2, static_cast<int>(std::ceil(len / std::max(step, 1e-3))));
+        }
+        for (int s = 1; s <= n; ++s) {
+            const double t = double(s) / n, u = 1.0 - t;
+            const V3 p = p0 * (u * u * u) + p1 * (3 * u * u * t) + p2 * (3 * u * t * t) + p3 * (t * t * t);
+            out.insert(out.end(), {p.x, p.y, p.z});
+        }
+    }
+    return out;
+}
+
+// The polyline resampled at equal spacing of about `interval` of its length (at least two pieces); unchanged when interval <= 0.
+std::vector<double> resamplePolyline(const std::vector<double>& pts, double interval) {
+    const size_t n = pts.size() / 3;
+    if (n < 2 || interval <= 0) return pts;
+    std::vector<double> cum(n, 0.0);
+    for (size_t i = 1; i < n; ++i) cum[i] = cum[i - 1] + (V3{pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2]} - V3{pts[i * 3 - 3], pts[i * 3 - 2], pts[i * 3 - 1]}).length();
+    const double total = cum.back();
+    if (total < 1e-9) return pts;
+    const int pieces = std::max(2, static_cast<int>(std::ceil(total / interval)));
+    std::vector<double> out;
+    size_t seg = 1;
+    for (int k = 0; k <= pieces; ++k) {
+        const double d = total * k / pieces;
+        while (seg + 1 < n && cum[seg] < d) ++seg;
+        const double span = cum[seg] - cum[seg - 1];
+        const double t = span > 1e-12 ? std::min(1.0, std::max(0.0, (d - cum[seg - 1]) / span)) : 0.0;
+        for (size_t c = 0; c < 3; ++c) out.push_back(pts[(seg - 1) * 3 + c] + (pts[seg * 3 + c] - pts[(seg - 1) * 3 + c]) * t);
+    }
+    return out;
+}
+
+// CSGPolygon3D mode "path": the polygon swept along the Path3D that path_node names. False (the reason kept in the context) when there is no usable curve.
+bool pathPolygon(const FNode& n, const std::vector<double>& xy, int mat, CsgCtx& ctx, csg::Mesh& out) {
+    const Prop* pn = nodeProp(n, "path_node");
+    const FNode* pathNode = pn ? resolveNodePath(n, pn->value.s) : nullptr;
+    if (!pathNode || pathNode->type != "Path3D") { ctx.pathReason = "path_node does not name a Path3D in the scene"; return false; }
+    const Prop* cp = nodeProp(*pathNode, "curve");
+    const std::optional<ResRef> res = cp && cp->doc ? resolveRes(ctx.c, cp->value, *cp->doc) : std::nullopt;
+    if (!res || res->type != "Curve3D" || !res->props) { ctx.pathReason = "the Path3D has no Curve3D"; return false; }
+    const Var* data = findP(*res->props, "_data");
+    const Var* points = data && data->type == VType::Dictionary ? data->find("points") : nullptr;
+    const Var* bake = findP(*res->props, "bake_interval");
+    if (!points || points->nums.size() < 18) { ctx.pathReason = "the Curve3D has fewer than two points"; return false; }
+    const int intervalType = static_cast<int>(nodeNum(n, "path_interval_type", 0));
+    const double interval = nodeNum(n, "path_interval", 1.0);
+    std::vector<double> line;
+    if (intervalType == 1) line = flattenCurve3D(*points, 0.0, std::max(1, static_cast<int>(std::lround(interval))));   // subdivide: pieces per curve segment
+    else line = resamplePolyline(flattenCurve3D(*points, std::max(0.01, numOf(bake, 0.2)), 0), interval);
+    if (!nodeBool(n, "path_local", false) && pathNode->hasXform) {
+        // The path's own transform places it; the CSG node's frame is taken as the one it shares, which holds for siblings at the same transform.
+        for (size_t i = 0; i + 2 < line.size(); i += 3) {
+            const V3 p = pathNode->xf.basis * V3{line[i], line[i + 1], line[i + 2]} + pathNode->xf.pos;
+            line[i] = p.x; line[i + 1] = p.y; line[i + 2] = p.z;
+        }
+        ctx.pathReason = "path_local is off, so the Path3D's transform is applied and the CSG node's own is taken to be shared with it";
+    }
+    const int rot = static_cast<int>(nodeNum(n, "path_rotation", 1));
+    out = csg::sweepPolygon(xy, line, {}, rot == 0 ? csg::SweepFrame::Fixed : (rot == 1 ? csg::SweepFrame::Path : csg::SweepFrame::Follow), nodeBool(n, "path_joined", false),
+                            nodeBool(n, "path_continuous_u", true) ? nodeNum(n, "path_u_distance", 1.0) : 0.0, mat);
+    return !out.empty();
 }
 
 csg::Mesh evalCsg(const FNode& n, CsgCtx& ctx) {
@@ -236,7 +331,10 @@ csg::Mesh evalCsg(const FNode& n, CsgCtx& ctx) {
             const int mode = static_cast<int>(nodeNum(n, "mode", 0));
             if (mode == 0) own = csg::extrudePolygon(xy, nodeNum(n, "depth", 1.0), mat);
             else if (mode == 1) own = csg::spinPolygon(xy, nodeNum(n, "spin_degrees", 360.0), static_cast<int>(nodeNum(n, "spin_sides", 5)), mat);
-            else ctx.pathUnsupported = true;
+            else if (mode == 2) {
+                if (pathPolygon(n, xy, mat, ctx, own)) ctx.pathUsed = true;
+                else ctx.pathUnsupported = true;
+            } else ctx.pathUnsupported = true;
         }
     }
     if (nodeBool(n, "invert_faces", false)) csg::invertFaces(own);
@@ -565,7 +663,8 @@ void Converter::geometryNode(FNode& fn, std::vector<std::pair<std::string, Var>>
     if (isCsgClass(t) && !(fn.parent && isCsgClass(fn.parent->type))) {
         CsgCtx ctx{*this, {}, w, false, 0};
         csg::Mesh result = evalCsg(fn, ctx);
-        if (ctx.pathUnsupported) rate("mode", Rating::Unsupported, "a CSGPolygon3D extruded along a path is not baked; its depth and spin modes are");
+        if (ctx.pathUnsupported) rate("mode", Rating::Unsupported, "a CSGPolygon3D extruded along a path could not be baked" + (ctx.pathReason.empty() ? std::string() : ": " + ctx.pathReason));
+        else if (ctx.pathUsed) rate("mode", Rating::Converted, "a CSGPolygon3D extruded along its Path3D is swept at convert time" + (ctx.pathReason.empty() ? std::string() : " (" + ctx.pathReason + ")"));
         const double snap = nodeNum(fn, "snap", 0.001);
         const csg::Soup soup = csg::toSoup(result, snap);
         if (soup.idx.empty()) {
@@ -590,8 +689,10 @@ void Converter::geometryNode(FNode& fn, std::vector<std::pair<std::string, Var>>
             else if (k == "smooth_faces" || k == "radius" || k == "radial_segments" || k == "rings" || k == "height" || k == "sides" || k == "cone" || k == "size" || k == "inner_radius" || k == "outer_radius" ||
                      k == "ring_sides" || k == "polygon" || k == "depth" || k == "spin_degrees" || k == "spin_sides" || k == "mode" || k == "material" || k == "mesh")
                 rate(k, Rating::Converted, "baked into the mesh");
-            else if (k == "path_node" || k == "path_interval_type" || k == "path_interval" || k == "path_simplify_angle" || k == "path_rotation" || k == "path_local" || k == "path_continuous_u" || k == "path_u_distance" || k == "path_joined")
-                rate(k, Rating::Unsupported, "path extrusion is not baked");
+            else if (k == "path_simplify_angle" || k == "path_rotation_accurate")
+                rate(k, Rating::Approximated, "the sweep keeps every sample and uses its own frame at corners");
+            else if (k == "path_node" || k == "path_interval_type" || k == "path_interval" || k == "path_rotation" || k == "path_local" || k == "path_continuous_u" || k == "path_u_distance" || k == "path_joined")
+                rate(k, ctx.pathUsed ? Rating::Converted : Rating::Unsupported, ctx.pathUsed ? "baked into the swept mesh" : "the path could not be swept");
             else if (k == "smooth_faces") {}
         }
         if (nodeBool(fn, "use_collision", false)) {

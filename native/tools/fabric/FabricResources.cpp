@@ -818,6 +818,21 @@ std::string Converter::viewportReference(const Var* value, const gd::GodotDocBas
 
 // ---- primitive meshes ----------------------------------------------------------------------------------------------
 
+Var Converter::inlinePrimitiveMesh(const Var& value, const gd::GodotDocBase& doc, const Where& w) {
+    if (value.type != VType::SubResource) return makeNil();
+    const gd::GodotSubResource* sr = doc.findSub(value.s);
+    if (!sr || !isPrimitiveMeshType(sr->type) || sr->type == "TubeTrailMesh" || sr->type == "RibbonTrailMesh") return makeNil();
+    std::vector<std::pair<std::string, Var>> entries;
+    for (const gd::GodotProperty& p : sr->props) {
+        if (ignorableResourceProp(p.name)) continue;
+        Var v = convertValue(p.value, doc, w, p.name);
+        if (v.isNil() && !p.value.isNil()) continue;   // a nested resource that could not be converted; already reported
+        entries.emplace_back(p.name, std::move(v));
+    }
+    report_.add("resource", doc.file, w.node, sr->type, "", Rating::Converted, "kept as Object(" + sr->type + ") so the node can read the vertices Aver.Fabric's own generator makes (it matches Godot's vertex order)", sr->line);
+    return makeObject(sr->type, std::move(entries));
+}
+
 std::string Converter::primitiveMeshAsset(const std::string& type, const std::vector<gd::GodotProperty>& props,
                                           const gd::GodotDocBase& doc, const Where& w) {
     // A key from the type and every property's canonical text: equal meshes share one file.

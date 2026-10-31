@@ -512,6 +512,21 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
             report_.add("setting", kProject, "", "", limit.setting, Rating::Unsupported, "not a positive whole number; the engine's own limit stays", 0);
         }
     }
+    // Godot has no limit on the meshes a script builds; the engine's guard of 256 is raised for a converted project (voxel worlds build a mesh per chunk).
+    d.runtimeMeshes = 1024;
+    report_.add("setting", kProject, "", "", "", Rating::Converted, "RENDER.RUNTIMEMESHES 1024: the most meshes scripts may build at run time (the engine's guard is 256); unmeasured per mesh", 0);
+
+    // Godot's catch-up cap per frame (default 8) is the engine's PHYSICS.MAXSTEPS, which takes 1 to 64.
+    if (const Var* steps = project_.setting("physics/common/max_physics_steps_per_frame")) {
+        const double n = numOf(steps, 8);
+        if (n >= 1 && n <= 64) {
+            d.physMaxSteps = static_cast<int>(n);
+            report_.add("setting", kProject, "", "", "physics/common/max_physics_steps_per_frame", Rating::Converted, "PHYSICS.MAXSTEPS " + std::to_string(d.physMaxSteps), 0);
+        } else {
+            d.physMaxSteps = n < 1 ? 1 : 64;
+            report_.add("setting", kProject, "", "", "physics/common/max_physics_steps_per_frame", Rating::Approximated, "PHYSICS.MAXSTEPS takes 1 to 64; " + std::to_string(d.physMaxSteps) + " is used", 0);
+        }
+    }
     // Aver always simulates with Jolt: the project's choice of engine changes nothing but how closely the bodies match what Godot's own engine would do.
     if (const Var* engine = project_.setting("physics/3d/physics_engine")) {
         const std::string which = stringOf(engine, "");
@@ -600,7 +615,8 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
                                     "application/config/icon", "application/run/main_scene", "application/run/max_fps", "display/window/size/", "display/window/stretch/", "display/window/vsync/",
                                     "gui/theme/custom", "gui/timers/tooltip_delay_sec", "physics/3d/default_gravity",
                                     "physics/3d/default_gravity_vector", "physics/3d/default_linear_damp", "physics/3d/default_angular_damp",
-                                    "physics/common/physics_ticks_per_second", "physics/common/physics_interpolation", "internationalization/locale/",
+                                    "physics/common/physics_ticks_per_second", "physics/common/physics_interpolation", "physics/common/max_physics_steps_per_frame",
+                                    "internationalization/locale/",
                                     "input/", "autoload/", "layer_names/", "editor_plugins/", "dotnet/project/", "config_version",
                                     "physics/3d/physics_engine", "physics/jolt_physics_3d/limits/max_bodies", "physics/jolt_physics_3d/limits/max_body_pairs",
                                     "physics/jolt_physics_3d/limits/max_contact_constraints", "physics/jolt_physics_3d/limits/temporary_memory_buffer_size",

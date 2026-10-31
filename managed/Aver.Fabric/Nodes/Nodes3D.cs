@@ -843,4 +843,66 @@ public class CollisionShape3D : Node3D
 
     /// <summary>A disabled shape is not part of its parent's body. Changing it after the parent is ready makes the body again.</summary>
     public bool Disabled { get => _disabled; set { _disabled = value; (GetParent() as CollisionObject3D)?.QueueRebuild(); } }
+
+    /// <summary>The colour the shape is drawn in when the tree shows collisions (SceneTree.DebugCollisionsHint); (0, 0, 0, 0) takes the engine's own by body kind.</summary>
+    public Color DebugColor { get; set; } = new(0, 0, 0, 0);
+
+    /// <summary>Whether the debug drawing fills the shape. Stored: the drawing is the outline.</summary>
+    public bool DebugFill { get; set; } = true;
+}
+
+/// <summary>A polygon in the node's XY plane extruded along Z, centred, as one collision shape (Godot's CollisionPolygon3D): a convex polygon makes a convex shape,
+/// any other a triangle mesh. Set <see cref="Polygon"/> and <see cref="Depth"/>; the shape is made again when either changes.</summary>
+public class CollisionPolygon3D : CollisionShape3D
+{
+    private Vector2[] _polygon = System.Array.Empty<Vector2>();
+    private float _depth = 1f;
+
+    public Vector2[] Polygon { get => _polygon; set { _polygon = value ?? System.Array.Empty<Vector2>(); Rebuild(); } }
+    public float Depth { get => _depth; set { _depth = value; Rebuild(); } }
+    public float Margin { get; set; } = 0.04f;
+
+    private void Rebuild() => Shape = _polygon.Length < 3 ? null : Extrude(_polygon, _depth);
+
+    internal static Shape3D? Extrude(Vector2[] polygon, float depth)
+    {
+        float h = depth * 0.5f;
+        int n = polygon.Length;
+        float area = 0f;
+        bool convex = true;
+        for (int i = 0; i < n; i++)
+        {
+            Vector2 a = polygon[i], b = polygon[(i + 1) % n], c = polygon[(i + 2) % n];
+            area += a.Cross(b);
+        }
+        float sign = area >= 0f ? 1f : -1f;
+        for (int i = 0; i < n && convex; i++)
+        {
+            Vector2 a = polygon[i], b = polygon[(i + 1) % n], c = polygon[(i + 2) % n];
+            if ((b - a).Cross(c - b) * sign < -1e-6f) convex = false;
+        }
+        if (convex)
+        {
+            var pts = new Vector3[n * 2];
+            for (int i = 0; i < n; i++) { pts[i] = new Vector3(polygon[i].X, polygon[i].Y, h); pts[n + i] = new Vector3(polygon[i].X, polygon[i].Y, -h); }
+            return new ConvexPolygonShape3D { Points = pts };
+        }
+        int[] tris = Geometry2D.TriangulatePolygon(polygon);
+        if (tris.Length == 0) return null;
+        var faces = new List<Vector3>();
+        for (int t = 0; t + 2 < tris.Length; t += 3)
+        {
+            Vector2 a = polygon[tris[t]], b = polygon[tris[t + 1]], c = polygon[tris[t + 2]];
+            faces.AddRange(new[] { new Vector3(a.X, a.Y, h), new Vector3(b.X, b.Y, h), new Vector3(c.X, c.Y, h) });
+            faces.AddRange(new[] { new Vector3(a.X, a.Y, -h), new Vector3(c.X, c.Y, -h), new Vector3(b.X, b.Y, -h) });
+        }
+        for (int i = 0; i < n; i++)
+        {
+            Vector2 a = polygon[i], b = polygon[(i + 1) % n];
+            var a0 = new Vector3(a.X, a.Y, h); var a1 = new Vector3(a.X, a.Y, -h);
+            var b0 = new Vector3(b.X, b.Y, h); var b1 = new Vector3(b.X, b.Y, -h);
+            faces.AddRange(new[] { a0, b0, b1, a0, b1, a1 });
+        }
+        return new ConcavePolygonShape3D { Data = faces.ToArray() };
+    }
 }

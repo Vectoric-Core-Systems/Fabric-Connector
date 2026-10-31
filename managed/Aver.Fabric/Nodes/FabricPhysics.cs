@@ -107,14 +107,75 @@ internal static class FabricPhysics
             Transform3D local = cs.Transform;
             parts.Add(new Aver.Physics.ShapeChild(shape, ToPhys(FabricSpace.ToAverPosition(local.Origin)), ToPhys(FabricSpace.ToAverRotation(local.Basis.Orthonormalized().GetRotationQuaternion()))));
         }
+        // Shapes a script added through the shape-owner API (create_shape_owner, shape_owner_add_shape).
+        foreach ((Shape3D owned, Transform3D at) in node.OwnedShapes())
+        {
+            PhysShape shape = BuildShape(owned, at.Basis.GetScale());
+            if (!shape.IsValid) continue;
+            parts.Add(new Aver.Physics.ShapeChild(shape, ToPhys(FabricSpace.ToAverPosition(at.Origin)), ToPhys(FabricSpace.ToAverRotation(at.Basis.Orthonormalized().GetRotationQuaternion()))));
+        }
         if (parts.Count == 0) return PhysBody.None;
         PhysShape whole = parts.Count == 1 && IsIdentity(parts[0]) ? parts[0].Shape : PhysShape.Compound(parts.ToArray());
+        // A custom centre of mass (RigidBody3D.center_of_mass_mode custom) moves the body's centre of mass off the shape's; the geometry stays.
+        if (node is RigidBody3D rb && rb.CenterOfMassMode == RigidBody3D.CenterOfMassModeEnum.Custom && whole.TryGetInfo(out Aver.Physics.ShapeInfo info))
+        {
+            PhysFloat3 want = ToPhysPosition(rb.CenterOfMass);   // in the body's own space, as Godot states it
+            whole = whole.OffsetCenterOfMass(new PhysFloat3(want.X - info.CenterOfMass.X, want.Y - info.CenterOfMass.Y, want.Z - info.CenterOfMass.Z));
+        }
         Transform3D g = node.GlobalTransform;
         return whole.CreateBody(ToPhys(FabricSpace.ToAverPosition(g.Origin)), ToPhys(FabricSpace.ToAverRotation(g.Basis.Orthonormalized().GetRotationQuaternion())), motion, massKg, 0, sensor);
     }
 
     private static bool IsIdentity(Aver.Physics.ShapeChild c) =>
         c.Position.X == 0 && c.Position.Y == 0 && c.Position.Z == 0 && c.Rotation.X == 0 && c.Rotation.Y == 0 && c.Rotation.Z == 0 && c.Rotation.W == 1;
+
+    private static PhysFloat3 ToPhysDirection(Vector3 v) => CollisionObject3D.ToPhysDirection(v);
+
+    // The answer of a test motion as a KinematicCollision3D: travel, remainder and one hit per contact.
+    internal static void FillCollision(KinematicCollision3D into, Aver.Physics.MotionTestResult result)
+    {
+        into.Hits.Clear();
+        into.TravelVector = CollisionObject3D.FromPhys(result.Travel, 1f / FabricSpace.CmPerMetre);
+        into.RemainderVector = CollisionObject3D.FromPhys(result.Remainder, 1f / FabricSpace.CmPerMetre);
+        foreach (Aver.Physics.MotionContact c in result.Contacts)
+        {
+            GodotObject? collider = CollisionObject3D.NodeOfBody(c.Collider);
+            into.Hits.Add(new KinematicCollision3D.Hit(FromPhysPosition(c.Point), CollisionObject3D.FromPhys(c.Normal), collider, collider?.GetInstanceId() ?? 0,
+                CollisionObject3D.FromPhys(c.ColliderVelocity, 1f / FabricSpace.CmPerMetre), c.SubShape, c.Depth / FabricSpace.CmPerMetre));
+        }
+    }
+
+    // The triangle a ray hit on a ConcavePolygonShape3D body, or -1 (the user data is the triangle number; other shapes carry none).
+    internal static int FaceIndexOf(PhysBody body, int subShape)
+    {
+        try
+        {
+            Aver.Physics.SurfaceHit h = Aver.Physics.Physics.SubShapeInfo(body, subShape);
+            return h.Hit ? h.Triangle : -1;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return -1; }
+    }
+
+    // A grid of heights as a triangle mesh: width points along X and depth along Z, one metre apart, centred on the origin (Godot's HeightMapShape3D).
+    private static PhysShape BuildHeightMap(HeightMapShape3D hm, Vector3 scale)
+    {
+        int w = hm.MapWidth, d = hm.MapDepth;
+        float[] data = hm.MapData;
+        if (w < 2 || d < 2 || data.Length < w * d) return PhysShape.None;
+        var verts = new PhysFloat3[w * d];
+        for (int z = 0; z < d; z++)
+            for (int x = 0; x < w; x++)
+                verts[z * w + x] = ToPhysPosition(new Vector3((x - (w - 1) * 0.5f) * scale.X, data[z * w + x] * scale.Y, (z - (d - 1) * 0.5f) * scale.Z));
+        var idx = new List<int>((w - 1) * (d - 1) * 6);
+        for (int z = 0; z + 1 < d; z++)
+            for (int x = 0; x + 1 < w; x++)
+            {
+                int a = z * w + x, b = a + 1, c = a + w, e = c + 1;
+                // The axis map mirrors the space: wound b-c-a and b-e-c face up.
+                idx.AddRange(new[] { a, c, b, b, c, e });
+            }
+        return PhysShape.Mesh(verts, idx.ToArray());
+    }
 
     // A Godot shape resource as a physics shape in Aver units (metres to centimetres; the axes of the shape follow its node).
     internal static PhysShape BuildShape(Shape3D s, Vector3 scale)
@@ -149,8 +210,16 @@ internal static class FabricPhysics
                 var idx = new int[n];
                 for (int i = 0; i < n; i++) verts[i] = ToPhysPosition(concave.Data[i] * scale);
                 for (int t = 0; t < n; t += 3) { idx[t] = t; idx[t + 1] = t + 2; idx[t + 2] = t + 1; }
-                return PhysShape.Mesh(verts, idx);
+                // The triangle's number rides along as its user data: a ray hit reads it back as face_index.
+                var faces = new int[n / 3];
+                for (int t = 0; t < faces.Length; t++) faces[t] = t;
+                return PhysShape.Mesh(verts, idx, triUserData: faces);
             }
+            case HeightMapShape3D hm:
+                return BuildHeightMap(hm, scale);
+            case SeparationRayShape3D ray:
+                // Godot's ray runs along the shape's local +Z; the engine's stand-in is a thin capsule along that direction.
+                return PhysShape.SeparationRay(ray.Length * cm, ToPhysDirection(Vector3.Back));
             case WorldBoundaryShape3D wb:
             {
                 Aver.Scene.Vec3 normal = FabricSpace.ToAverDirection(new Vector3(wb.Plane.Normal.X, wb.Plane.Normal.Y, wb.Plane.Normal.Z));

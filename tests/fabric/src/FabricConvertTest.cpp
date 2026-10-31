@@ -390,7 +390,8 @@ int main() {
         check(route >= 0 && w.placements[static_cast<usize>(route)].className == "Path3D" && curve.type == gd::GodotVType::Object && curve.s == "Curve3D" && curve.find("_data"),
               "a Path3D is a Path3D (G5 A2) whose Curve3D is an Object(Curve3D, ...) value");
         const int hinge = find(w, {"Main", "Hinge"});
-        check(hinge >= 0 && propIs(w, hinge, "_class", "\"HingeJoint3D\"") && propIs(w, hinge, "node_a", "NodePath(\"../Ball\")"), "a joint keeps its parameters as properties");
+        check(hinge >= 0 && w.placements[static_cast<usize>(hinge)].className == "HingeJoint3D" && propIs(w, hinge, "node_a", "NodePath(\"../Ball\")") && propIs(w, hinge, "node_b", "NodePath(\"../Floor\")"),
+              "a joint is Aver.Fabric's HingeJoint3D (wave 5) and keeps the paths of its two bodies");
     }
 
     // Meshes.
@@ -524,7 +525,7 @@ int main() {
             return false;
         };
         check(has("\"type\":\"Sprite2D\"", "\"rating\":\"unsupported\"", "2D nodes are out of scope"), "a 2D node is reported unsupported");
-        check(has("\"type\":\"HingeJoint3D\"", "\"rating\":\"unsupported\"", "\"kind\":\"node\""), "a joint is reported unsupported");
+        check(has("\"type\":\"HingeJoint3D\"", "\"rating\":\"approximated\"", "\"kind\":\"node\""), "a joint is reported approximated: Jolt builds it, the limits are measured from the bodies' pose");
         check(has("\"type\":\"Label\"", "\"property\":\"text\"", "\"rating\":\"converted\""), "a UI control's text is reported converted (G5 U2: Aver.Fabric's Label reads it)");
         check(has("\"type\":\"StandardMaterial3D\"", "\"property\":\"uv1_scale\"", "\"rating\":\"converted\""), "uv1_scale is converted now (the .ocmat FX record, G4 R6)");
         check(has("\"type\":\"ShaderMaterial\"", "\"rating\":\"unsupported\"", "has no shader"), "a ShaderMaterial without a shader is reported unsupported (G6 SH2: a shader is converted, an empty one has nothing to run)");
