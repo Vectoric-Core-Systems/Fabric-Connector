@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-700 public types and 7632 public members, read from `managed/Aver.Fabric/` (134 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+716 public types and 7844 public members, read from `managed/Aver.Fabric/` (136 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -3058,9 +3058,77 @@ Values: `LightAndSky = 0`, `LightOnly = 1`, `SkyOnly = 2`
 
 ### DisplayServer
 
-`public static class DisplayServer` - Godot's DisplayServer singleton, as far as game scripts use it to ask what device they run on.
+`public static class DisplayServer` - Godot's DisplayServer singleton: the window, the screen, the pointer's shape, vsync and the touch screen, for the one window Aver has.
 
-- `public static bool IsTouchscreenAvailable()` - Whether the device has a touch screen.
+- `public const int MainWindowId = 0`
+- `public const int InvalidWindowId = -1`
+- `public const int ScreenOfMainWindow = -1`
+- `public const int ScreenPrimary = -2`
+- `public static string GetName()` - The display server's name: Aver draws and reads input through its own window layer.
+- `public static bool IsTouchscreenAvailable()` - Whether the device has a touch screen: the window layer has reported a finger (SDL), or touch emulation from the mouse is on.
+- `public static int[] GetWindowList()`
+- `public static int GetScreenCount()`
+- `public static int GetPrimaryScreen()`
+- `public static int WindowGetCurrentScreen(int windowId = MainWindowId)`
+- `public static void WindowSetCurrentScreen(int screen, int windowId = MainWindowId)`
+- `public static WindowMode WindowGetMode(int windowId = MainWindowId)`
+- `public static void WindowSetMode(WindowMode mode, int windowId = MainWindowId)` - Sets the window's mode.
+- `public static Vector2I WindowGetSize(int windowId = MainWindowId)` - The client area in pixels.
+- `public static Vector2I WindowGetSizeWithDecorations(int windowId = MainWindowId)` - The window with its frame: the client area, as Aver does not report the frame's size.
+- `public static void WindowSetSize(Vector2I size, int windowId = MainWindowId)`
+- `public static Vector2I WindowGetPosition(int windowId = MainWindowId)`
+- `public static Vector2I WindowGetPositionWithDecorations(int windowId = MainWindowId)`
+- `public static void WindowSetPosition(Vector2I position, int windowId = MainWindowId)`
+- `public static bool WindowGetFlag(WindowFlags flag, int windowId = MainWindowId)`
+- `public static void WindowSetFlag(WindowFlags flag, bool enabled, int windowId = MainWindowId)` - Resizable (the inverse of ResizeDisabled), Borderless and AlwaysOnTop reach the window; the other flags are kept as set (approximated).
+- `public static void WindowSetTitle(string title, int windowId = MainWindowId)`
+- `public static bool WindowIsFocused(int windowId = MainWindowId)`
+- `public static void WindowMoveToForeground(int windowId = MainWindowId)`
+- `public static void WindowRequestAttention(int windowId = MainWindowId)`
+- `public static void WindowSetMinSize(Vector2I size, int windowId = MainWindowId)` - Kept as set (approximated): the engine's window has no size limits.
+- `public static Vector2I WindowGetMinSize(int windowId = MainWindowId)`
+- `public static void WindowSetMaxSize(Vector2I size, int windowId = MainWindowId)`
+- `public static Vector2I WindowGetMaxSize(int windowId = MainWindowId)`
+- `public static void WindowSetVsyncMode(VSyncMode mode, int windowId = MainWindowId)`
+- `public static VSyncMode WindowGetVsyncMode(int windowId = MainWindowId)` - The vsync mode in force: what the engine published once the shipped game has applied a request, else what was last set (Enabled by default).
+- `public static Vector2I ScreenGetSize(int screen = ScreenOfMainWindow)` - The monitor's size in pixels (the window's own size when the engine cannot tell).
+- `public static Vector2I ScreenGetPosition(int screen = ScreenOfMainWindow)`
+- `public static Rect2I ScreenGetUsableRect(int screen = ScreenOfMainWindow)`
+- `public static int ScreenGetDpi(int screen = ScreenOfMainWindow)` - Dots per inch: 96 times the display scale.
+- `public static float ScreenGetScale(int screen = ScreenOfMainWindow)`
+- `public static float ScreenGetRefreshRate(int screen = ScreenOfMainWindow)` - Approximated: the engine does not read the refresh rate; -1, as Godot answers when it cannot tell.
+- `public static void ScreenSetKeepOn(bool enable)` - Kept as set (approximated): the engine does not manage the screen saver.
+- `public static bool ScreenIsKeptOn()`
+- `public static Vector2I MouseGetPosition()` - The pointer in screen pixels: the window's position plus the pointer in the window.
+- `public static MouseButtonMask MouseGetButtonState()`
+- `public static void WarpMouse(Vector2I position)` - Moves the pointer to a screen position.
+- `public static void CursorSetShape(CursorShape shape)`
+- `public static CursorShape CursorGetShape()`
+- `public static void CursorSetCustomImage(Resource? cursor, CursorShape shape = CursorShape.Arrow, Vector2 hotspot = default)` - Replaces a shape with an image (see SetCustomMouseCursor for what is approximated).
+
+### DisplayServer.CursorShape
+
+`public enum CursorShape`
+
+Values: `Arrow = 0`, `Ibeam = 1`, `PointingHand = 2`, `Cross = 3`, `Wait = 4`, `Busy = 5`, `Drag = 6`, `CanDrop = 7`, `Forbidden = 8`, `Vsize = 9`, `Hsize = 10`, `Bdiagsize = 11`, `Fdiagsize = 12`, `Move = 13`, `Vsplit = 14`, `Hsplit = 15`, `Help = 16`
+
+### DisplayServer.VSyncMode
+
+`public enum VSyncMode`
+
+Values: `Disabled = 0`, `Enabled = 1`, `Adaptive = 2`, `Mailbox = 3`
+
+### DisplayServer.WindowFlags
+
+`public enum WindowFlags`
+
+Values: `ResizeDisabled = 0`, `Borderless = 1`, `AlwaysOnTop = 2`, `Transparent = 3`, `NoFocus = 4`, `Popup = 5`, `ExtendToTitle = 6`, `MousePassthrough = 7`, `SharpCorners = 8`, `ExcludeFromCapture = 9`, `PopupWmHint = 10`, `MinimizeDisabled = 11`, `MaximizeDisabled = 12`
+
+### DisplayServer.WindowMode
+
+`public enum WindowMode`
+
+Values: `Windowed = 0`, `Minimized = 1`, `Maximized = 2`, `Fullscreen = 3`, `ExclusiveFullscreen = 4`
 
 ### EncodedObjectAsId
 
@@ -4161,12 +4229,38 @@ Values: `TopTo = 0`, `CenterTo = 1`, `BaselineTo = 3`, `BottomTo = 2`, `ToTop = 
 - `public static MouseButtonMask GetMouseButtonMask()`
 - `public static Vector2 GetLastMouseVelocity()` - The pointer's velocity in pixels per second, from the last motion event.
 - `public static Vector2 GetLastMouseScreenVelocity()`
+- `public static GodotObject Singleton { get; }` - The object that carries Input's signals: Input.Singleton.Connect("joy_connection_changed", ...).
+- `public static event Action<long, bool>? JoyConnectionChanged` - Raised when a gamepad is plugged in or removed (Godot's joy_connection_changed): the device number and whether it is now connected.
 - `public static Collections.Array<int> GetConnectedJoypads()` - The connected gamepads' device numbers.
-- `public static void StartJoyVibration(int device, float weakMagnitude, float strongMagnitude, float duration = 0f)`
+- `public static string GetJoyName(int device)` - The device's name ("" for a pad that is not connected).
+- `public static string GetJoyGuid(int device)` - Approximated: the engine does not read the device's GUID, so this is empty.
+- `public static bool IsJoyKnown(int device)` - Whether the engine maps the device to the standard layout: every connected pad is read through one.
+- `public static Collections.Dictionary GetJoyInfo(int device)` - Approximated: the vendor, product and mapping details are not read, so the dictionary holds only the pad's name.
+- `public static void StartJoyVibration(int device, float weakMagnitude, float strongMagnitude, float duration = 0f)` - Rumbles a pad: the weak (high-frequency) and strong motors, 0 to 1, for duration seconds (0 until stopped).
 - `public static void StopJoyVibration(int device)`
+- `public static Vector2 GetJoyVibrationStrength(int device)` - The last rumble asked of the pad: weak and strong magnitude (Godot's get_joy_vibration_strength).
+- `public static float GetJoyVibrationDuration(int device)` - The seconds the last rumble was asked to run (0: until stopped).
+- `public static Vector3 GetAccelerometer()` - Approximated: zero.
+- `public static Vector3 GetGravity()`
+- `public static Vector3 GetGyroscope()`
+- `public static Vector3 GetMagnetometer()`
+- `public static bool EmulateTouchFromMouse { get; set; }` - Whether the left mouse button acts as a finger (Godot's emulate_touch_from_mouse).
+- `public static bool EmulateMouseFromTouch { get; set; }` - Stored, not applied (approximated): on Windows a touch already arrives as a mouse event, and SDL's touch-to-mouse is left at its default.
+- `public static bool UseAccumulatedInput { get; set; }` - Stored, not applied: the engine delivers each input event as it comes (it never merges motion into one per frame).
+- `public static void SetDefaultCursorShape(CursorShape shape = CursorShape.Arrow)` - The shape the pointer shows while it is over the window.
+- `public static CursorShape GetCurrentCursorShape()`
+- `public static void SetCustomMouseCursor(Resource? image, CursorShape shape = CursorShape.Arrow, Vector2 hotspot = default)` - Replaces a cursor shape with an image.
+- `public static void SetCustomMouseCursorPixels(byte[]? rgba, int width, int height, CursorShape shape = CursorShape.Arrow, Vector2 hotspot = default)` - Replaces a cursor shape with w x h RGBA bytes (straight alpha, top row first, each side 1 to 256), the hotspot inside the image; null puts the system shape back.
+- `public static void WarpMouse(Vector2 position)` - Moves the pointer to a position in viewport pixels at the next frame.
 - `public static void VibrateHandheld(int durationMs = 500, float amplitude = -1f)` - Approximated: Aver has no handheld haptics, so this does nothing; the first call says so in the log.
-- `public static MouseModeEnum MouseMode { get; set; }` - Whether the pointer is shown, hidden or captured by the game window.
+- `public static MouseModeEnum MouseMode { get; set; }` - Whether the pointer is shown, hidden, captured or confined to the game window.
 - `public static void ParseInputEvent(InputEvent @event)` - Feeds an event to the game as if it had come from a device (Godot's parse_input_event): input and action state change, and the event goes down the tree to _Input and _UnhandledInput.
+
+### Input.CursorShape
+
+`public enum CursorShape` - Godot's Input.CursorShape (the same shapes as Control.CursorShape).
+
+Values: `Arrow = 0`, `Ibeam = 1`, `PointingHand = 2`, `Cross = 3`, `Wait = 4`, `Busy = 5`, `Drag = 6`, `CanDrop = 7`, `Forbidden = 8`, `Vsize = 9`, `Hsize = 10`, `Bdiagsize = 11`, `Fdiagsize = 12`, `Move = 13`, `Vsplit = 14`, `Hsplit = 15`, `Help = 16`
 
 ### Input.MouseModeEnum
 
@@ -4466,7 +4560,7 @@ Values: `Invalid = -1`, `LeftX = 0`, `LeftY = 1`, `RightX = 2`, `RightY = 3`, `T
 
 `public enum JoyButton`
 
-Values: `Invalid = -1`, `A = 0`, `B = 1`, `X = 2`, `Y = 3`, `Back = 4`, `Guide = 5`, `Start = 6`, `LeftStick = 7`, `RightStick = 8`, `LeftShoulder = 9`, `RightShoulder = 10`, `DpadUp = 11`, `DpadDown = 12`, `DpadLeft = 13`, `DpadRight = 14`, `Misc1 = 15`
+Values: `Invalid = -1`, `A = 0`, `B = 1`, `X = 2`, `Y = 3`, `Back = 4`, `Guide = 5`, `Start = 6`, `LeftStick = 7`, `RightStick = 8`, `LeftShoulder = 9`, `RightShoulder = 10`, `DpadUp = 11`, `DpadDown = 12`, `DpadLeft = 13`, `DpadRight = 14`, `Misc1 = 15`, `Paddle1 = 16`, `Paddle2 = 17`, `Paddle3 = 18`, `Paddle4 = 19`, `Touchpad = 20`
 
 ### JSON
 
@@ -4484,7 +4578,7 @@ Values: `Invalid = -1`, `A = 0`, `B = 1`, `X = 2`, `Y = 3`, `Back = 4`, `Guide =
 
 `public enum Key : long` - Keyboard keys, with Godot's key codes (letters and digits are their ASCII codes, special keys are 1 &lt;&lt; 22 plus an index).
 
-Values: `None = 0`, `Special = 4194304`, `Escape = 4194305`, `Tab = 4194306`, `Backtab = 4194307`, `Backspace = 4194308`, `Enter = 4194309`, `KpEnter = 4194310`, `Insert = 4194311`, `Delete = 4194312`, `Pause = 4194313`, `Print = 4194314`, `Sysreq = 4194315`, `Clear = 4194316`, `Home = 4194317`, `End = 4194318`, `Left = 4194319`, `Up = 4194320`, `Right = 4194321`, `Down = 4194322`, `Pageup = 4194323`, `Pagedown = 4194324`, `Shift = 4194325`, `Ctrl = 4194326`, `Meta = 4194327`, `Alt = 4194328`, `Capslock = 4194329`, `Numlock = 4194330`, `Scrolllock = 4194331`, `F1 = 4194332`, `F2 = 4194333`, `F3 = 4194334`, `F4 = 4194335`, `F5 = 4194336`, `F6 = 4194337`, `F7 = 4194338`, `F8 = 4194339`, `F9 = 4194340`, `F10 = 4194341`, `F11 = 4194342`, `F12 = 4194343`, `Space = 32`, `Key0 = 48`, `Key1 = 49`, `Key2 = 50`, `Key3 = 51`, `Key4 = 52`, `Key5 = 53`, `Key6 = 54`, `Key7 = 55`, `Key8 = 56`, `Key9 = 57`, `A = 65`, `B = 66`, `C = 67`, `D = 68`, `E = 69`, `F = 70`, `G = 71`, `H = 72`, `I = 73`, `J = 74`, `K = 75`, `L = 76`, `M = 77`, `N = 78`, `O = 79`, `P = 80`, `Q = 81`, `R = 82`, `S = 83`, `T = 84`, `U = 85`, `V = 86`, `W = 87`, `X = 88`, `Y = 89`, `Z = 90`
+Values: `None = 0`, `Special = 4194304`, `Escape = 4194305`, `Tab = 4194306`, `Backtab = 4194307`, `Backspace = 4194308`, `Enter = 4194309`, `KpEnter = 4194310`, `Insert = 4194311`, `Delete = 4194312`, `Pause = 4194313`, `Print = 4194314`, `Sysreq = 4194315`, `Clear = 4194316`, `Home = 4194317`, `End = 4194318`, `Left = 4194319`, `Up = 4194320`, `Right = 4194321`, `Down = 4194322`, `Pageup = 4194323`, `Pagedown = 4194324`, `Shift = 4194325`, `Ctrl = 4194326`, `Meta = 4194327`, `Alt = 4194328`, `Capslock = 4194329`, `Numlock = 4194330`, `Scrolllock = 4194331`, `F1 = 4194332`, `F2 = 4194333`, `F3 = 4194334`, `F4 = 4194335`, `F5 = 4194336`, `F6 = 4194337`, `F7 = 4194338`, `F8 = 4194339`, `F9 = 4194340`, `F10 = 4194341`, `F11 = 4194342`, `F12 = 4194343`, `F13 = 4194344`, `F14 = 4194345`, `F15 = 4194346`, `F16 = 4194347`, `F17 = 4194348`, `F18 = 4194349`, `F19 = 4194350`, `F20 = 4194351`, `F21 = 4194352`, `F22 = 4194353`, `F23 = 4194354`, `F24 = 4194355`, `Menu = 4194370`, `Hyper = 4194371`, `Help = 4194373`, `KpMultiply = 4194433`, `KpDivide = 4194434`, `KpSubtract = 4194435`, `KpPeriod = 4194436`, `KpAdd = 4194437`, `Kp0 = 4194438`, `Kp1 = 4194439`, `Kp2 = 4194440`, `Kp3 = 4194441`, `Kp4 = 4194442`, `Kp5 = 4194443`, `Kp6 = 4194444`, `Kp7 = 4194445`, `Kp8 = 4194446`, `Kp9 = 4194447`, `Space = 32`, `Apostrophe = 39`, `Comma = 44`, `Minus = 45`, `Period = 46`, `Slash = 47`, `Semicolon = 59`, `Equal = 61`, `Bracketleft = 91`, `Backslash = 92`, `Bracketright = 93`, `Quoteleft = 96`, `Key0 = 48`, `Key1 = 49`, `Key2 = 50`, `Key3 = 51`, `Key4 = 52`, `Key5 = 53`, `Key6 = 54`, `Key7 = 55`, `Key8 = 56`, `Key9 = 57`, `A = 65`, `B = 66`, `C = 67`, `D = 68`, `E = 69`, `F = 70`, `G = 71`, `H = 72`, `I = 73`, `J = 74`, `K = 75`, `L = 76`, `M = 77`, `N = 78`, `O = 79`, `P = 80`, `Q = 81`, `R = 82`, `S = 83`, `T = 84`, `U = 85`, `V = 86`, `W = 87`, `X = 88`, `Y = 89`, `Z = 90`
 
 ### KeyModifierMask
 
@@ -9774,6 +9868,7 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 
 `public class Viewport : Node` - A rendering/input area (Godot's Viewport).
 
+- `public event Action SizeChanged` - Raised when the viewport's size changes (Godot's size_changed): a window the player resizes, or a script setting Size.
 - `public virtual Vector2I Size { get; set; }` - The size in pixels.
 - `public virtual ViewportTexture? GetTexture()` - The picture this viewport draws as a texture.
 - `public ScreenSpaceAAEnum ScreenSpaceAA { get; set; }` - Stored, not applied (approximated): the project's anti-aliasing is converted into RENDER.NEURAA and RENDER.TAA when the project is converted; this value, set at run time, does not switch them.
@@ -9787,7 +9882,7 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public void GuiCancelDrag()`
 - `public World3D World3D { get; set; }` - The 3D world of this viewport: its physics space.
 - `public virtual Camera3D? GetCamera3D()` - The camera that is drawn (the one made current last).
-- `public Vector2 GetMousePosition()` - The pointer in viewport pixels.
+- `public virtual Vector2 GetMousePosition()` - The pointer in viewport pixels: the engine's reading every frame (the position the UI sees, before any content stretch), else where script-fed events last put it.
 - `public void SetInputAsHandled()` - Stops the input event being processed by anything further (Godot's set_input_as_handled).
 - `public bool IsInputHandled()`
 
@@ -9796,6 +9891,12 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 `public enum ScreenSpaceAAEnum` - Godot's Viewport.ScreenSpaceAA: the anti-aliasing a viewport applies after it has drawn (a post-process filter, apart from MSAA).
 
 Values: `Disabled = 0`, `Fxaa = 1`, `Smaa = 2`, `Max = 3`
+
+### Viewport.SignalName
+
+`public new class SignalName : Node.SignalName`
+
+- `public static readonly StringName SizeChanged`
 
 ### ViewportTexture
 
@@ -9896,13 +9997,22 @@ Values: `Subdiv64 = 0`, `Subdiv128 = 1`, `Subdiv256 = 2`, `Subdiv512 = 3`, `Max 
 
 `public class Window : Viewport` - The window at the top of the tree; its name is "root" (Godot's Window).
 
-- `public string Title { get; set; }`
+- `public string Title { get; set; }` - The window's title bar text.
+- `public ModeEnum Mode { get; set; }` - The window's mode: windowed, minimized, maximized or fullscreen.
+- `public Vector2I Position { get; set; }` - The window's top-left in screen pixels.
+- `public bool Borderless { get; set; }` - No frame or title bar.
+- `public bool AlwaysOnTop { get; set; }`
+- `public bool Unresizable { get; set; }` - The player cannot resize the window.
+- `public bool Transparent { get; set; }` - Kept as set (approximated): the engine's window is opaque.
+- `public bool Unfocusable { get; set; }` - Kept as set (approximated): the engine's window takes focus as any window does.
+- `public bool HasFocus()` - Whether the window has the keyboard focus.
+- `public override Vector2 GetMousePosition()`
 - `public ContentScaleModeEnum ContentScaleMode { get; set; }` - How the UI follows the window's size: nothing stretches (default), the canvas is drawn scaled (canvas_items), or the picture is rendered at the base size and scaled up (viewport).
 - `public ContentScaleAspectEnum ContentScaleAspect { get; set; }` - What happens when the window's shape differs from the base size's.
 - `public ContentScaleStretchEnum ContentScaleStretch { get; set; }` - Fractional or integer scaling.
 - `public Vector2I ContentScaleSize { get; set; }` - The size the UI is authored at; zero in either axis means none (no stretch).
 - `public float ContentScaleFactor { get; set; }` - The extra scale applied on top of the stretch.
-- `public override Vector2I Size { get; set; }`
+- `public override Vector2I Size { get; set; }` - The window's pixel size: the shipped game's, as it published it (the player may have resized the window), else the one a script set, else the project's WINDOW.SIZE.
 - `public override Rect2 GetVisibleRect()` - The area Controls are laid out in: the window's pixels divided by the content scale factor, or the base size (letterboxed or grown) when the stretch mode is on.
 - `public Rect2 GetContentScreenRect()` - Where the stretched content lands in the window, in window pixels (the letterbox is the rest).
 - `public bool IsLetterboxed()`
@@ -9926,6 +10036,12 @@ Values: `Disabled = 0`, `CanvasItems = 1`, `Viewport = 2`
 `public enum ContentScaleStretchEnum`
 
 Values: `Fractional = 0`, `Integer = 1`
+
+### Window.ModeEnum
+
+`public enum ModeEnum` - Godot's Window.Mode.
+
+Values: `Windowed = 0`, `Minimized = 1`, `Maximized = 2`, `Fullscreen = 3`, `ExclusiveFullscreen = 4`
 
 ### WorkerThreadPool
 
@@ -9962,6 +10078,77 @@ Values: `Fractional = 0`, `Integer = 1`
 - `public const string Layer = "fabric.environment"` - The script post layer the node writes to.
 - `public Environment? Environment { get; set; }`
 - `public CameraAttributes? CameraAttributes { get; set; }`
+
+### XRAnchor3D
+
+`public class XRAnchor3D : XRNode3D` - A tracked anchor in the real world (Godot's XRAnchor3D).
+
+- `public Vector3 GetSize()`
+
+### XRCamera3D
+
+`public class XRCamera3D : Camera3D` - The camera of an XR session (Godot's XRCamera3D): an ordinary camera here.
+
+### XRController3D
+
+`public class XRController3D : XRNode3D` - A tracked controller (Godot's XRController3D).
+
+- `public bool IsButtonPressed(StringName name)`
+- `public float GetFloat(StringName name)`
+- `public Vector2 GetVector2(StringName name)`
+- `public XRPositionalTracker.TrackerHandEnum GetTrackerHand()` - Always Unknown.
+
+### XRInterface
+
+`public class XRInterface : RefCounted` - An XR interface (Godot's XRInterface).
+
+- `public virtual string GetName()`
+- `public virtual bool IsInitialized()`
+- `public virtual bool Initialize()`
+- `public virtual void Uninitialize()`
+
+### XRNode3D
+
+`public class XRNode3D : Node3D` - A node a tracker drives (Godot's XRNode3D).
+
+- `public StringName Tracker { get; set; }` - The tracker's name ("left_hand", "right_hand", "head").
+- `public StringName Pose { get; set; }` - The pose of the tracker this node follows ("default", "aim", "grip").
+- `public bool ShowWhenTracked { get; set; }`
+- `public bool GetIsActive()` - Always false: no XR interface is running.
+- `public bool GetHasTrackingData()` - Always false: there is no tracking data.
+
+### XROrigin3D
+
+`public class XROrigin3D : Node3D` - The centre of the play space (Godot's XROrigin3D): an ordinary node here.
+
+- `public float WorldScale { get; set; }` - Kept as set: no XR interface scales the world.
+- `public bool Current { get; set; }` - Whether this is the origin in use.
+
+### XRPositionalTracker
+
+`public class XRPositionalTracker : RefCounted` - A tracked thing (Godot's XRPositionalTracker).
+
+- `public StringName Name { get; set; }`
+
+### XRPositionalTracker.TrackerHandEnum
+
+`public enum TrackerHandEnum`
+
+Values: `Unknown = 0`, `Left = 1`, `Right = 2`, `Max = 3`
+
+### XRServer
+
+`public static class XRServer` - Godot's XRServer singleton, with no interface to find.
+
+- `public static float WorldScale { get; set; }` - Kept as set; nothing scales the world.
+- `public static Transform3D WorldOrigin { get; set; }`
+- `public static Transform3D ReferenceFrame { get; }`
+- `public static XRInterface? FindInterface(string name)` - Always null: Aver has no XR interface.
+- `public static XRInterface? PrimaryInterface { get; set; }`
+- `public static int GetInterfaceCount()`
+- `public static XRInterface? GetInterface(int index)`
+- `public static Collections.Array<Collections.Dictionary> GetInterfaces()`
+- `public static XRPositionalTracker? GetTracker(StringName name)`
 
 ## namespace Aver.Fabric.Collections
 

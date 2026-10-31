@@ -49,6 +49,8 @@ const std::set<std::string>& supportedClasses() {
                                             // G5 A2: animation trees, skeletons, paths and helper nodes
                                             "AnimationTree", "Skeleton3D", "BoneAttachment3D", "SkeletonIK3D", "Path3D", "PathFollow3D", "SpringArm3D",
                                             "RemoteTransform3D", "VisibleOnScreenNotifier3D", "VisibleOnScreenEnabler3D",
+                                            // wave 3: XR nodes as inert carriers (chooseClass rates them approximated)
+                                            "XROrigin3D", "XRCamera3D", "XRController3D", "XRAnchor3D", "XRNode3D",
                                             // G5 S1: audio
                                             "AudioStreamPlayer", "AudioStreamPlayer3D", "AudioListener3D",
                                             // G5 N1: navigation
@@ -154,6 +156,12 @@ ClassChoice chooseClass(const std::string& t) {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
         c.reason = "its visible flag hides what is drawn on it; the layer number, offset, rotation and scale are kept but not applied (the GUI draws every Control in tree order, in viewport space)";
+        return c;
+    }
+    if (t == "XROrigin3D" || t == "XRCamera3D" || t == "XRController3D" || t == "XRAnchor3D" || t == "XRNode3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "an inert carrier so the scene loads: XR is not supported (OpenXR is a later project), nothing tracks the node, XRServer finds no interface, and an XRCamera3D does not become the level's view (the converter picks a Camera3D for that)";
         return c;
     }
     if (t == "VisibleOnScreenNotifier3D" || t == "VisibleOnScreenEnabler3D") {

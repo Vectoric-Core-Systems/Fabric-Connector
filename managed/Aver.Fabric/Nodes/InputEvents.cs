@@ -18,7 +18,16 @@ public enum Key : long
     Shift = 4194325, Ctrl = 4194326, Meta = 4194327, Alt = 4194328, Capslock = 4194329, Numlock = 4194330, Scrolllock = 4194331,
     F1 = 4194332, F2 = 4194333, F3 = 4194334, F4 = 4194335, F5 = 4194336, F6 = 4194337, F7 = 4194338, F8 = 4194339,
     F9 = 4194340, F10 = 4194341, F11 = 4194342, F12 = 4194343,
+    // F13 to F24 have no engine key slot (Aver's key set stops at F12): a script can name them, and nothing presses them.
+    F13 = 4194344, F14 = 4194345, F15 = 4194346, F16 = 4194347, F17 = 4194348, F18 = 4194349, F19 = 4194350, F20 = 4194351,
+    F21 = 4194352, F22 = 4194353, F23 = 4194354, F24 = 4194355,
+    Menu = 4194370, Hyper = 4194371, Help = 4194373,
+    KpMultiply = 4194433, KpDivide = 4194434, KpSubtract = 4194435, KpPeriod = 4194436, KpAdd = 4194437,
+    Kp0 = 4194438, Kp1 = 4194439, Kp2 = 4194440, Kp3 = 4194441, Kp4 = 4194442, Kp5 = 4194443, Kp6 = 4194444, Kp7 = 4194445, Kp8 = 4194446, Kp9 = 4194447,
     Space = 32,
+    // Punctuation is its ASCII code (the US layout's key).
+    Apostrophe = 39, Comma = 44, Minus = 45, Period = 46, Slash = 47, Semicolon = 59, Equal = 61,
+    Bracketleft = 91, Backslash = 92, Bracketright = 93, Quoteleft = 96,
     Key0 = 48, Key1 = 49, Key2 = 50, Key3 = 51, Key4 = 52, Key5 = 53, Key6 = 54, Key7 = 55, Key8 = 56, Key9 = 57,
     A = 65, B = 66, C = 67, D = 68, E = 69, F = 70, G = 71, H = 72, I = 73, J = 74, K = 75, L = 76, M = 77,
     N = 78, O = 79, P = 80, Q = 81, R = 82, S = 83, T = 84, U = 85, V = 86, W = 87, X = 88, Y = 89, Z = 90,
@@ -41,6 +50,7 @@ public enum JoyButton
 {
     Invalid = -1, A = 0, B = 1, X = 2, Y = 3, Back = 4, Guide = 5, Start = 6, LeftStick = 7, RightStick = 8,
     LeftShoulder = 9, RightShoulder = 10, DpadUp = 11, DpadDown = 12, DpadLeft = 13, DpadRight = 14, Misc1 = 15,
+    Paddle1 = 16, Paddle2 = 17, Paddle3 = 18, Paddle4 = 19, Touchpad = 20,
 }
 
 public enum JoyAxis { Invalid = -1, LeftX = 0, LeftY = 1, RightX = 2, RightY = 3, TriggerLeft = 4, TriggerRight = 5 }
@@ -221,8 +231,8 @@ public class InputEventMouseMotion : InputEventMouse
     public override string AsText() => $"Mouse motion relative ({Relative.X}, {Relative.Y})";
 }
 
-/// <summary>A finger touching or leaving the screen (Godot's InputEventScreenTouch). Aver's input chain has no touch source, so these arrive only from
-/// <see cref="Input.ParseInputEvent"/>; a script written for a touch screen compiles and runs, and receives nothing from a desktop.</summary>
+/// <summary>A finger touching or leaving the screen (Godot's InputEventScreenTouch). They come from a real touch screen where the window layer has one (SDL),
+/// from the mouse when <see cref="Input.EmulateTouchFromMouse"/> is on, and from <see cref="Input.ParseInputEvent"/>.</summary>
 public class InputEventScreenTouch : InputEvent
 {
     /// <summary>Which finger (0 for the first).</summary>
@@ -356,6 +366,39 @@ internal static class InputBridge
         list.Add((Aver.Framework.Key.Right, Key.Right));
         list.Add((Aver.Framework.Key.Up, Key.Up));
         list.Add((Aver.Framework.Key.Down, Key.Down));
+        for (int i = 0; i < 12; i++) list.Add(((Aver.Framework.Key)((int)Aver.Framework.Key.F1 + i), (Key)((long)Key.F1 + i)));
+        for (int i = 0; i < 10; i++) list.Add(((Aver.Framework.Key)((int)Aver.Framework.Key.Kp0 + i), (Key)((long)Key.Kp0 + i)));
+        list.Add((Aver.Framework.Key.PageUp, Key.Pageup));
+        list.Add((Aver.Framework.Key.PageDown, Key.Pagedown));
+        list.Add((Aver.Framework.Key.Home, Key.Home));
+        list.Add((Aver.Framework.Key.End, Key.End));
+        list.Add((Aver.Framework.Key.Insert, Key.Insert));
+        list.Add((Aver.Framework.Key.Delete, Key.Delete));
+        list.Add((Aver.Framework.Key.Backspace, Key.Backspace));
+        list.Add((Aver.Framework.Key.CapsLock, Key.Capslock));
+        list.Add((Aver.Framework.Key.NumLock, Key.Numlock));
+        list.Add((Aver.Framework.Key.ScrollLock, Key.Scrolllock));
+        list.Add((Aver.Framework.Key.Pause, Key.Pause));
+        list.Add((Aver.Framework.Key.PrintScreen, Key.Print));
+        list.Add((Aver.Framework.Key.Menu, Key.Menu));
+        list.Add((Aver.Framework.Key.Meta, Key.Meta));
+        list.Add((Aver.Framework.Key.Minus, Key.Minus));
+        list.Add((Aver.Framework.Key.Equal, Key.Equal));
+        list.Add((Aver.Framework.Key.LBracket, Key.Bracketleft));
+        list.Add((Aver.Framework.Key.RBracket, Key.Bracketright));
+        list.Add((Aver.Framework.Key.Backslash, Key.Backslash));
+        list.Add((Aver.Framework.Key.Semicolon, Key.Semicolon));
+        list.Add((Aver.Framework.Key.Apostrophe, Key.Apostrophe));
+        list.Add((Aver.Framework.Key.Comma, Key.Comma));
+        list.Add((Aver.Framework.Key.Period, Key.Period));
+        list.Add((Aver.Framework.Key.Slash, Key.Slash));
+        list.Add((Aver.Framework.Key.Grave, Key.Quoteleft));
+        list.Add((Aver.Framework.Key.KpAdd, Key.KpAdd));
+        list.Add((Aver.Framework.Key.KpSubtract, Key.KpSubtract));
+        list.Add((Aver.Framework.Key.KpMultiply, Key.KpMultiply));
+        list.Add((Aver.Framework.Key.KpDivide, Key.KpDivide));
+        list.Add((Aver.Framework.Key.KpDecimal, Key.KpPeriod));
+        list.Add((Aver.Framework.Key.KpEnter, Key.KpEnter));
         return list.ToArray();
     }
 
@@ -368,7 +411,6 @@ internal static class InputBridge
 
     internal static bool TryAverKey(Key key, out Aver.Framework.Key aver)
     {
-        if (key == Key.KpEnter) key = Key.Enter;
         foreach (var (a, g) in s_keys) if (g == key) { aver = a; return true; }
         aver = default;
         return false;
@@ -390,6 +432,13 @@ internal static class InputBridge
         Aver.Framework.GamepadButton.DPadDown => JoyButton.DpadDown,
         Aver.Framework.GamepadButton.DPadLeft => JoyButton.DpadLeft,
         Aver.Framework.GamepadButton.DPadRight => JoyButton.DpadRight,
+        Aver.Framework.GamepadButton.Guide => JoyButton.Guide,
+        Aver.Framework.GamepadButton.Misc1 => JoyButton.Misc1,
+        Aver.Framework.GamepadButton.Paddle1 => JoyButton.Paddle1,
+        Aver.Framework.GamepadButton.Paddle2 => JoyButton.Paddle2,
+        Aver.Framework.GamepadButton.Paddle3 => JoyButton.Paddle3,
+        Aver.Framework.GamepadButton.Paddle4 => JoyButton.Paddle4,
+        Aver.Framework.GamepadButton.Touchpad => JoyButton.Touchpad,
         _ => JoyButton.Invalid,
     };
 
@@ -420,13 +469,27 @@ internal static class InputBridge
         Aver.Framework.Key.MouseLeft => MouseButton.Left,
         Aver.Framework.Key.MouseRight => MouseButton.Right,
         Aver.Framework.Key.MouseMiddle => MouseButton.Middle,
+        Aver.Framework.Key.MouseX1 => MouseButton.Xbutton1,
+        Aver.Framework.Key.MouseX2 => MouseButton.Xbutton2,
+        Aver.Framework.Key.MouseWheelUp => MouseButton.WheelUp,
+        Aver.Framework.Key.MouseWheelDown => MouseButton.WheelDown,
+        Aver.Framework.Key.MouseWheelLeft => MouseButton.WheelLeft,
+        Aver.Framework.Key.MouseWheelRight => MouseButton.WheelRight,
         _ => MouseButton.None,
     };
 
+    /// <summary>The engine key slot a Godot mouse button reads (the wheel directions are slots that a notch presses for a frame).</summary>
     internal static bool TryAverMouse(MouseButton b, out Aver.Framework.Key key)
     {
-        key = b switch { MouseButton.Left => Aver.Framework.Key.MouseLeft, MouseButton.Right => Aver.Framework.Key.MouseRight, MouseButton.Middle => Aver.Framework.Key.MouseMiddle, _ => default };
-        return b is MouseButton.Left or MouseButton.Right or MouseButton.Middle;
+        key = b switch
+        {
+            MouseButton.Left => Aver.Framework.Key.MouseLeft, MouseButton.Right => Aver.Framework.Key.MouseRight, MouseButton.Middle => Aver.Framework.Key.MouseMiddle,
+            MouseButton.Xbutton1 => Aver.Framework.Key.MouseX1, MouseButton.Xbutton2 => Aver.Framework.Key.MouseX2,
+            MouseButton.WheelUp => Aver.Framework.Key.MouseWheelUp, MouseButton.WheelDown => Aver.Framework.Key.MouseWheelDown,
+            MouseButton.WheelLeft => Aver.Framework.Key.MouseWheelLeft, MouseButton.WheelRight => Aver.Framework.Key.MouseWheelRight,
+            _ => default,
+        };
+        return b is not MouseButton.None;
     }
 
     /// <summary>The Godot event for an engine event: the same object each time it is asked, so a handled mark is shared.</summary>
@@ -450,8 +513,18 @@ internal static class InputBridge
             }
             case Aver.Framework.InputEventMouseButton b:
                 return new InputEventMouseButton { ButtonIndex = ToMouseButton(b.Button), Pressed = b.IsPressed, Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
+            case Aver.Framework.InputEventMouseWheel w when w.Horizontal != 0f && w.Delta == 0f:
+                return new InputEventMouseButton { ButtonIndex = w.Horizontal > 0 ? MouseButton.WheelRight : MouseButton.WheelLeft, Pressed = true, Factor = MathF.Abs(w.Horizontal), Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
             case Aver.Framework.InputEventMouseWheel w:
                 return new InputEventMouseButton { ButtonIndex = w.Delta > 0 ? MouseButton.WheelUp : MouseButton.WheelDown, Pressed = true, Factor = MathF.Abs(w.Delta), Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
+            case Aver.Framework.InputEventTouch t:
+                return new InputEventScreenTouch { Index = t.Finger, Position = new Vector2(t.X, t.Y), Pressed = t.IsPressed };
+            case Aver.Framework.InputEventTouchMotion tm:
+            {
+                var rel = new Vector2(tm.RelativeX, tm.RelativeY);
+                float dt = Input.FrameDelta > 0 ? (float)Input.FrameDelta : 1f / 60f;
+                return new InputEventScreenDrag { Index = tm.Finger, Position = new Vector2(tm.X, tm.Y), Relative = rel, ScreenRelative = rel, Velocity = rel / dt, ScreenVelocity = rel / dt, Pressure = tm.Pressure };
+            }
             case Aver.Framework.InputEventMouseMotion m:
             {
                 var rel = new Vector2(m.RelativeX, m.RelativeY);
@@ -477,12 +550,18 @@ internal static class InputBridge
         {
             case InputEventKey k when TryAverKey(k.GetKeycodeWithModifiers(), out Aver.Framework.Key ak):
                 return new Aver.Framework.InputEventKey(ak, k.Pressed);
-            case InputEventMouseButton b when TryAverMouse(b.ButtonIndex, out Aver.Framework.Key mk):
-                return new Aver.Framework.InputEventMouseButton(mk, b.Pressed);
             case InputEventMouseButton w when w.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown:
                 return new Aver.Framework.InputEventMouseWheel(w.ButtonIndex == MouseButton.WheelUp ? w.Factor : -w.Factor);
+            case InputEventMouseButton w when w.ButtonIndex is MouseButton.WheelLeft or MouseButton.WheelRight:
+                return new Aver.Framework.InputEventMouseWheel(0f, w.ButtonIndex == MouseButton.WheelRight ? w.Factor : -w.Factor);
+            case InputEventMouseButton b when TryAverMouse(b.ButtonIndex, out Aver.Framework.Key mk):
+                return new Aver.Framework.InputEventMouseButton(mk, b.Pressed);
             case InputEventMouseMotion m:
                 return new Aver.Framework.InputEventMouseMotion(m.Relative.X, m.Relative.Y);
+            case InputEventScreenTouch t:
+                return new Aver.Framework.InputEventTouch(t.Index, t.Pressed, t.Position.X, t.Position.Y);
+            case InputEventScreenDrag d:
+                return new Aver.Framework.InputEventTouchMotion(d.Index, d.Position.X, d.Position.Y, d.Relative.X, d.Relative.Y, d.Pressure);
             case InputEventJoypadButton jb when TryAverButton(jb.ButtonIndex, out Aver.Framework.GamepadButton ab):
                 return new Aver.Framework.InputEventJoypadButton(ab, jb.Pressed, jb.Device);
             default:

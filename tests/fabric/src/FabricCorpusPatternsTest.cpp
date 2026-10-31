@@ -232,20 +232,25 @@ int main() {
     };
     {
         const auto accept = bindingsOf("ui_accept");
-        check(accept.size() == 3 && has(accept, fmt::OcInputSource::Key, "Enter") && has(accept, fmt::OcInputSource::Key, "Space") && has(accept, fmt::OcInputSource::GamepadButton, "A"),
-              "ui_accept: Godot 3's Enter and KP Enter are one Enter binding, with Space and pad A (3 bindings)");
+        check(accept.size() == 4 && has(accept, fmt::OcInputSource::Key, "Enter") && has(accept, fmt::OcInputSource::Key, "KpEnter") && has(accept, fmt::OcInputSource::Key, "Space") &&
+                  has(accept, fmt::OcInputSource::GamepadButton, "A"),
+              "ui_accept: Godot 3's Enter and KP Enter are two bindings (the numpad key has its own slot), with Space and pad A (4 bindings)");
         const auto left = bindingsOf("ui_left");
         check(left.size() == 2 && has(left, fmt::OcInputSource::Key, "Left") && has(left, fmt::OcInputSource::GamepadButton, "DPadLeft"), "ui_left: Left, and joypad button 14 read with Godot 3's numbering as DPadLeft");
         const auto up = bindingsOf("ui_up");
         check(up.size() == 2 && has(up, fmt::OcInputSource::Key, "Up") && has(up, fmt::OcInputSource::GamepadButton, "DPadUp"), "ui_up: Up, and joypad button 12 as DPadUp");
         check(has(bindingsOf("ui_focus_next"), fmt::OcInputSource::Key, "Tab"), "ui_focus_next: Godot 3's Tab");
         check(declared("ui_focus_prev") && bindingsOf("ui_focus_prev").empty(), "ui_focus_prev: an empty key event is declared with no binding");
-        check(declared("ui_page_up") && bindingsOf("ui_page_up").empty(), "ui_page_up: PageUp is not an Aver key, so nothing is bound");
+        check(declared("ui_page_up") && has(bindingsOf("ui_page_up"), fmt::OcInputSource::Key, "PageUp"), "ui_page_up: Godot 3's PageUp is an Aver key now and is bound");
         const auto trig = bindingsOf("ui_trigger");
         check(has(trig, fmt::OcInputSource::Key, "Escape") && has(trig, fmt::OcInputSource::GamepadAxis, "LeftTrigger"), "ui_trigger: Godot 3's L2 button is bound as Aver's trigger axis");
         const auto goUp = bindingsOf("go_up");
         check(goUp.size() == 2 && has(goUp, fmt::OcInputSource::Key, "W") && has(goUp, fmt::OcInputSource::GamepadButton, "DPadUp"), "go_up: a physical keycode, and Godot 4's joypad button 11 as DPadUp");
-        check(declared("page_down") && bindingsOf("page_down").empty(), "page_down: neither PageDown nor Godot 4's joypad button 15 (Misc 1) is bindable");
+        {
+            const auto pageDown = bindingsOf("page_down");
+            check(declared("page_down") && pageDown.size() == 2 && has(pageDown, fmt::OcInputSource::Key, "PageDown") && has(pageDown, fmt::OcInputSource::GamepadButton, "Misc1"),
+                  "page_down: PageDown and Godot 4's joypad button 15 (Misc 1) are both bound");
+        }
     }
 
     // ---- the report -------------------------------------------------------------------------------------------------------------------
@@ -263,8 +268,8 @@ int main() {
         check(!has3("an override of a node that the instanced scene does not have", "", ""), "no override is lost for a node the model lacks");
         check(has3("\"node\":\"ui_accept\"", "\"rating\":\"approximated\"", "Godot 3's encoding"), "the Godot 3 key code is reported as read, not silently");
         check(has3("\"node\":\"ui_left\"", "\"rating\":\"approximated\"", "Godot 3 joypad numbering"), "the Godot 3 joypad numbering is reported");
-        check(has3("\"node\":\"ui_page_up\"", "\"rating\":\"unsupported\"", "PageUp key (in Godot 3's key encoding) is not in Aver's Key enum"), "PageUp is named in the report with the reason");
-        check(has3("\"node\":\"page_down\"", "\"rating\":\"unsupported\"", "gamepad button 15 (Misc 1)"), "the unmappable joypad button is named");
+        check(!has3("\"node\":\"ui_page_up\"", "\"rating\":\"unsupported\"", "is not in Aver's Key enum"), "PageUp is no longer reported as outside Aver's key set");
+        check(!has3("\"node\":\"page_down\"", "\"rating\":\"unsupported\"", "gamepad button 15"), "joypad button 15 (Misc 1) is no longer reported as unmappable");
         check(has3("\"node\":\"ui_focus_prev\"", "\"rating\":\"approximated\"", "empty key event"), "the empty key event is reported as empty");
         check(has3("\"property\":\"application/config/tags\"", "\"rating\":\"approximated\"", "editor or import-time"), "an editor-only setting is not reported as lost");
         check(has3("\"property\":\"debug/gdscript/warnings/untyped_declaration\"", "\"rating\":\"approximated\"", "editor or import-time"), "a script-warning setting is not reported as lost");

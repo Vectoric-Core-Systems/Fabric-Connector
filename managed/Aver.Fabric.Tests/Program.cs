@@ -116,6 +116,7 @@ static class Program
         failures += TweenTests.RunAll();     // F2b: easing curves, tween sequencing, loops, pause and process modes
         failures += ServiceTests.RunAll();   // F2b: SceneTree frame signals, timers, await, groups, scene changes, ResourceLoader, PackedScene
         failures += InputTests.RunAll();     // F2b: Input and InputMap, InputEvent classes, the engine-event bridge, _Input delivery
+        failures += DisplayTests.RunAll();   // wave 3: DisplayServer, Window controls, vsync, the frame cap, size_changed
         failures += PhysicsWrapperTests.RunAll(); // F2b: Camera3D maths, physics node defaults and conversions, vehicle, queries without a world
         failures += AnimationTests.RunAll(); // G5 A1: Animation, AnimationLibrary, AnimationPlayer over the engine's property-track player
         failures += CurvePathTests.RunAll(); // G5 A2: Expression, Curve, Curve3D, Gradient, PathFollow3D, Skeleton3D, SpringArm3D, RemoteTransform3D, on-screen notifiers

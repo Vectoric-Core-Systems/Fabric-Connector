@@ -51,9 +51,21 @@ public static class Engine
     /// <summary>The most physics steps one frame runs to catch up. Stored, not applied (approximated): the engine's own catch-up limit stays.</summary>
     public static int MaxPhysicsStepsPerFrame { get; set; } = 8;
 
-    /// <summary>The frame rate cap, 0 for none. Stored, not applied (approximated): the engine paces frames by the display's refresh (vsync) and the project's
-    /// RENDER.FRAMEBUDGETMS, and has no hard cap a script can set.</summary>
-    public static int MaxFps { get; set; }
+    private static int s_maxFps;
+
+    /// <summary>The frame rate cap, 0 for none. The shipped game's loop waits out the rest of 1 / fps after presenting, on top of whatever the present mode
+    /// paces to (vsync); the editor ignores it. The project's <c>application/run/max_fps</c> sets it at start (WINDOW.MAXFPS).</summary>
+    public static int MaxFps
+    {
+        get => s_maxFps;
+        set
+        {
+            s_maxFps = Math.Max(0, value);
+            if (!NodeHost.Current.IsEngine) return;
+            try { Aver.Framework.Display.MaxFps = s_maxFps; }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+        }
+    }
 
     /// <summary>Godot's jitter fix for fixed steps. Stored, not applied: the engine's physics interpolation (PHYSICS.INTERPOLATION) does the smoothing.</summary>
     public static double PhysicsJitterFix { get; set; } = 0.5;

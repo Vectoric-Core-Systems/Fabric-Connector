@@ -10,6 +10,7 @@
 #include "aver/platform/FileSystem.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 
 namespace aver::fabric {
@@ -51,15 +52,54 @@ const char* averKeyName(long long code) {
         case 4194325: return "LeftShift";
         case 4194326: return "LeftCtrl";
         case 4194328: return "LeftAlt";
-        case 4194309: case 4194310: return "Enter";
+        case 4194327: return "Meta";
+        case 4194309: return "Enter";
+        case 4194310: return "KpEnter";
         case 4194305: return "Escape";
         case 4194306: return "Tab";
         case 4194319: return "Left";
         case 4194320: return "Up";
         case 4194321: return "Right";
         case 4194322: return "Down";
-        default: return nullptr;
+        // Navigation and editing keys.
+        case 4194308: return "Backspace";
+        case 4194311: return "Insert";
+        case 4194312: return "Delete";
+        case 4194313: return "Pause";
+        case 4194314: return "PrintScreen";
+        case 4194317: return "Home";
+        case 4194318: return "End";
+        case 4194323: return "PageUp";
+        case 4194324: return "PageDown";
+        case 4194329: return "CapsLock";
+        case 4194330: return "NumLock";
+        case 4194331: return "ScrollLock";
+        case 4194370: return "Menu";
+        // Punctuation is its ASCII code in Godot (the US layout's key).
+        case 45: return "Minus";
+        case 61: return "Equal";
+        case 91: return "LBracket";
+        case 93: return "RBracket";
+        case 92: return "Backslash";
+        case 59: return "Semicolon";
+        case 39: return "Apostrophe";
+        case 44: return "Comma";
+        case 46: return "Period";
+        case 47: return "Slash";
+        case 96: return "Grave";
+        // The numpad.
+        case 4194433: return "KpMultiply";
+        case 4194434: return "KpDivide";
+        case 4194435: return "KpSubtract";
+        case 4194436: return "KpDecimal";
+        case 4194437: return "KpAdd";
+        default: break;
     }
+    // F1..F12 (Godot has F13 to F35 as well; Aver's Key enum stops at F12) and Kp0..Kp9.
+    static char fbuf[8];
+    if (code >= 4194332 && code <= 4194343) { std::snprintf(fbuf, sizeof fbuf, "F%d", static_cast<int>(code - 4194331)); return fbuf; }
+    if (code >= 4194438 && code <= 4194447) { std::snprintf(fbuf, sizeof fbuf, "Kp%d", static_cast<int>(code - 4194438)); return fbuf; }
+    return nullptr;
 }
 
 // Godot 3 wrote a special key (arrows, Enter, Tab, ...) as 1<<24 | n and Godot 4 writes 1<<22 | n; the low bits are the same.
@@ -115,7 +155,14 @@ const char* averPadButton(long long idx) {
         case 12: return "DPadDown";
         case 13: return "DPadLeft";
         case 14: return "DPadRight";
-        default: return nullptr;   // 5 guide, 15 and up: misc, paddles, touchpad
+        case 5: return "Guide";
+        case 15: return "Misc1";
+        case 16: return "Paddle1";
+        case 17: return "Paddle2";
+        case 18: return "Paddle3";
+        case 19: return "Paddle4";
+        case 20: return "Touchpad";
+        default: return nullptr;   // 21 and up: no such Godot button
     }
 }
 
@@ -155,7 +202,8 @@ const char* gamepadButtonName(long long idx, bool legacy) {
 }
 
 constexpr const char* kAverKeySet =
-    "A-Z, 0-9, Space, Enter, Escape, Tab, the arrows, Shift, Ctrl, Alt and the three mouse buttons";
+    "A-Z, 0-9, F1-F12, Space, Enter, Escape, Tab, Backspace, the arrows, Home, End, Page Up and Down, Insert, Delete, the punctuation keys, the numpad, "
+    "the lock keys, Shift, Ctrl, Alt, Meta, Menu, and the mouse buttons";
 
 }  // namespace
 
@@ -167,11 +215,11 @@ void Converter::convertInput() {
     data.contextPriority = 0;
 
     // A key or mouse button that needs Shift, Ctrl or Alt held keeps that need: its binding carries a chord trigger on an action bound to the modifier key.
-    // Those actions are written after the project's own, one per modifier that turned up (Aver's Key enum has the left keys only, and no Meta).
+    // Those actions are written after the project's own, one per modifier that turned up (Aver's Key enum has the left Shift, Ctrl and Alt keys only).
     std::map<std::string, std::string> modifierKeys;   // action name -> Aver key name
     const auto requireModifiers = [&](const Var& ev, fmt::OcInputBinding& b, const gd::GodotInputAction& act, const std::string& cls) {
         const struct { const char* flag; const char* word; const char* key; } mods[] = {
-            {"shift_pressed", "shift", "LeftShift"}, {"ctrl_pressed", "ctrl", "LeftCtrl"}, {"alt_pressed", "alt", "LeftAlt"}};
+            {"shift_pressed", "shift", "LeftShift"}, {"ctrl_pressed", "ctrl", "LeftCtrl"}, {"alt_pressed", "alt", "LeftAlt"}, {"meta_pressed", "meta", "Meta"}};
         std::string held;
         for (const auto& m : mods) {
             if (!boolOf(ev.find(m.flag), false)) continue;
@@ -185,9 +233,7 @@ void Converter::convertInput() {
         }
         if (!held.empty())
             report_.add("input", kProject, act.name, cls, "", Rating::Approximated,
-                        held + " must be held: a chord trigger on an action bound to the left " + held + " key (the right-hand key does not count)", act.line);
-        if (boolOf(ev.find("meta_pressed"), false))
-            report_.add("input", kProject, act.name, cls, "", Rating::Approximated, "the Meta (Windows, Command) key requirement is dropped: Aver's Key enum has no Meta key", act.line);
+                        held + " must be held: a chord trigger on an action bound to the " + held + " key (the left Shift, Ctrl and Alt only; either Meta key counts)", act.line);
     };
 
     for (const gd::GodotInputAction& act : project_.inputActions) {
@@ -238,22 +284,15 @@ void Converter::convertInput() {
                 requireModifiers(ev, b, act, cls);
             } else if (cls == "InputEventMouseButton") {
                 const int idx = static_cast<int>(numOf(ev.find("button_index"), 0));
-                if (idx == 1 || idx == 2 || idx == 3) {
+                // Godot's button indices: 1 to 3 the three buttons, 4 to 7 the wheel up, down, left, right (each notch a press), 8 and 9 the side buttons.
+                static const char* const kMouseKeys[] = {"", "MouseLeft", "MouseRight", "MouseMiddle", "MouseWheelUp", "MouseWheelDown", "MouseWheelLeft",
+                                                         "MouseWheelRight", "MouseX1", "MouseX2"};
+                if (idx >= 1 && idx <= 9) {
                     b.source = fmt::OcInputSource::Key;
-                    b.key = idx == 1 ? "MouseLeft" : idx == 2 ? "MouseRight" : "MouseMiddle";
+                    b.key = kMouseKeys[idx];
                     requireModifiers(ev, b, act, cls);
-                } else if (idx == 4 || idx == 5) {
-                    b.source = fmt::OcInputSource::MouseWheel;
-                    b.scale = idx == 4 ? 1.0f : -1.0f;
-                    // A wheel notch is an axis value for one frame; a pressed trigger turns it into the single press Godot's wheel button is.
-                    fmt::OcTriggerSpec pressed;
-                    pressed.kind = fmt::OcTriggerKind::Pressed;
-                    b.triggers.push_back(fmt::formatTriggerSpec(pressed));
-                    requireModifiers(ev, b, act, cls);
-                    report_.add("input", kProject, act.name, cls, "", Rating::Approximated,
-                                "a wheel notch is an axis value in Aver, a button press in Godot: the binding carries a pressed trigger, so one notch fires the action once", act.line);
                 } else {
-                    skip("mouse button " + std::to_string(idx) + " (side buttons, horizontal wheel) is not in Aver's input set", act.line);
+                    skip("mouse button " + std::to_string(idx) + " is not one of Godot's nine mouse buttons", act.line);
                     continue;
                 }
             } else if (cls == "InputEventJoypadButton") {
@@ -270,7 +309,7 @@ void Converter::convertInput() {
                 }
                 const char* n = legacyPad ? averPadButtonLegacy(idx) : averPadButton(idx);
                 if (!n) {
-                    skip("gamepad button " + std::to_string(idx) + " (" + gamepadButtonName(idx, legacyPad) + ") is not in Aver's GamepadButton enum (A, B, X, Y, Back, Start, the two thumbs, the two shoulders, the d-pad)",
+                    skip("gamepad button " + std::to_string(idx) + " (" + gamepadButtonName(idx, legacyPad) + ") is not in Aver's GamepadButton enum (A, B, X, Y, Back, Guide, Start, the two thumbs, the two shoulders, the d-pad, Misc1, the four paddles, the touchpad)",
                          act.line);
                     continue;
                 }
@@ -285,14 +324,19 @@ void Converter::convertInput() {
                 if (!n) { skip("gamepad axis " + std::to_string(idx) + " is not in Aver's gamepad set", act.line); continue; }
                 b.source = fmt::OcInputSource::GamepadAxis;
                 b.key = n;
-                // Godot's stick Y runs down; XInput's (and so Aver's) runs up.
+                // Godot's stick Y runs down; XInput's (and so Aver's) runs up. A motion event names one HALF of the axis (its axis_value's sign), and
+                // the action's strength is never negative: the binding is signed to read that half positive and clamped so the other half reads nothing.
                 const double value = numOf(ev.find("axis_value"), 1.0);
                 const bool yAxis = idx == 1 || idx == 3;
                 b.scale = static_cast<float>((value < 0 ? -1.0 : 1.0) * (yAxis ? -1.0 : 1.0));
+                fmt::OcModifierSpec half;
+                half.kind = fmt::OcModifierKind::Clamp;
+                half.v[0] = 0.0f;
+                half.v[1] = 1.0f;
+                b.modifiers.push_back(fmt::formatModifierSpec(half));
                 axis = true;
-                report_.add("input", kProject, act.name, cls, "", Rating::Approximated,
-                            "Godot's action strength is never negative; the Aver axis binding is signed" +
-                                std::string(yAxis ? " (the stick's Y direction is flipped to XInput's)" : ""), act.line);
+                if (yAxis)
+                    report_.add("input", kProject, act.name, cls, "", Rating::Converted, "the stick's Y direction is flipped to XInput's; the binding reads the half of the axis the event names", act.line);
             } else {
                 skip(cls + " is not an input the converter maps (mouse motion, touch and shortcuts are not bound by action)", act.line);
                 continue;
@@ -410,6 +454,30 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
     const int mode = static_cast<int>(setting("display/window/size/mode", 0));
     d.windowFullscreen = (mode == 3 || mode == 4) ? 1 : 0;
     report_.add("setting", kProject, "", "", "display/window/size", Rating::Converted, "WINDOW.SIZE / RESIZABLE / FULLSCREEN", 0);
+    if (mode == 4)
+        report_.add("setting", kProject, "", "", "display/window/size/mode", Rating::Approximated,
+                    "exclusive fullscreen is borderless fullscreen: Aver never takes over the display mode (it breaks alt-tab)", 0);
+    // Vsync: Godot's modes are 0 disabled, 1 enabled (the default), 2 adaptive, 3 mailbox; Aver's WINDOW.VSYNC counts 0 fifo, 1 immediate, 2 adaptive, 3 mailbox.
+    if (project_.setting("display/window/vsync/vsync_mode")) {
+        const int vsync = static_cast<int>(setting("display/window/vsync/vsync_mode", 1));
+        if (vsync >= 0 && vsync <= 3) {
+            d.windowVsync = vsync == 0 ? 1 : vsync == 1 ? 0 : vsync;
+            report_.add("setting", kProject, "", "", "display/window/vsync/vsync_mode", Rating::Converted, "WINDOW.VSYNC " + std::to_string(d.windowVsync), 0);
+        }
+    }
+    if (project_.setting("application/run/max_fps")) {
+        const int maxFps = static_cast<int>(setting("application/run/max_fps", 0));
+        if (maxFps > 0) {
+            d.windowMaxFps = maxFps;
+            report_.add("setting", kProject, "", "", "application/run/max_fps", Rating::Converted, "WINDOW.MAXFPS " + std::to_string(maxFps), 0);
+        }
+    }
+    if (project_.setting("display/window/size/borderless") && boolOf(project_.setting("display/window/size/borderless"), false))
+        report_.add("setting", kProject, "", "", "display/window/size/borderless", Rating::Approximated,
+                    "a borderless window is not an .ocproject key; a script can set it with Window.Borderless", 0);
+    if (project_.setting("display/window/size/always_on_top") && boolOf(project_.setting("display/window/size/always_on_top"), false))
+        report_.add("setting", kProject, "", "", "display/window/size/always_on_top", Rating::Approximated,
+                    "an always-on-top window is not an .ocproject key; a script can set it with Window.AlwaysOnTop", 0);
     convertProjectUi(d);   // G5 U1: stretch mode, aspect, scale, the project theme, the tooltip delay
 
     // Physics: Godot's rules, stated.
@@ -529,7 +597,7 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
 
     // Settings nobody converted, each named.
     static const char* handled[] = {"application/config/name", "application/config/description", "application/config/features",
-                                    "application/config/icon", "application/run/main_scene", "display/window/size/", "display/window/stretch/",
+                                    "application/config/icon", "application/run/main_scene", "application/run/max_fps", "display/window/size/", "display/window/stretch/", "display/window/vsync/",
                                     "gui/theme/custom", "gui/timers/tooltip_delay_sec", "physics/3d/default_gravity",
                                     "physics/3d/default_gravity_vector", "physics/3d/default_linear_damp", "physics/3d/default_angular_damp",
                                     "physics/common/physics_ticks_per_second", "physics/common/physics_interpolation", "internationalization/locale/",

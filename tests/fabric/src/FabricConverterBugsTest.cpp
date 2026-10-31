@@ -8,7 +8,7 @@
 //   C16  Jolt's limits reach the .ocproject
 //   C17  a Radiance .hdr texture is tone-mapped to a PNG
 //   C18  an InputEventAction in a Shortcut becomes Object(InputEventAction)
-//   C19  key modifiers and wheel notches in the input map become chord and pressed triggers
+//   C19  key modifiers in the input map become chord triggers; wheel notches are the engine's wheel key slots
 //   C20  cast_shadow, gi_mode, extra_cull_margin and ignore_occlusion_culling are reported
 // The converter is run as a process and what it wrote is read back. Exits 0 or 1.
 #include "../../formats.godot/src/GodotBinaryFixtures.hpp"
@@ -169,6 +169,16 @@ static std::string wheelEvent(int button) {
            std::to_string(button) + ",\"canceled\":false,\"pressed\":true,\"double_click\":false,\"script\":null)";
 }
 
+static std::string joyMotionEvent(int axis, double value) {
+    return "Object(InputEventJoypadMotion,\"resource_local_to_scene\":false,\"resource_name\":\"\",\"device\":0,\"axis\":" + std::to_string(axis) +
+           ",\"axis_value\":" + std::to_string(value) + ",\"script\":null)";
+}
+
+static std::string joyButtonEvent(int button) {
+    return "Object(InputEventJoypadButton,\"resource_local_to_scene\":false,\"resource_name\":\"\",\"device\":0,\"button_index\":" + std::to_string(button) +
+           ",\"pressure\":0.0,\"pressed\":false,\"script\":null)";
+}
+
 int main() {
     AVER_INFO("FabricConverterBugsTest");
     namespace fs = std::filesystem;
@@ -194,7 +204,12 @@ int main() {
               "[input]\n\n"
               "save={\n\"deadzone\": 0.2,\n\"events\": [" + keyEvent(83, true) + ", " + keyEvent(83, false) + "]\n}\n"
               "zoom_in={\n\"deadzone\": 0.2,\n\"events\": [" + wheelEvent(4) + "]\n}\n"
-              "plain={\n\"deadzone\": 0.2,\n\"events\": [" + keyEvent(67, false) + "]\n}\n\n"
+              "plain={\n\"deadzone\": 0.2,\n\"events\": [" + keyEvent(67, false) + "]\n}\n"
+              "look_left={\n\"deadzone\": 0.2,\n\"events\": [" + joyMotionEvent(0, -1.0) + "]\n}\n"
+              "look_right={\n\"deadzone\": 0.2,\n\"events\": [" + joyMotionEvent(0, 1.0) + "]\n}\n"
+              "look_down={\n\"deadzone\": 0.2,\n\"events\": [" + joyMotionEvent(1, 1.0) + "]\n}\n"
+              "extras={\n\"deadzone\": 0.5,\n\"events\": [" + keyEvent(4194336, false) + ", " + keyEvent(4194443, false) + ", " + keyEvent(46, false) + ", " +
+                  keyEvent(4194310, false) + ", " + wheelEvent(8) + ", " + wheelEvent(6) + ", " + joyButtonEvent(20) + ", " + joyButtonEvent(5) + "]\n}\n\n"
               "[memory]\n\nmultithread/thread_rid_pool_prealloc=60\n\n"
               "[physics]\n\n3d/physics_engine=\"Jolt Physics\"\n"
               "jolt_physics_3d/limits/max_bodies=4096\njolt_physics_3d/limits/max_body_pairs=8192\n"
@@ -234,7 +249,10 @@ int main() {
               "[node name=\"Wall\" type=\"StaticBody3D\" parent=\".\"]\nphysics_material_override = SubResource(\"PhysicsMaterial_slick\")\n\n"
               "[node name=\"Floor\" type=\"MeshInstance3D\" parent=\".\"]\nmesh = ExtResource(\"2_tri\")\nmaterial_override = SubResource(\"StandardMaterial3D_sky\")\n"
               "cast_shadow = 0\ngi_mode = 0\nextra_cull_margin = 2.0\nignore_occlusion_culling = true\n\n"
-              "[node name=\"Quit\" type=\"Button\" parent=\".\"]\nshortcut = SubResource(\"Shortcut_quit\")\n");
+              "[node name=\"Quit\" type=\"Button\" parent=\".\"]\nshortcut = SubResource(\"Shortcut_quit\")\n\n"
+              "[node name=\"Rig\" type=\"XROrigin3D\" parent=\".\"]\nworld_scale = 2.0\n\n"
+              "[node name=\"Eyes\" type=\"XRCamera3D\" parent=\"Rig\"]\n\n"
+              "[node name=\"LeftHand\" type=\"XRController3D\" parent=\"Rig\"]\ntracker = &\"left_hand\"\n");
 
     const std::string out = (root / "out").generic_string();
     std::string log;
@@ -329,17 +347,51 @@ int main() {
             if (b.triggers.size() == 1 && b.triggers[0] == "chord:fabric_modifier_ctrl") ++ctrlS;
             else if (b.triggers.empty()) ++bareS;
         }
-        if (b.action == "zoom_in" && b.source == fmt::OcInputSource::MouseWheel && b.triggers.size() == 1 && b.triggers[0] == "pressed") ++wheelPressed;
+        if (b.action == "zoom_in" && b.source == fmt::OcInputSource::Key && b.key == "MouseWheelUp" && b.triggers.empty()) ++wheelPressed;
         if (b.action == "plain" && b.key == "C" && b.triggers.empty()) ++plainC;
     }
     check(ctrlS == 1 && bareS == 1, "Ctrl+S and plain S are two bindings of save: the first carries a chord trigger on the Ctrl action, the second none");
-    check(wheelPressed == 1, "the wheel notch binding carries a pressed trigger");
+    check(wheelPressed == 1, "the wheel notch is the engine's wheel-up key slot (a notch presses it for a frame), with no trigger");
     check(plainC == 1, "a key with no modifier gets no trigger");
     bool modifierAction = false, modifierBound = false;
     for (const fmt::OcInputAction& a : in.actions) modifierAction = modifierAction || a.name == "fabric_modifier_ctrl";
     for (const fmt::OcInputBinding& b : in.bindings) modifierBound = modifierBound || (b.action == "fabric_modifier_ctrl" && b.source == fmt::OcInputSource::Key && b.key == "LeftCtrl");
     check(modifierAction && modifierBound, "the Ctrl action exists and is bound to the left Ctrl key");
     check(reported(jsonl, {"\"node\":\"save\"", "\"rating\":\"approximated\"", "chord trigger"}), "the modifier is reported (left key only) instead of being dropped");
+
+    // ---- F68: XR nodes load as inert carriers ---------------------------------------------------------------------------------------------
+    check(reported(jsonl, {"\"type\":\"XROrigin3D\"", "\"rating\":\"approximated\"", "inert carrier"}) && reported(jsonl, {"\"type\":\"XRCamera3D\"", "\"rating\":\"approximated\""}) &&
+              reported(jsonl, {"\"type\":\"XRController3D\"", "\"rating\":\"approximated\""}),
+          "the XR nodes are placed as their own classes and rated approximated, with the reason");
+    check(!reported(jsonl, {"\"type\":\"XROrigin3D\"", "\"rating\":\"unsupported\""}), "an XROrigin3D is not dropped");
+
+    // ---- P43 / P44: the wider key set, the side buttons and sideways wheel, joypad extras, and half axes -------------------------------------
+    AVER_INFO("-- the wider input set and half axes --");
+    {
+        const auto hasKey = [&](const char* action, const char* key) {
+            for (const fmt::OcInputBinding& b : in.bindings)
+                if (b.action == action && b.source == fmt::OcInputSource::Key && b.key == key && b.triggers.empty()) return true;
+            return false;
+        };
+        const auto hasPad = [&](const char* action, const char* button) {
+            for (const fmt::OcInputBinding& b : in.bindings)
+                if (b.action == action && b.source == fmt::OcInputSource::GamepadButton && b.key == button) return true;
+            return false;
+        };
+        check(hasKey("extras", "F5") && hasKey("extras", "Kp5") && hasKey("extras", "Period") && hasKey("extras", "KpEnter"), "F5, numpad 5, the period and KP Enter each get a key binding");
+        check(hasKey("extras", "MouseX1") && hasKey("extras", "MouseWheelLeft"), "mouse button 8 (side) and 6 (wheel left) become the engine's key slots");
+        check(hasPad("extras", "Touchpad") && hasPad("extras", "Guide"), "joypad buttons 20 and 5 are the touchpad and Guide");
+        const auto half = [&](const char* action, const char* axisName, float scale) {
+            for (const fmt::OcInputBinding& b : in.bindings)
+                if (b.action == action && b.source == fmt::OcInputSource::GamepadAxis && b.key == axisName && b.scale == scale && b.modifiers.size() == 1 && b.modifiers[0] == "clamp") return true;
+            return false;
+        };
+        check(half("look_left", "LeftX", -1.0f) && half("look_right", "LeftX", 1.0f), "the two halves of an axis are a negated and a plain binding, each clamped to 0..1");
+        check(half("look_down", "LeftY", -1.0f), "Godot's stick Y (down positive) is flipped to XInput's, still one clamped half");
+        std::string raw = slurp(project + "/Content/Input/ConverterBugs.ocinput");
+        check(raw.rfind("OCINPUT 2\n", 0) == 0, "a scheme with a clamp modifier is written as OCINPUT 2");
+        check(!reported(jsonl, {"\"node\":\"look_left\"", "\"rating\":\"approximated\"", "never negative"}), "the half axis is not reported as approximated any more");
+    }
 
     // ---- C20: per-instance rendering flags -----------------------------------------------------------------------------------------------
     AVER_INFO("-- C20 dropped rendering properties --");

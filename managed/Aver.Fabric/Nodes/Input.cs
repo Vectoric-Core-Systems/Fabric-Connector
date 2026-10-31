@@ -202,9 +202,13 @@ public static class Input
     private static readonly HashSet<MouseButton> s_mouseButtons = new();
     private static readonly HashSet<JoyButton> s_joyButtons = new();
     private static readonly Dictionary<JoyAxis, float> s_joyAxes = new();
-    private static MouseModeEnum s_mouseMode = MouseModeEnum.Captured;
+    // Godot's pointer starts visible; Aver's own rule (captured while a session plays) is what a project gets until a script sets a mode.
+    private static MouseModeEnum s_mouseMode = MouseModeEnum.Visible;
+    private static bool s_pointerApplied;
     private static IDisposable? s_cursorScope;
     private static Vector2 s_mouseVelocity, s_mousePosition;
+    private static readonly bool[] s_padSeen = new bool[Aver.Framework.Gamepads.MaxPads];
+    private static CursorShape s_cursorShape;
 
     /// <summary>True while a physics pass runs (set by the driver): "just pressed" then means this physics frame, not this process frame.</summary>
     internal static bool InPhysicsFrame;
@@ -212,14 +216,35 @@ public static class Input
     /// <summary>The seconds of the frame being processed.</summary>
     internal static double FrameDelta { get; private set; }
 
-    internal static Vector2 MousePosition => s_mousePosition;
+    /// <summary>Where the pointer is, in window pixels: the engine's own reading (the position the UI sees), else where script-fed events last put it.</summary>
+    internal static Vector2 MousePosition => EnginePointer(out Vector2 p) ? p : s_mousePosition;
+
+    private static readonly float[] s_pointerBuf = new float[2];
+
+    private static bool EnginePointer(out Vector2 p)
+    {
+        p = default;
+        if (!NodeHost.Current.IsEngine || !UiNative.Available) return false;
+        try
+        {
+            UiNative.aver_ui_pointer(s_pointerBuf);
+            p = new Vector2(s_pointerBuf[0], s_pointerBuf[1]);
+            return true;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return false; }
+    }
 
     internal static void ResetForTests()
     {
         s_actions.Clear(); s_keys.Clear(); s_mouseButtons.Clear(); s_joyButtons.Clear(); s_joyAxes.Clear(); s_builtin.Clear();
         s_mouseVelocity = s_mousePosition = default;
         InPhysicsFrame = false;
-        s_mouseMode = MouseModeEnum.Captured;
+        s_mouseMode = MouseModeEnum.Visible;
+        s_pointerApplied = false;
+        s_cursorShape = CursorShape.Arrow;
+        System.Array.Clear(s_padSeen);
+        s_joyHooks = null;
+        s_touchEmulation = false;
         InputMap.ResetForTests();
     }
 
@@ -230,6 +255,13 @@ public static class Input
         InPhysicsFrame = false;
         if (s_builtin.Count > 0)
             foreach (string name in s_builtin.Keys.ToList()) BuiltinPoll(name, out _);
+        if (NodeHost.Current.IsEngine)
+        {
+            // The first frame hands the engine Godot's default pointer (visible), which a script's own mode replaces.
+            if (!s_pointerApplied) { s_pointerApplied = true; ApplyMouseMode(); }
+            PollJoypads();
+            SceneTree.Instance.Root.PollEngineSize();
+        }
     }
 
     private static long ProcessFrameNow => NodeHost.Current.IsEngine ? Aver.Framework.Engine.ProcessFrames : SceneTree.Instance.GetFrame();
@@ -455,6 +487,8 @@ public static class Input
         if (IsMouseButtonPressed(MouseButton.Left)) m |= MouseButtonMask.Left;
         if (IsMouseButtonPressed(MouseButton.Right)) m |= MouseButtonMask.Right;
         if (IsMouseButtonPressed(MouseButton.Middle)) m |= MouseButtonMask.Middle;
+        if (IsMouseButtonPressed(MouseButton.Xbutton1)) m |= MouseButtonMask.MbXbutton1;
+        if (IsMouseButtonPressed(MouseButton.Xbutton2)) m |= MouseButtonMask.MbXbutton2;
         return m;
     }
 
@@ -463,17 +497,205 @@ public static class Input
 
     public static Vector2 GetLastMouseScreenVelocity() => s_mouseVelocity;
 
+    // ---- gamepads ----
+
+    /// <summary>The carrier of the Input singleton's signals (Godot's Input is an object; here it is a static class).</summary>
+    private sealed class InputSignals : RefCounted
+    {
+        public new class SignalName : GodotObject.SignalName
+        {
+            public static readonly StringName JoyConnectionChanged = "joy_connection_changed";
+        }
+    }
+
+    private static InputSignals? s_joyHooks;
+
+    /// <summary>The object that carries Input's signals: <c>Input.Singleton.Connect("joy_connection_changed", ...)</c>.</summary>
+    public static GodotObject Singleton => s_joyHooks ??= new InputSignals();
+
+    /// <summary>Raised when a gamepad is plugged in or removed (Godot's joy_connection_changed): the device number and whether it is now connected.</summary>
+    public static event Action<long, bool>? JoyConnectionChanged;
+
+    // Watches the four pads the engine reads; the first frame reports the pads already plugged in as connected, as Godot does at start.
+    private static void PollJoypads()
+    {
+        for (int pad = 0; pad < s_padSeen.Length; pad++)
+        {
+            bool now;
+            try { now = Aver.Framework.Gamepads.IsConnected(pad); }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return; }
+            if (now == s_padSeen[pad]) continue;
+            s_padSeen[pad] = now;
+            JoyConnectionChanged?.Invoke(pad, now);
+            Singleton.EmitSignal(InputSignals.SignalName.JoyConnectionChanged, (long)pad, now);
+        }
+    }
+
+    private static bool PadIsConnected(int device)
+    {
+        if (device < 0 || device >= Aver.Framework.Gamepads.MaxPads) return false;
+        if (!NodeHost.Current.IsEngine) return device == 0 && (s_joyButtons.Count > 0 || s_joyAxes.Count > 0);
+        try { return Aver.Framework.Gamepads.IsConnected(device); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return false; }
+    }
+
     /// <summary>The connected gamepads' device numbers.</summary>
     public static Collections.Array<int> GetConnectedJoypads()
     {
         var pads = new Collections.Array<int>();
-        if (s_joyButtons.Count > 0 || s_joyAxes.Count > 0) pads.Add(0);
+        for (int d = 0; d < Aver.Framework.Gamepads.MaxPads; d++) if (PadIsConnected(d)) pads.Add(d);
         return pads;
     }
 
-    public static void StartJoyVibration(int device, float weakMagnitude, float strongMagnitude, float duration = 0f) { }
+    /// <summary>The device's name ("" for a pad that is not connected).</summary>
+    public static string GetJoyName(int device)
+    {
+        if (!PadIsConnected(device) || !NodeHost.Current.IsEngine) return "";
+        try { return Aver.Framework.Gamepads.Name(device); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return ""; }
+    }
 
-    public static void StopJoyVibration(int device) { }
+    /// <summary>Approximated: the engine does not read the device's GUID, so this is empty.</summary>
+    public static string GetJoyGuid(int device) => "";
+
+    /// <summary>Whether the engine maps the device to the standard layout: every connected pad is read through one.</summary>
+    public static bool IsJoyKnown(int device) => PadIsConnected(device);
+
+    /// <summary>Approximated: the vendor, product and mapping details are not read, so the dictionary holds only the pad's name.</summary>
+    public static Collections.Dictionary GetJoyInfo(int device)
+    {
+        var info = new Collections.Dictionary();
+        string name = GetJoyName(device);
+        if (name.Length > 0) info.Add("name", name);
+        return info;
+    }
+
+    /// <summary>Rumbles a pad: the weak (high-frequency) and strong motors, 0 to 1, for <paramref name="duration"/> seconds (0 until stopped).</summary>
+    public static void StartJoyVibration(int device, float weakMagnitude, float strongMagnitude, float duration = 0f)
+    {
+        s_vibration[Math.Clamp(device, 0, s_vibration.Length - 1)] = (Math.Clamp(weakMagnitude, 0f, 1f), Math.Clamp(strongMagnitude, 0f, 1f), Math.Max(0f, duration));
+        if (!NodeHost.Current.IsEngine) return;
+        try { Aver.Framework.Gamepads.Rumble(device, weakMagnitude, strongMagnitude, duration); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+    }
+
+    public static void StopJoyVibration(int device)
+    {
+        s_vibration[Math.Clamp(device, 0, s_vibration.Length - 1)] = default;
+        if (!NodeHost.Current.IsEngine) return;
+        try { Aver.Framework.Gamepads.StopRumble(device); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+    }
+
+    // What the last rumble request asked, so a test (or a script via GetJoyVibrationStrength) can read it back.
+    private static readonly (float Weak, float Strong, float Duration)[] s_vibration = new (float, float, float)[Aver.Framework.Gamepads.MaxPads];
+
+    /// <summary>The last rumble asked of the pad: weak and strong magnitude (Godot's get_joy_vibration_strength).</summary>
+    public static Vector2 GetJoyVibrationStrength(int device) =>
+        device >= 0 && device < s_vibration.Length ? new Vector2(s_vibration[device].Weak, s_vibration[device].Strong) : Vector2.Zero;
+
+    /// <summary>The seconds the last rumble was asked to run (0: until stopped).</summary>
+    public static float GetJoyVibrationDuration(int device) => device >= 0 && device < s_vibration.Length ? s_vibration[device].Duration : 0f;
+
+    // ---- motion sensors: no device has one ----
+
+    private static bool s_sensorLogged;
+
+    private static Vector3 NoSensor()
+    {
+        if (!s_sensorLogged)
+        {
+            s_sensorLogged = true;
+            Aver.Scripting.Log.Info("[Fabric] Input motion sensors (accelerometer, gravity, gyroscope, magnetometer): this device has none; they read zero");
+        }
+        return Vector3.Zero;
+    }
+
+    /// <summary>Approximated: zero. The engine reads no motion sensor; the first call says so in the log.</summary>
+    public static Vector3 GetAccelerometer() => NoSensor();
+    public static Vector3 GetGravity() => NoSensor();
+    public static Vector3 GetGyroscope() => NoSensor();
+    public static Vector3 GetMagnetometer() => NoSensor();
+
+    // ---- touch ----
+
+    private static bool s_touchEmulation;
+
+    /// <summary>Whether the left mouse button acts as a finger (Godot's emulate_touch_from_mouse). Off by default; the engine does it where no real touch screen
+    /// has reported a finger.</summary>
+    public static bool EmulateTouchFromMouse
+    {
+        get => NodeHost.Current.IsEngine ? TouchEmulationEngine(null) : s_touchEmulation;
+        set
+        {
+            s_touchEmulation = value;
+            if (NodeHost.Current.IsEngine) TouchEmulationEngine(value);
+        }
+    }
+
+    private static bool TouchEmulationEngine(bool? set)
+    {
+        try
+        {
+            if (set is { } v) Aver.Framework.Touch.Emulation = v;
+            return Aver.Framework.Touch.Emulation;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return s_touchEmulation; }
+    }
+
+    /// <summary>Stored, not applied (approximated): on Windows a touch already arrives as a mouse event, and SDL's touch-to-mouse is left at its default.</summary>
+    public static bool EmulateMouseFromTouch { get; set; } = true;
+
+    /// <summary>Stored, not applied: the engine delivers each input event as it comes (it never merges motion into one per frame).</summary>
+    public static bool UseAccumulatedInput { get; set; } = true;
+
+    /// <summary>Godot's Input.CursorShape (the same shapes as <c>Control.CursorShape</c>).</summary>
+    public enum CursorShape { Arrow = 0, Ibeam = 1, PointingHand = 2, Cross = 3, Wait = 4, Busy = 5, Drag = 6, CanDrop = 7, Forbidden = 8, Vsize = 9, Hsize = 10, Bdiagsize = 11, Fdiagsize = 12, Move = 13, Vsplit = 14, Hsplit = 15, Help = 16 }
+
+    /// <summary>The shape the pointer shows while it is over the window.</summary>
+    public static void SetDefaultCursorShape(CursorShape shape = CursorShape.Arrow)
+    {
+        s_cursorShape = shape;
+        if (!NodeHost.Current.IsEngine) return;
+        try { Aver.Framework.Pointer.Shape = (Aver.Framework.CursorShape)(int)shape; }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+    }
+
+    public static CursorShape GetCurrentCursorShape() => s_cursorShape;
+
+    private static bool s_cursorImageLogged;
+
+    /// <summary>Replaces a cursor shape with an image. Approximated: the engine takes the pixels as RGBA, and a texture's pixels are not readable from a script
+    /// yet, so a texture is refused (the first time, in the log) and the shape stays as it was; <see cref="SetCustomMouseCursorPixels"/> takes the bytes.</summary>
+    public static void SetCustomMouseCursor(Resource? image, CursorShape shape = CursorShape.Arrow, Vector2 hotspot = default)
+    {
+        if (image == null) { SetCustomMouseCursorPixels(null, 0, 0, shape, hotspot); return; }
+        if (s_cursorImageLogged) return;
+        s_cursorImageLogged = true;
+        Aver.Scripting.Log.Info("[Fabric] Input.SetCustomMouseCursor: the pixels of " + image.GetType().Name + " are not readable here yet; the cursor keeps its shape (SetCustomMouseCursorPixels takes RGBA bytes)");
+    }
+
+    /// <summary>Replaces a cursor shape with w x h RGBA bytes (straight alpha, top row first, each side 1 to 256), the hotspot inside the image; null puts the system
+    /// shape back.</summary>
+    public static void SetCustomMouseCursorPixels(byte[]? rgba, int width, int height, CursorShape shape = CursorShape.Arrow, Vector2 hotspot = default)
+    {
+        if (!NodeHost.Current.IsEngine) return;
+        try { Aver.Framework.Pointer.SetCursorImage((Aver.Framework.CursorShape)(int)shape, rgba, width, height, (int)hotspot.X, (int)hotspot.Y); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+    }
+
+    /// <summary>Moves the pointer to a position in viewport pixels at the next frame.</summary>
+    public static void WarpMouse(Vector2 position)
+    {
+        s_mousePosition = position;
+        if (!NodeHost.Current.IsEngine) return;
+        try
+        {
+            Vector2 w = SceneTree.Instance.Root.ContentToWindow(position);
+            Aver.Framework.Pointer.Warp(w.X, w.Y);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+    }
 
     private static bool s_vibrateLogged;
 
@@ -485,22 +707,39 @@ public static class Input
         Aver.Scripting.Log.Info("[Fabric] Input.VibrateHandheld: this device has no handheld vibration; the call does nothing");
     }
 
-    /// <summary>Whether the pointer is shown, hidden or captured by the game window. The engine shows or hides it through the cursor request.</summary>
+    /// <summary>Whether the pointer is shown, hidden, captured or confined to the game window. The shipped game takes the mode as it is; the editor's Play
+    /// knows only a free or a captured pointer, so there a visible, hidden or confined mode frees it.</summary>
     public static MouseModeEnum MouseMode
     {
         get => s_mouseMode;
         set
         {
             s_mouseMode = value;
-            if (!NodeHost.Current.IsEngine) return;
-            try
-            {
-                bool free = value is MouseModeEnum.Visible or MouseModeEnum.Confined;
-                if (free && s_cursorScope == null) s_cursorScope = Game.FreeCursor();
-                else if (!free && s_cursorScope != null) { s_cursorScope.Dispose(); s_cursorScope = null; }
-            }
-            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+            s_pointerApplied = true;
+            if (NodeHost.Current.IsEngine) ApplyMouseMode();
         }
+    }
+
+    // Hands the engine the pointer mode (the game applies it) and, for the editor's Play, the free-cursor request that stands in for it.
+    private static void ApplyMouseMode()
+    {
+        try
+        {
+            Aver.Framework.Pointer.Mode = s_mouseMode switch
+            {
+                MouseModeEnum.Visible => Aver.Framework.PointerMode.Visible,
+                MouseModeEnum.Hidden => Aver.Framework.PointerMode.Hidden,
+                MouseModeEnum.Captured => Aver.Framework.PointerMode.Captured,
+                MouseModeEnum.Confined => Aver.Framework.PointerMode.Confined,
+                _ => Aver.Framework.PointerMode.ConfinedHidden,
+            };
+            // Only a visible pointer asks for the free cursor in the shipped game (a free cursor there wins over every mode); the editor, which ignores
+            // the mode, gets the request for every mode but a captured one.
+            bool free = s_mouseMode == MouseModeEnum.Visible || (s_mouseMode != MouseModeEnum.Captured && Aver.Framework.OS.HasFeature("editor"));
+            if (free && s_cursorScope == null) s_cursorScope = Game.FreeCursor();
+            else if (!free && s_cursorScope != null) { s_cursorScope.Dispose(); s_cursorScope = null; }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
     }
 
     // ---- feeding events in ----

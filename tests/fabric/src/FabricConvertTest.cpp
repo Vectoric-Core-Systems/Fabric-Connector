@@ -211,7 +211,9 @@ int main() {
         const auto left = bindingsOf("move_left");
         check(left.size() == 2 && left[0]->source == fmt::OcInputSource::GamepadAxis && left[0]->key == "LeftX" && near(left[0]->scale, -1.0),
               "move_left: joypad axis 0 at -1 is LeftX with scale -1");
-        check(bindingsOf("debug_menu").empty(), "debug_menu: F5 is not in Aver's key set, so nothing is bound");
+        check(bindingsOf("debug_menu").empty(), "debug_menu: F13 is not in Aver's key set (it stops at F12), so nothing is bound");
+        check(!left[0]->modifiers.empty() && left[0]->modifiers[0] == "clamp",
+              "move_left: a joypad motion binding reads one half of its axis (a clamp modifier on the binding)");
         for (const fmt::OcInputAction& a : in.actions)
             if (a.name == "move_left")
                 check(a.type == fmt::OcInputValueType::Axis1D && a.modifiers.size() == 1 && a.modifiers[0].rfind("deadzone", 0) == 0,
@@ -382,7 +384,7 @@ int main() {
         const int icon = find(w, {"Main", "Icon"});
         check(icon >= 0 && w.placements[static_cast<usize>(icon)].className == "Node" && propIs(w, icon, "_class", "\"Sprite2D\""), "a 2D node is kept as a plain node");
         const int hum = find(w, {"Main", "Hum"});
-        check(hum >= 0 && w.placements[static_cast<usize>(hum)].className == "Node3D" && propIs(w, hum, "_class", "\"XROrigin3D\""), "an unsupported 3D class is a Node3D carrier");
+        check(hum >= 0 && w.placements[static_cast<usize>(hum)].className == "Node3D" && propIs(w, hum, "_class", "\"XRFaceModifier3D\""), "an unsupported 3D class is a Node3D carrier");
         const int route = find(w, {"Main", "Route"});
         const gd::GodotVariant curve = variantOf(w, route, "curve");
         check(route >= 0 && w.placements[static_cast<usize>(route)].className == "Path3D" && curve.type == gd::GodotVType::Object && curve.s == "Curve3D" && curve.find("_data"),
