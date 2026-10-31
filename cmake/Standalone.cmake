@@ -5,6 +5,7 @@
 #   cmake -S . -B build                                                 the engine at AVER_ENGINE_REF below, fetched from GitHub
 #   cmake --build build                                                 builds what the extension and its tests use (not the editor or the engine's tests)
 #   ctest --test-dir build                                              the extension's tests
+#   -DFABRIC_DEPLOY_TO=<engine build>/bin                               also copies the extension to <engine build>/bin/Extensions/FabricConnector
 #
 # The engine's own build tree is <build>/engine; the extension is in <build>/engine/bin/Extensions/FabricConnector, beside AverAssetC in
 # <build>/engine/bin: {extension.json, native/<platform>/Aver.Fabric.Native.*, managed/Aver.Fabric.dll, tools/Aver.Fabric.Convert.*, data/extension_api.json}.
@@ -14,6 +15,9 @@ set(AVER_ENGINE_REPO "https://github.com/Vectoric-Core-Systems/Aver-Engine.git" 
 set(AVER_ENGINE_REF "abf79f62a12b7cec27168243c9f1ca785fc57e16" CACHE STRING "The Aver Engine commit (or tag) to fetch when AVER_ENGINE_DIR is empty")
 set(AVER_ENGINE_CMAKE_ARGS "" CACHE STRING "More options for the engine's configure, as a ;-separated list of -D... arguments")
 option(AVER_FABRIC_BUILD_TESTS "Build and register the extension's tests" ON)
+# Opt-in: after each build, copy the built extension folder to <FABRIC_DEPLOY_TO>/Extensions/FabricConnector. Point it at the bin folder of your own
+# engine build (e.g. <engine checkout>/build/bin) and the extension sits beside that build's editor and AverAssetC. Empty: nothing is copied.
+set(FABRIC_DEPLOY_TO "" CACHE PATH "A folder to copy the built extension into, as <path>/Extensions/FabricConnector (empty: do not copy)")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
@@ -43,10 +47,14 @@ if(NOT EXISTS "${AVER_ENGINE_SOURCE_DIR}/tools/CMakeLists.txt" OR NOT _aver_engi
   message(FATAL_ERROR "This engine cannot build an extension from outside its tree (no tools/CMakeLists.txt for AverAssetC, or no AVER_EXTERNAL_EXTENSIONS). "
                       "Use a newer engine: set AVER_ENGINE_DIR, or move AVER_ENGINE_REF to a commit that has both.")
 endif()
+set(_aver_engine_args_fabric "")
+if(_aver_engine_root MATCHES "AVER_WITH_FABRIC")   # an engine from before the extension left its tree: its in-tree copy is off, this repository is the source
+  set(_aver_engine_args_fabric -DAVER_WITH_FABRIC=OFF)
+endif()
 unset(_aver_engine_root)
 
 # ---- The engine, configured with the extension added to it ------------------------------------------------------------------------
-# Only what the extension needs: no editor, no runtime host, no engine tests (the engine's AVER_WITH_FABRIC is off: the extension comes from here).
+# Only what the extension needs: no editor, no runtime host, no engine tests.
 # AVER_EXTERNAL_EXTENSIONS makes the engine add this repository to its build (cmake/Extension.cmake).
 set(AVER_ENGINE_BUILD_DIR ${CMAKE_BINARY_DIR}/engine)
 set(_aver_engine_args
@@ -57,7 +65,7 @@ set(_aver_engine_args
   -DAVER_BUILD_SANDBOX=OFF
   -DAVER_BUILD_GAME=OFF
   -DAVER_BUILD_TESTS=OFF
-  -DAVER_WITH_FABRIC=OFF
+  ${_aver_engine_args_fabric}
   -DAVER_EXTERNAL_EXTENSIONS=${CMAKE_CURRENT_SOURCE_DIR}
   -DAVER_FABRIC_BUILD_TESTS=${AVER_FABRIC_BUILD_TESTS})
 # What the caller chose for the toolchain goes through to the engine's configure.
@@ -86,6 +94,15 @@ add_custom_target(AverEngineWithFabric ALL
   COMMAND ${CMAKE_COMMAND} --build "${AVER_ENGINE_BUILD_DIR}" --target Aver.Fabric.All
   USES_TERMINAL
   COMMENT "Building the Aver Engine pieces and the Fabric Connector (${AVER_ENGINE_BUILD_DIR})")
+if(FABRIC_DEPLOY_TO)
+  cmake_path(ABSOLUTE_PATH FABRIC_DEPLOY_TO NORMALIZE OUTPUT_VARIABLE _fabric_deploy_root)
+  message(STATUS "Fabric Connector: the built extension is copied to ${_fabric_deploy_root}/Extensions/FabricConnector after each build")
+  # Merges into what is there (files of the same name are replaced, nothing is deleted). On Windows a running editor or AverAssetC holds the
+  # library open and the copy of that file fails: close it first.
+  add_custom_command(TARGET AverEngineWithFabric POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${AVER_ENGINE_BUILD_DIR}/bin/Extensions/FabricConnector" "${_fabric_deploy_root}/Extensions/FabricConnector"
+    COMMENT "Copying the Fabric Connector to ${_fabric_deploy_root}/Extensions/FabricConnector")
+endif()
 enable_testing()
 # `subdirs` with the absolute path makes ctest read the engine build's test file from its own directory, as ctest run there does.
 file(WRITE "${CMAKE_BINARY_DIR}/engine-tests.cmake" "subdirs(\"${AVER_ENGINE_BUILD_DIR}\")\n")

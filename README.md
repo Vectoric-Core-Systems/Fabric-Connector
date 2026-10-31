@@ -41,7 +41,19 @@ The engine is configured in `build/engine` (no editor, no runtime host, no engin
 build/engine/bin/AverAssetC fabric <godot-project-dir> <out-dir>
 ```
 
-Options: `AVER_ENGINE_DIR`, `AVER_ENGINE_REF`, `AVER_ENGINE_REPO`, `AVER_ENGINE_CMAKE_ARGS` (more `-D` options for the engine's configure), `AVER_FABRIC_BUILD_TESTS` (default ON). The number of parallel jobs is the build tool's default, or `CMAKE_BUILD_PARALLEL_LEVEL`.
+Options: `AVER_ENGINE_DIR`, `AVER_ENGINE_REF`, `AVER_ENGINE_REPO`, `AVER_ENGINE_CMAKE_ARGS` (more `-D` options for the engine's configure), `AVER_FABRIC_BUILD_TESTS` (default ON), `FABRIC_DEPLOY_TO` (below).
+
+### Use it with your own engine build
+
+`FABRIC_DEPLOY_TO` (a path, empty by default) copies the built extension folder (`extension.json`, `native/<platform>/`, `managed/`, `tools/`, `data/`) to `<FABRIC_DEPLOY_TO>/Extensions/FabricConnector` at the end of every build. Point it at the `bin` folder of the engine build you work in and the extension sits beside that build's editor and `AverAssetC`:
+
+```
+cmake -S . -B build -G Ninja -DAVER_ENGINE_DIR=<engine checkout> -DFABRIC_DEPLOY_TO=<engine checkout>/build/bin
+cmake --build build
+<engine checkout>/build/bin/AverAssetC fabric <godot-project-dir> <out-dir>
+```
+
+The copy merges into the folder (a file of the same name is replaced, nothing is deleted). Close the editor and any running `AverAssetC` first: on Windows they hold the extension's library open and that one file cannot be replaced. The number of parallel jobs is the build tool's default, or `CMAKE_BUILD_PARALLEL_LEVEL`.
 
 ## Test
 
