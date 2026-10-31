@@ -45,6 +45,12 @@ static class Program
             Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
             return failures;
         }
+        if (args.Length == 1 && args[0] == "skeleton-wave") // only the wave 7 suite (skeleton, animation, ragdoll)
+        {
+            failures = SkeletonWaveTests.RunAll();
+            Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
+            return failures;
+        }
         if (args.Length == 1 && args[0] == "animation") // only the G5 A1 suite
         {
             failures = AnimationTests.RunAll();
@@ -119,6 +125,7 @@ static class Program
         failures += DisplayTests.RunAll();   // wave 3: DisplayServer, Window controls, vsync, the frame cap, size_changed
         failures += PhysicsWrapperTests.RunAll(); // F2b: Camera3D maths, physics node defaults and conversions, vehicle, queries without a world
         failures += AnimationTests.RunAll(); // G5 A1: Animation, AnimationLibrary, AnimationPlayer over the engine's property-track player
+        failures += SkeletonWaveTests.RunAll(); // wave 7: the skeleton pose mapping, PhysicalBone3D, markers and sections, copy_track, the skeleton and mesh API remainder
         failures += CurvePathTests.RunAll(); // G5 A2: Expression, Curve, Curve3D, Gradient, PathFollow3D, Skeleton3D, SpringArm3D, RemoteTransform3D, on-screen notifiers
         failures += AnimationTreeTests.RunAll(); // G5 A2: AnimationTree over the engine's property-track player
         failures += AudioTests.RunAll();     // G5 S1: AudioServer, bus effects, audio streams, AudioStreamPlayer(3D), AudioListener3D over the engine's mixer (offline)

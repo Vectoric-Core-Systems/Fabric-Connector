@@ -275,7 +275,7 @@ int main() {
         check(has3("\"property\":\"debug/gdscript/warnings/untyped_declaration\"", "\"rating\":\"approximated\"", "editor or import-time"), "a script-warning setting is not reported as lost");
         check(has3("\"type\":\"Curve\"", "\"property\":\"_limits\"", "\"rating\":\"converted\""), "_limits is rated converted");
         check(!has3("\"property\":\"libraries/\"", "path-style property", ""), "libraries/ is no longer a path-style property");
-        check(has3("\"type\":\"Skeleton3D\"", "\"rating\":\"approximated\"", "not connected to a skinned mesh"), "the model's Skeleton3D is approximated, with its reason");
+        check(has3("\"type\":\"Skeleton3D\"", "\"rating\":\"approximated\"", "any other skeleton is script-level only and moves no vertices"), "the model's Skeleton3D is approximated, with its reason");
     }
 
     AVER_INFO("=== {} checks, {} failed ===", g_checks, g_failures);

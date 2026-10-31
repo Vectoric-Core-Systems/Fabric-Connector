@@ -1,0 +1,52 @@
+[gd_scene load_steps=5 format=3 uid="uid://cskinmain001"]
+
+[ext_resource type="PackedScene" path="res://models/skin.gltf" id="1_skin"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule_hips"]
+radius = 0.2
+height = 0.8
+
+[sub_resource type="Animation" id="Animation_marks"]
+resource_name = "marks"
+length = 3.0
+markers = [{
+"color": Color(1, 0, 0, 1),
+"name": &"hit",
+"time": 1.0
+}, {
+"color": Color(1, 1, 1, 1),
+"name": &"end",
+"time": 2.5
+}]
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_marks"]
+_data = {
+&"marks": SubResource("Animation_marks")
+}
+
+[node name="Main" type="Node3D"]
+
+[node name="Hero" parent="." instance=ExtResource("1_skin")]
+
+[node name="PhysicalBoneSimulator3D" type="PhysicalBoneSimulator3D" parent="Hero/Armature/Skeleton3D"]
+
+[node name="Physical Bone Hips" type="PhysicalBone3D" parent="Hero/Armature/Skeleton3D/PhysicalBoneSimulator3D"]
+bone_name = &"Hips"
+mass = 12.0
+friction = 0.5
+bounce = 0.25
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hero/Armature/Skeleton3D/PhysicalBoneSimulator3D/Physical Bone Hips"]
+shape = SubResource("Capsule_hips")
+
+[node name="Physical Bone Spine" type="PhysicalBone3D" parent="Hero/Armature/Skeleton3D/PhysicalBoneSimulator3D"]
+bone_name = &"Spine"
+joint_type = 2
+joint_constraints/swing_span = 25.0
+joint_constraints/twist_span = 15.0
+mass = 4.0
+
+[node name="Extra" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_marks")
+}

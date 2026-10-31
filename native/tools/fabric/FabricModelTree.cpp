@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <map>
@@ -105,7 +106,7 @@ struct GltfBuffers {
     }
 
     // An accessor's elements as doubles (`comps` per element); false when it cannot be read.
-    bool read(int acc, int comps, std::vector<double>& out) {
+    bool read(int acc, int comps, std::vector<double>& out, bool normalize = false) {
         const JsonValue& a = (*doc)["accessors"][static_cast<usize>(acc < 0 ? 0 : acc)];
         if (acc < 0 || !a.isObject() || !a.has("bufferView")) return false;
         const JsonValue& bv = (*doc)["bufferViews"][static_cast<usize>(a["bufferView"].asInt(0))];
@@ -126,7 +127,14 @@ struct GltfBuffers {
                 else if (ct == 5125) { u32 u; std::memcpy(&u, p, 4); v = u; }
                 else if (ct == 5123) { u16 u; std::memcpy(&u, p, 2); v = u; }
                 else if (ct == 5122) { i16 u; std::memcpy(&u, p, 2); v = u; }
+                else if (ct == 5120) v = static_cast<i8>(*p);
                 else v = *p;
+                if (normalize) {   // glTF's normalised integers
+                    if (ct == 5120) v = std::max(v / 127.0, -1.0);
+                    else if (ct == 5121) v = v / 255.0;
+                    else if (ct == 5122) v = std::max(v / 32767.0, -1.0);
+                    else if (ct == 5123) v = v / 65535.0;
+                }
                 out.push_back(v);
             }
         return true;
@@ -398,6 +406,7 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
                     bool has = false;
                     ModelBone mb;
                     mb.name = nm[at(b)];
+                    mb.gltfNode = b;
                     mb.parent = pb;
                     mb.rest = nodeLocal(jn[at(b)], has);
                     const int idx = static_cast<int>(bones.size());
@@ -480,6 +489,99 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
 
     if (doc["animations"].size() > 0) add(0, siblingName(0, "AnimationPlayer"), "AnimationPlayer");
 
+    // ---- the file's animations: each channel's keys, read from the buffers, as tracks on the nodes and bones of this tree ----
+    // The values are the glTF's own (metres, Godot's axes), so a bone's pose key is exactly what Godot's importer puts in the track.
+    // LINEAR keeps the file's keys, STEP is a nearest-key track, CUBICSPLINE is sampled at 30 frames per second (Godot bakes it too, so the in-between values differ a little).
+    const JsonValue& anims = doc["animations"];
+    const std::function<std::string(int)> pathOf = [&](int t) {
+        std::string p;
+        for (int a = t; a > 0; a = T.nodes[at(a)].parent) p = p.empty() ? T.nodes[at(a)].name : T.nodes[at(a)].name + "/" + p;
+        return p;
+    };
+    size_t weightChannels = 0, unreadChannels = 0;
+    for (usize ai = 0; ai < anims.size(); ++ai) {
+        const JsonValue& an = anims[ai];
+        ModelAnim ma;
+        ma.name = an.has("name") ? validNodeName(std::string(an["name"].asString())) : "animation_" + std::to_string(ai);
+        if (ma.name.empty()) ma.name = "animation_" + std::to_string(ai);
+        const JsonValue& samplers = an["samplers"];
+        const JsonValue& chans = an["channels"];
+        for (usize k = 0; k < chans.size(); ++k) {
+            const JsonValue& ch = chans[k];
+            const int n = static_cast<int>(ch["target"]["node"].asInt(-1));
+            const std::string_view pn = ch["target"]["path"].asString();
+            if (n < 0 || n >= N) continue;
+            int type = 0;
+            if (pn == "translation") type = 1;
+            else if (pn == "rotation") type = 2;
+            else if (pn == "scale") type = 3;
+            else { ++weightChannels; continue; }
+            const int comps = type == 2 ? 4 : 3;
+            const int si = static_cast<int>(ch["sampler"].asInt(-1));
+            if (si < 0 || static_cast<usize>(si) >= samplers.size()) { ++unreadChannels; continue; }
+            const JsonValue& smp = samplers[static_cast<usize>(si)];
+            const std::string_view interp = smp["interpolation"].asString("LINEAR");
+            const bool cubic = interp == "CUBICSPLINE";
+            std::vector<double> times, vals;
+            const int outAcc = static_cast<int>(smp["output"].asInt(-1));
+            const bool norm = outAcc >= 0 && doc["accessors"][static_cast<usize>(outAcc)]["normalized"].asBool(false);
+            if (!gb.read(static_cast<int>(smp["input"].asInt(-1)), 1, times) || !gb.read(outAcc, comps, vals, norm)) { ++unreadChannels; continue; }
+            const size_t K = times.size();
+            if (K == 0 || vals.size() != K * static_cast<size_t>(comps) * (cubic ? 3 : 1)) { ++unreadChannels; continue; }
+
+            ModelAnimTrack tr;
+            if (boneIndex[at(n)] >= 0 && boneGroup[at(n)] >= 0 && skelNode.count(boneGroup[at(n)])) tr.path = pathOf(skelNode[boneGroup[at(n)]]) + ":" + nm[at(n)];
+            else if (treeOf[at(n)] >= 0) tr.path = pathOf(treeOf[at(n)]);
+            else continue;
+            tr.type = type;
+            tr.step = interp == "STEP";
+            const auto unit = [&](double* q) {   // a rotation key stays a unit quaternion
+                const double l = std::sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+                if (l > 1e-12) for (int c = 0; c < 4; ++c) q[c] /= l;
+            };
+            if (!cubic) {
+                tr.times = times;
+                tr.values = vals;
+                if (type == 2) for (size_t i = 0; i < K; ++i) unit(&tr.values[i * 4]);
+            } else {
+                // Key i holds [in-tangent, value, out-tangent]; the segment i -> i+1 is the cubic Hermite of the two values with those tangents.
+                const size_t stride = static_cast<size_t>(comps) * 3;
+                const auto value = [&](size_t i, int c) { return vals[i * stride + static_cast<size_t>(comps) + static_cast<size_t>(c)]; };
+                const auto outT = [&](size_t i, int c) { return vals[i * stride + static_cast<size_t>(comps) * 2 + static_cast<size_t>(c)]; };
+                const auto inT = [&](size_t i, int c) { return vals[i * stride + static_cast<size_t>(c)]; };
+                const double t0 = times.front(), t1 = times.back();
+                std::vector<double> sample;
+                for (double t = t0; t < t1 - 1e-9; t += 1.0 / 30.0) sample.push_back(t);
+                sample.push_back(t1);
+                size_t seg = 0;
+                for (const double t : sample) {
+                    while (seg + 2 < K && t >= times[seg + 1]) ++seg;
+                    double q[4] = {0, 0, 0, 0};
+                    if (K == 1) {
+                        for (int c = 0; c < comps; ++c) q[c] = value(0, c);
+                    } else {
+                        const double dt = times[seg + 1] - times[seg];
+                        const double u = dt > 1e-12 ? std::clamp((t - times[seg]) / dt, 0.0, 1.0) : 0.0;
+                        const double u2 = u * u, u3 = u2 * u;
+                        const double h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+                        for (int c = 0; c < comps; ++c)
+                            q[c] = h00 * value(seg, c) + h10 * dt * outT(seg, c) + h01 * value(seg + 1, c) + h11 * dt * inT(seg + 1, c);
+                    }
+                    if (type == 2) unit(q);
+                    tr.times.push_back(t);
+                    tr.values.insert(tr.values.end(), q, q + comps);
+                }
+            }
+            ma.length = std::max(ma.length, tr.times.back());
+            ma.tracks.push_back(std::move(tr));
+        }
+        T.anims.push_back(std::move(ma));
+    }
+    if (weightChannels > 0)
+        T.notes.push_back("the file animates " + std::to_string(weightChannels) + " morph-weight or other channel(s) (glTF 'weights' or pointer targets); the animation player does not get them");
+    if (unreadChannels > 0)
+        T.notes.push_back(std::to_string(unreadChannels) + " animation channel(s) could not be read from the file's buffers and are left out");
+
     if (foreignNode) T.notes.push_back("a glTF camera or light node is kept as a plain Node3D; Godot would make a Camera3D or a light node");
     if (physicsUsed)
         T.notes.push_back(std::string("the model's glTF physics (OMI_physics_body / OMI_physics_shape) is made into bodies (a node with a motion) and CollisionShape3D nodes (a node with a collider), as Godot's importer does: box, sphere, capsule, cylinder, "
@@ -489,7 +591,7 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
         if (ext[k].asString() == "KHR_physics_rigid_bodies")
             T.notes.push_back("the model uses KHR_physics_rigid_bodies: Godot's importer makes bodies and shapes from it; this converter does not, so those nodes stay plain Node3D and the model has no collision here");
     if (!groupJoints.empty())
-        T.notes.push_back("a skeleton's bones are written as Skeleton3D bone properties (name, parent, rest pose); no skinned vertex follows them (see the Skeleton3D note)");
+        T.notes.push_back("a skeleton's bones are written as Skeleton3D bone properties (name, parent, rest pose); the skinned meshes below it follow its pose where the importer's skeleton matches (see the Skeleton3D note)");
     return true;
 }
 

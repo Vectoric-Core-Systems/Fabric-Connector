@@ -1,0 +1,10 @@
+; Engine configuration file.
+; A fixture for the wave 7 skeleton work (FabricSkinTest): a skinned model with three animations and a scene that authors a ragdoll for its skeleton.
+
+config_version=5
+
+[application]
+
+config/name="Skin Game"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")

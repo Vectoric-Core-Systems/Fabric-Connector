@@ -14,7 +14,7 @@ using Aver.Scene;
 namespace Aver.Fabric;
 
 /// <summary>One animation: tracks of keys, a length and a loop mode (Godot's Animation).</summary>
-public class Animation : Resource
+public partial class Animation : Resource
 {
     public enum TrackType { Value = 0, Position3D = 1, Rotation3D = 2, Scale3D = 3, BlendShape = 4, Method = 5, Bezier = 6, Audio = 7, Animation = 8 }
     public enum InterpolationType { Nearest = 0, Linear = 1, Cubic = 2, LinearAngle = 3, CubicAngle = 4 }
@@ -106,6 +106,82 @@ public class Animation : Resource
                 if (TrackGetType(i) == TrackType.Value && ValueTrackGetUpdateMode(i) == UpdateMode.Capture) return true;
             return false;
         }
+    }
+
+    // ---- markers: named times (AnimationPlayer.PlaySectionWithMarkers plays between two of them) ----
+
+    /// <summary>Adds a marker at <paramref name="time"/> seconds. An empty or taken name is refused with an error.</summary>
+    public void AddMarker(StringName name, double time)
+    {
+        if (Handle == 0) return;
+        if (PanimNative.aver_panim_marker_add(Handle, name.ToString(), time) == 0)
+            Aver.Scripting.Log.Error($"[Fabric] Animation: the marker '{name}' cannot be added (an empty name, a name already used, or a time that is not a number)");
+        else Touch();
+    }
+
+    public void RemoveMarker(StringName name) { if (Handle != 0 && PanimNative.aver_panim_marker_remove(Handle, name.ToString()) != 0) Touch(); }
+
+    public bool HasMarker(StringName name) => Handle != 0 && PanimNative.aver_panim_marker_time(Handle, name.ToString(), out _) != 0;
+
+    /// <summary>The time of a marker; 0 (with an error) when there is none of that name.</summary>
+    public double GetMarkerTime(StringName name)
+    {
+        if (Handle != 0 && PanimNative.aver_panim_marker_time(Handle, name.ToString(), out double t) != 0) return t;
+        Aver.Scripting.Log.Error($"[Fabric] Animation: there is no marker '{name}'");
+        return 0;
+    }
+
+    public Color GetMarkerColor(StringName name)
+    {
+        var c = new double[4];
+        return Handle != 0 && PanimNative.aver_panim_marker_color(Handle, name.ToString(), c) != 0 ? new Color((float)c[0], (float)c[1], (float)c[2], (float)c[3]) : new Color(1, 1, 1, 1);
+    }
+
+    public void SetMarkerColor(StringName name, Color color)
+    {
+        if (Handle != 0 && PanimNative.aver_panim_marker_set_color(Handle, name.ToString(), color.R, color.G, color.B, color.A) != 0) Touch();
+    }
+
+    /// <summary>The names of the markers, ordered by time.</summary>
+    public string[] GetMarkerNames()
+    {
+        if (Handle == 0) return System.Array.Empty<string>();
+        var list = new List<(double Time, string Name)>();
+        int n = PanimNative.aver_panim_marker_count(Handle);
+        for (int i = 0; i < n; i++)
+        {
+            string name = PanimNative.Str(PanimNative.aver_panim_marker_name(Handle, i));
+            if (PanimNative.aver_panim_marker_time(Handle, name, out double t) != 0) list.Add((t, name));
+        }
+        return list.OrderBy(m => m.Time).ThenBy(m => m.Name, StringComparer.Ordinal).Select(m => m.Name).ToArray();
+    }
+
+    private IEnumerable<(double Time, string Name)> Markers()
+    {
+        foreach (string name in GetMarkerNames())
+            if (PanimNative.aver_panim_marker_time(Handle, name, out double t) != 0) yield return (t, name);
+    }
+
+    /// <summary>The marker at exactly <paramref name="time"/> (within a microsecond), else an empty name.</summary>
+    public StringName GetMarkerAtTime(double time)
+    {
+        foreach (var m in Markers()) if (Math.Abs(m.Time - time) < 1e-6) return m.Name;
+        return StringName.Empty;
+    }
+
+    /// <summary>The first marker after <paramref name="time"/>, else an empty name.</summary>
+    public StringName GetNextMarker(double time)
+    {
+        foreach (var m in Markers()) if (m.Time > time + 1e-6) return m.Name;
+        return StringName.Empty;
+    }
+
+    /// <summary>The last marker before <paramref name="time"/>, else an empty name.</summary>
+    public StringName GetPrevMarker(double time)
+    {
+        string found = "";
+        foreach (var m in Markers()) if (m.Time < time - 1e-6) found = m.Name;
+        return found;
     }
 
     // ---- tracks ----

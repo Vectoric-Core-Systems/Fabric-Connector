@@ -41,6 +41,7 @@ set(AVER_FABRIC_CONVERTER_SOURCES
   ${AVER_FABRIC_CONVERTER_DIR}/FabricScripts.cpp
   ${AVER_FABRIC_CONVERTER_DIR}/FabricMeshGen.cpp
   ${AVER_FABRIC_CONVERTER_DIR}/FabricModelTree.cpp
+  ${AVER_FABRIC_CONVERTER_DIR}/FabricModelRuntime.cpp
   ${AVER_FABRIC_CONVERTER_DIR}/FabricGeometry.cpp
   ${AVER_FABRIC_CONVERTER_DIR}/FabricAnimation.cpp
   ${AVER_FABRIC_CONVERTER_DIR}/FabricAnimTree.cpp

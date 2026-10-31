@@ -79,10 +79,13 @@ public partial class CollisionObject3D : Node3D
     internal virtual float BodyMassKg => 0f;
     internal virtual bool IsSensor => false;
 
+    /// <summary>False for a node whose body is made elsewhere (a PhysicalBone3D is a part of the engine's ragdoll, not a body of its own).</summary>
+    internal virtual bool MakesOwnBody => true;
+
     internal override void OnReadying()
     {
         base.OnReadying();
-        if (Self.IsValid && NodeHost.Current.IsEngine) BuildBody();
+        if (Self.IsValid && NodeHost.Current.IsEngine && MakesOwnBody) BuildBody();
     }
 
     internal override void OnExitingTree()

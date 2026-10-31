@@ -48,6 +48,9 @@ const std::set<std::string>& supportedClasses() {
                                             "AnimationPlayer",
                                             // G5 A2: animation trees, skeletons, paths and helper nodes
                                             "AnimationTree", "Skeleton3D", "BoneAttachment3D", "SkeletonIK3D", "Path3D", "PathFollow3D", "SpringArm3D",
+                                            // wave 7: the ragdoll nodes
+                                            "PhysicalBone3D", "PhysicalBoneSimulator3D",
+                                            "LookAtModifier3D", "CopyTransformModifier3D", "AimModifier3D", "ConvertTransformModifier3D",
                                             "RemoteTransform3D", "VisibleOnScreenNotifier3D", "VisibleOnScreenEnabler3D",
                                             // wave 3: XR nodes as inert carriers (chooseClass rates them approximated)
                                             "XROrigin3D", "XRCamera3D", "XRController3D", "XRAnchor3D", "XRNode3D",
@@ -137,7 +140,22 @@ ClassChoice chooseClass(const std::string& t) {
     if (t == "Skeleton3D") {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
-        c.reason = "the skeleton is a script-level pose model (bone list, rests, poses, overrides, bone tracks); it is not connected to a skinned mesh, so posing it moves no vertices";
+        c.reason = "the skeleton is a pose model (bone list, rests, poses, overrides, bone tracks); for an imported model whose skeleton the importer wrote it poses the skinned meshes below it, "
+                   "through the engine's pose seam; any other skeleton is script-level only and moves no vertices";
+        return c;
+    }
+    if (t == "LookAtModifier3D" || t == "CopyTransformModifier3D" || t == "AimModifier3D" || t == "ConvertTransformModifier3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "a bone constraint on the skeleton's pose model: it applies the direct pose (shortest-arc aim, per-axis copy, range remap), not Godot's secondary-rotation solve, "
+                   "Euler limits or damping curves";
+        return c;
+    }
+    if (t == "PhysicalBone3D" || t == "PhysicalBoneSimulator3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "the engine builds one ragdoll for the skeleton; the PhysicalBone3D nodes author which bones are parts and their mass, friction, bounce, joint kind and limits and capsule radius, "
+                   "which the converter writes into the skeleton's .ocragdoll file (box, convex and trimesh shapes become capsules; joint offsets, sliders and 6DOF limits are not kept)";
         return c;
     }
     if (t == "SkeletonIK3D") {
@@ -571,7 +589,11 @@ std::unique_ptr<FNode> Converter::buildScene(const std::string& resPath, int dep
                 made = std::make_unique<FNode>();
                 made->type = "Node3D";
                 made->fromModel = true;
-                if (const ModelResult* mr = modelFor(subRes, w)) buildModelNodes(*made, modelTreeFor(subRes, w), *mr, subRes);
+                if (const ModelResult* mr = modelFor(subRes, w)) {
+                    const ModelTree* tree = modelTreeFor(subRes, w);
+                    buildModelNodes(*made, tree, *mr, subRes);
+                    bindModelRuntime(*made, tree, *mr, subRes);
+                }
                 made->instanceOf = subRes;
             } else {
                 made = subRes.empty() ? nullptr : buildScene(subRes, depth + 1, w);
@@ -641,6 +663,7 @@ std::unique_ptr<FNode> Converter::buildScene(const std::string& resPath, int dep
         }
         source->connections.push_back(Connection{c.signal, target, c.method, c.flags, c.unbinds, c.binds, doc});
     }
+    writeRagdollAuthoring(*root, resPath);
     return root;
 }
 
@@ -974,6 +997,8 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
         if (cv.isNil() && !pr.value.isNil()) continue;   // a resource that could not be converted; already reported
         // parameters/... (AnimationTree) and bones/... (Skeleton3D) are members the runtime classes read by their scene names.
         const bool dynamicKey = (fn.type == "AnimationTree" && pr.key.rfind("parameters/", 0) == 0) || (fn.type == "Skeleton3D" && pr.key.rfind("bones/", 0) == 0) ||
+                                (fn.type == "PhysicalBone3D" && pr.key.rfind("joint_constraints/", 0) == 0) ||
+                                ((fn.type == "CopyTransformModifier3D" || fn.type == "AimModifier3D" || fn.type == "ConvertTransformModifier3D") && pr.key.rfind("settings/", 0) == 0) ||
                                 (isControlClass(fn.type) && pr.key.rfind("theme_override_", 0) == 0) || isWidgetDynamicKey(fn.type, pr.key) ||
                                 (fn.type == "SoftBody3D" && pr.key.rfind("attachments/", 0) == 0) ||
                                 (cc.fabricClass == fn.type && (fn.type == "PinJoint3D" || fn.type == "HingeJoint3D" || fn.type == "SliderJoint3D" || fn.type == "ConeTwistJoint3D" ||

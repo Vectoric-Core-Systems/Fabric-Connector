@@ -229,6 +229,20 @@ public class AnimationNodeBlendTree : AnimationRootNode
 
     public const string OutputName = "output";
 
+    public new class SignalName : AnimationNode.SignalName
+    {
+        public static readonly StringName NodeChanged = "node_changed";
+    }
+
+    /// <summary>Emitted with a node's name when it is added, removed, renamed (the new name) or has an input wired or unwired.</summary>
+    public event Action<StringName> NodeChanged { add => Connect(SignalName.NodeChanged, Callable.From(value)); remove => Disconnect(SignalName.NodeChanged, Callable.From(value)); }
+
+    private void NodeEdited(string node)
+    {
+        EmitSignal(SignalName.NodeChanged, node);
+        EmitSignal(AnimationNode.SignalName.TreeChanged);
+    }
+
     private sealed class Entry
     {
         public AnimationNode Node = null!;
@@ -257,7 +271,7 @@ public class AnimationNodeBlendTree : AnimationRootNode
         if (n.Length == 0 || _nodes.ContainsKey(n) || node == null) return;
         _nodes[n] = new Entry { Node = node, Position = position };
         _order.Add(n);
-        EmitSignal(AnimationNode.SignalName.TreeChanged);
+        NodeEdited(n);
     }
 
     public AnimationNode? GetNode(StringName name) => _nodes.TryGetValue(name.ToString(), out Entry? e) ? e.Node : null;
@@ -270,7 +284,7 @@ public class AnimationNodeBlendTree : AnimationRootNode
         if (n == OutputName || !_nodes.Remove(n)) return;
         _order.Remove(n);
         foreach (var k in _connections.Where(c => c.Key.Node == n || c.Value == n).Select(c => c.Key).ToList()) _connections.Remove(k);
-        EmitSignal(AnimationNode.SignalName.TreeChanged);
+        NodeEdited(n);
     }
 
     public void RenameNode(StringName name, StringName newName)
@@ -286,7 +300,7 @@ public class AnimationNodeBlendTree : AnimationRootNode
             if (k.Node == o) { _connections.Remove(k); _connections[(n, k.Port)] = src == o ? n : src; }
             else if (src == o) _connections[k] = n;
         }
-        EmitSignal(AnimationNode.SignalName.TreeChanged);
+        NodeEdited(n);
     }
 
     public void SetNodePosition(StringName name, Vector2 position) { if (_nodes.TryGetValue(name.ToString(), out Entry? e)) e.Position = position; }
@@ -304,12 +318,12 @@ public class AnimationNodeBlendTree : AnimationRootNode
         string i = inputNode.ToString(), o = outputNode.ToString();
         if (!_nodes.ContainsKey(i) || !_nodes.ContainsKey(o) || i == o || inputIndex < 0 || _connections.ContainsKey((i, inputIndex))) return;
         _connections[(i, inputIndex)] = o;
-        EmitSignal(AnimationNode.SignalName.TreeChanged);
+        NodeEdited(i);
     }
 
     public void DisconnectNode(StringName inputNode, int inputIndex)
     {
-        if (_connections.Remove((inputNode.ToString(), inputIndex))) EmitSignal(AnimationNode.SignalName.TreeChanged);
+        if (_connections.Remove((inputNode.ToString(), inputIndex))) NodeEdited(inputNode.ToString());
     }
 
     public ConnectionError CanConnect(StringName inputNode, int inputIndex, StringName outputNode)

@@ -3,6 +3,7 @@
 #include "FabricMeshGen.hpp"
 
 #include "aver/core/Hash.hpp"
+#include "aver/formats/OcAnim.hpp"
 #include "aver/formats/OcMesh.hpp"
 #include "aver/platform/FileSystem.hpp"
 
@@ -902,6 +903,14 @@ const ModelResult* Converter::modelFor(const std::string& resPath, const Where& 
         base = safeName(base, "model");
         r = host_.importModel(disk, contentDir_, "Meshes/" + rel, base);
         if (r.ok) {
+            // The importer writes the model's skeletons beside its meshes; the converter finds them there (the host contract has no field for them).
+            std::error_code ec;
+            const std::string sub = "Meshes/" + rel;
+            for (const auto& entry : std::filesystem::directory_iterator(contentDir_ + "/" + sub, ec)) {
+                if (!entry.is_regular_file(ec) || entry.path().extension() != ".ocskel") continue;
+                r.skeletons.push_back(sub + "/" + entry.path().filename().string());
+            }
+            std::sort(r.skeletons.begin(), r.skeletons.end());
             applyRootScale(resPath, r);
             applyMaterialOverrides(resPath, r, base);
         }
@@ -1012,9 +1021,24 @@ void Converter::applyRootScale(const std::string& resPath, ModelResult& r) {
         }
         ++scaled;
     }
+    // The skeletons the importer wrote scale with the meshes they skin (rest translations, inverse binds, sockets), or a skinned mesh would not fit its bones.
+    size_t skeletonsScaled = 0;
+    for (const std::string& sp : r.skeletons) {
+        fmt::OcSkeleton sk;
+        std::string err;
+        if (!fmt::loadOcSkel(contentDir_ + "/" + sp, sk, &err)) continue;
+        const f32 k = static_cast<f32>(s);
+        for (fmt::OcBone& b : sk.bones) {
+            b.translation = b.translation * k;
+            for (int i = 12; i < 15; ++i) b.inverseBind[i] *= k;
+        }
+        for (fmt::OcSocket& so : sk.sockets) so.translation = so.translation * k;
+        if (fmt::saveOcSkel(contentDir_ + "/" + sp, sk, &err)) ++skeletonsScaled;
+    }
     r.rootScale = s;
     report_.add("resource", resPath, "", "PackedScene", "nodes/root_scale", Rating::Converted,
-                "the import's root scale " + std::to_string(s) + " is applied to " + std::to_string(scaled) + " mesh(es) and to the node translations (skeleton rest poses and animation clips the importer wrote are not scaled)", 0);
+                "the import's root scale " + std::to_string(s) + " is applied to " + std::to_string(scaled) + " mesh(es), " + std::to_string(skeletonsScaled) +
+                    " skeleton(s) and the node translations and animation tracks the converter writes (the importer's own engine-space clips are not scaled and not used)", 0);
 }
 
 const ModelTree* Converter::modelTreeFor(const std::string& resPath, const Where& w) {

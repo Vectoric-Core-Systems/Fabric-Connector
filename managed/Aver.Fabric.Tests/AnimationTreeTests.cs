@@ -628,6 +628,9 @@ static class AnimationTreeTests
         tree.GetParent()!.AddChild(brain);
         tree.AdvanceExpressionBaseNode = "../Brain";
         var pb = Playback(tree);
+        var stateLog = new List<string>();
+        pb.StateStarted += s => stateLog.Add("start " + s);
+        pb.StateFinished += s => stateLog.Add("finish " + s);
 
         T.Check("before the first pass nothing is playing", !pb.IsPlaying() && pb.GetCurrentNode() == "");
         Advance(tree, 0.1);
@@ -647,6 +650,7 @@ static class AnimationTreeTests
         brain.Speed = 0.5f;
         Advance(tree, 0.1);
         T.Check("and with it true goes back to Idle", pb.GetCurrentNode() == "Idle");
+        T.CheckSeq("state_finished and state_started come in order at each change (wave 7, F16)", new[] { "start Idle", "finish Idle", "start Run", "finish Run", "start Idle" }, stateLog);
         T.Check("conditions are case-insensitive parameters", tree.Get("PARAMETERS/conditions/RUNNING").VariantType == Variant.Type.Bool);
 
         // Enabled-mode transitions are for travel only: Idle has one to Attack and does not take it.
