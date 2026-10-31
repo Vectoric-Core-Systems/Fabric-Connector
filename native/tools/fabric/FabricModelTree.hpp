@@ -13,6 +13,7 @@ struct ModelBone {
     std::string name;
     int parent = -1;   // index into the skeleton's bones, -1 for a root bone
     Xform rest;        // local rest pose, metres
+    int gltfNode = -1; // the glTF node this bone is
 };
 
 struct ModelTreeNode {
@@ -31,7 +32,25 @@ struct ModelTreeNode {
     std::vector<double> shapeNums;
 };
 
+// One track of a glTF animation, decoded: a node's (or a bone's) translation, rotation or scale over time, in the file's metres and glTF axes
+// (which are Godot's). `path` is Godot's track path from the model's root node: "Armature/Skeleton3D:Hips" for a bone, "Armature/Fan" for a node.
+// A CUBICSPLINE channel is already sampled at 30 frames per second into a linear one; `step` marks a STEP channel (nearest key).
+struct ModelAnimTrack {
+    std::string path;
+    int type = 1;                 // 1 position, 2 rotation (x y z w), 3 scale
+    bool step = false;
+    std::vector<double> times;    // seconds, ascending
+    std::vector<double> values;   // 3 (4 for a rotation) numbers per time
+};
+
+struct ModelAnim {
+    std::string name;
+    double length = 0;            // the longest channel's last time
+    std::vector<ModelAnimTrack> tracks;
+};
+
 struct ModelTree {
+    std::vector<ModelAnim> anims;       // the file's animations, as Godot's importer puts them in the AnimationPlayer
     std::vector<ModelTreeNode> nodes;   // [0] is the root (its name is the instancing node's); creation order, not child order
     std::vector<std::string> notes;     // what the tree could not keep, for the report
     bool singleRoot = false;

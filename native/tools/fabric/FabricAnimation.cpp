@@ -267,7 +267,7 @@ std::string Converter::animationAsset(const std::string& cacheKey, const std::ve
         std::stable_sort(t.keys.begin(), t.keys.end(), [](const OcPropKey& a, const OcPropKey& b) { return a.time < b.time; });
         if (boneTrack && rating == Rating::Converted) {
             rating = Rating::Approximated;
-            why = "a bone track ('" + t.path + "'): written, and applied to the bone pose of the Skeleton3D it names (a script-level pose model, not connected to a skinned mesh)";
+            why = "a bone track ('" + t.path + "'): written, and applied to the bone pose of the Skeleton3D it names; that node poses the skinned meshes below it when it is bound to an imported model's skeleton, and is otherwise a script-level pose model";
         }
         if (t.type == OcPropTrackType::Value && t.path.find(':') == std::string::npos) {
             rating = Rating::Approximated;
@@ -278,9 +278,27 @@ std::string Converter::animationAsset(const std::string& cacheKey, const std::ve
         clip.propTracks.push_back(std::move(t));
     }
 
-    if (getProp(props, "markers"))
-        report_.add("resource", doc.file, w.node, "Animation", nameHint + ".markers", Rating::Unsupported,
-                    "animation markers (and play_section_with_markers) are not in the runtime", 0);
+    // Markers: an array of { name, time, color } dictionaries; they are saved with the clip (OcAnimation::markers) for play_section_with_markers.
+    if (const Var* mk = getProp(props, "markers")) {
+        size_t made = 0, skipped = 0;
+        for (const Var& m : mk->items) {
+            const Var* nm = m.find("name");
+            const Var* tm = m.find("time");
+            const Var* col = m.find("color");
+            if (!nm || !tm || nm->asString().empty() || clip.marker(nm->asString())) { ++skipped; continue; }
+            fmt::OcMarker om;
+            om.name = nm->asString();
+            om.time = tm->asNumber();
+            if (col && col->nums.size() >= 4)
+                for (int k = 0; k < 4; ++k) om.color[k] = static_cast<float>(col->nums[static_cast<size_t>(k)]);
+            clip.markers.push_back(std::move(om));
+            ++made;
+        }
+        report_.add("resource", doc.file, w.node, "Animation", nameHint + ".markers", skipped > 0 ? Rating::Approximated : Rating::Converted,
+                    std::to_string(made) + " marker(s) saved with the clip (play_section_with_markers, get_marker_time)" +
+                        (skipped > 0 ? "; " + std::to_string(skipped) + " without a name, a time or a unique name were dropped" : std::string{}),
+                    0);
+    }
 
     const std::string stem = safeName(nameHint, "animation");
     std::string unique = stem;

@@ -302,6 +302,11 @@ public:
     void applyMaterialOverrides(const std::string& resPath, ModelResult& r, const std::string& base);   // the import's use_external materials, onto the meshes' slots
     // The node tree Godot's importer makes for a glTF model (cached per file); null for other model formats and unreadable files.
     const ModelTree* modelTreeFor(const std::string& resPath, const Where& w);
+    // FabricModelRuntime.cpp (wave 7, F13 and F14): the model's Skeleton3D nodes bound to the importer's .ocskel, its skinned meshes marked, and its
+    // AnimationPlayer given the file's animations as .ocanim property clips.
+    void bindModelRuntime(FNode& root, const ModelTree* tree, const ModelResult& model, const std::string& modelRes);
+    // The scene's PhysicalBone3D nodes below a bound Skeleton3D, written as that skeleton's .ocragdoll (wave 7, F12 and P24).
+    void writeRagdollAuthoring(FNode& root, const std::string& sceneRes);
     std::map<std::string, std::unique_ptr<ModelTree>> modelTrees_;
     const gd::GodotResource* resourceDoc(const std::string& resPath);
     std::map<std::string, std::unique_ptr<gd::GodotResource>> resourceDocs_;

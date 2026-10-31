@@ -811,6 +811,75 @@ public class AnimationPlayer : AnimationMixer
     /// <summary>Plays an animation backwards from its end.</summary>
     public void PlayBackwards(StringName? name = null, double customBlend = -1) => Play(name, customBlend, -1.0f, true);
 
+    // ---- sections: playing a stretch of an animation ----
+
+    private string SectionTarget(StringName? name)
+    {
+        string n = name?.ToString() ?? "";
+        return n.Length == 0 ? AssignedAnimation.ToString() : n;
+    }
+
+    /// <summary>Plays <paramref name="startTime"/> to <paramref name="endTime"/> of an animation (a negative time is the animation's start or end).
+    /// The playhead starts at the section's edge and a looping animation loops inside it. An end that does not follow the start is refused with an error.</summary>
+    public void PlaySection(StringName? name = null, double startTime = -1, double endTime = -1, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)
+    {
+        if (Player == 0) return;
+        SyncLibraries();
+        string target = SectionTarget(name);
+        if (target.Length == 0 || !HasAnimation(target))
+        {
+            Aver.Scripting.Log.Error($"[Fabric] AnimationPlayer '{Name}': there is no animation '{target}' to play");
+            return;
+        }
+        if (PplayerNative.aver_pplayer_play_section(Player, target, startTime, endTime, customBlend, customSpeed, fromEnd ? 1 : 0) == 0)
+            Aver.Scripting.Log.Error($"[Fabric] AnimationPlayer '{Name}': the section {startTime} to {endTime} of '{target}' is empty");
+        DispatchEvents();
+    }
+
+    public void PlaySectionBackwards(StringName? name = null, double startTime = -1, double endTime = -1, double customBlend = -1) =>
+        PlaySection(name, startTime, endTime, customBlend, -1.0f, true);
+
+    /// <summary>Plays between two of the animation's markers (an empty marker name is the animation's start or end).</summary>
+    public void PlaySectionWithMarkers(StringName? name = null, StringName? startMarker = null, StringName? endMarker = null, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)
+    {
+        if (Player == 0) return;
+        SyncLibraries();
+        string target = SectionTarget(name);
+        if (target.Length == 0 || !HasAnimation(target))
+        {
+            Aver.Scripting.Log.Error($"[Fabric] AnimationPlayer '{Name}': there is no animation '{target}' to play");
+            return;
+        }
+        if (PplayerNative.aver_pplayer_play_section_markers(Player, target, startMarker?.ToString() ?? "", endMarker?.ToString() ?? "", customBlend, customSpeed, fromEnd ? 1 : 0) == 0)
+            Aver.Scripting.Log.Error($"[Fabric] AnimationPlayer '{Name}': '{target}' has no marker '{startMarker}' / '{endMarker}', or they do not bound a section");
+        DispatchEvents();
+    }
+
+    public void PlaySectionWithMarkersBackwards(StringName? name = null, StringName? startMarker = null, StringName? endMarker = null, double customBlend = -1) =>
+        PlaySectionWithMarkers(name, startMarker, endMarker, customBlend, -1.0f, true);
+
+    /// <summary>Changes the section of the animation that is playing or assigned.</summary>
+    public void SetSection(double startTime = -1, double endTime = -1)
+    {
+        if (Player != 0 && PplayerNative.aver_pplayer_set_section(Player, startTime, endTime) == 0)
+            Aver.Scripting.Log.Error($"[Fabric] AnimationPlayer '{Name}': the section {startTime} to {endTime} is empty, or no animation is assigned");
+    }
+
+    public void SetSectionWithMarkers(StringName? startMarker = null, StringName? endMarker = null)
+    {
+        if (Player != 0 && PplayerNative.aver_pplayer_set_section_markers(Player, startMarker?.ToString() ?? "", endMarker?.ToString() ?? "") == 0)
+            Aver.Scripting.Log.Error($"[Fabric] AnimationPlayer '{Name}': the markers '{startMarker}' / '{endMarker}' do not bound a section of the assigned animation");
+    }
+
+    /// <summary>Plays the whole animation again.</summary>
+    public void ResetSection() { if (Player != 0) PplayerNative.aver_pplayer_reset_section(Player); }
+
+    public bool HasSection() => Player != 0 && PplayerNative.aver_pplayer_has_section(Player) != 0;
+
+    public float GetSectionStartTime() => Player == 0 ? 0f : (float)PplayerNative.aver_pplayer_section_start(Player);
+
+    public float GetSectionEndTime() => Player == 0 ? 0f : (float)PplayerNative.aver_pplayer_section_end(Player);
+
     /// <summary>Plays an animation after capturing the current values of its capture-mode tracks and fading from them over <paramref name="duration"/>.</summary>
     public void PlayWithCapture(StringName? name = null, double duration = -1.0, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false,
         Tween.TransitionType transType = Tween.TransitionType.Linear, Tween.EaseType easeType = Tween.EaseType.In)

@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // Skeleton3D (Godot's bone hierarchy and its pose API), SkeletonModifier3D and SkeletonIK3D, BoneAttachment3D. The skeleton is a script-level
 // model in Godot's space: bones come from the scene text (bones/N/...) or from AddBone, poses are kept here and animation bone tracks write
-// them. It is NOT connected to a skinned mesh in the engine (the renderer's skeleton lives in the animation system's entities and has no
-// pose-input seam for scripts); the documented seam for that is in docs/plans/fabric/G5_PARITY.md, A2. docs/plans/fabric/G5_PARITY.md, A2.
+// them. For an imported model whose skeleton the converter bound to the engine's (the aver_skeleton property), the skinned meshes below the node are
+// posed from these poses once a frame through the engine's pose seam (Skeleton3D.Engine.cs); otherwise nothing is drawn from them.
+// docs/plans/G5_PARITY.md, A2, and docs/plans/WAVE7_SKELETON.md.
 
 namespace Aver.Fabric;
 
 /// <summary>A hierarchy of bones with rest and current poses (Godot's Skeleton3D).</summary>
-public class Skeleton3D : Node3D
+public partial class Skeleton3D : Node3D
 {
     public enum ModifierCallbackModeProcessEnum { Physics = 0, Idle = 1 }
 
@@ -270,7 +271,12 @@ public class Skeleton3D : Node3D
     private void Dirty(bool rest)
     {
         _dirtyPose = true;
-        if (rest) _dirtyRest = true;
+        _engineDirty = true;
+        if (rest)
+        {
+            _dirtyRest = true;
+            _godotOfEngine = null;   // the rests the engine mapping was built from changed
+        }
     }
 
     // A bone's parent may come later in the list, so the globals are resolved depth first.
@@ -321,11 +327,20 @@ public class Skeleton3D : Node3D
     /// <summary>Runs the modifiers that are children of this skeleton, in order, then tells followers (BoneAttachment3D) the pose changed.</summary>
     public void AdvanceModifiers(double delta)
     {
+        RefreshFromEngine();
         foreach (Node child in GetChildren())
             if (child is SkeletonModifier3D m && m.Active) m.ProcessModificationWithDelta(delta);
+        PushToEngine();   // before the one-pass overrides are dropped, so they reach the skinned meshes
+        bool cleared = false;
         for (int i = 0; i < _bones.Count; i++)
-            if (!_bones[i].OverridePersistent) _bones[i].OverrideAmount = 0;
+            if (!_bones[i].OverridePersistent)
+            {
+                cleared = cleared || _bones[i].OverrideAmount > 0;
+                _bones[i].OverrideAmount = 0;
+            }
+        bool pushedAlready = !_engineDirty;
         Dirty(false);
+        _engineDirty = !pushedAlready || cleared;   // the caches are redone, but the engine only needs a push when a pose changed
         EmitSignal(SignalName.PoseUpdated);
         EmitSignal(SignalName.SkeletonUpdated);
     }
@@ -352,6 +367,7 @@ public class Skeleton3D : Node3D
 
     internal override bool TryDynamicSet(string name, Variant value)
     {
+        if (TrySetEngineProperty(name, value)) return true;
         if (!name.StartsWith("bones/", StringComparison.Ordinal)) return false;
         string[] p = name.Split('/');
         if (p.Length != 3 || !int.TryParse(p[1], out int i) || i < 0 || i > 100000) return false;
@@ -402,6 +418,19 @@ public class SkeletonModifier3D : Node3D
     }
 
     public event Action ModificationProcessed { add => Connect(SignalName.ModificationProcessed, Callable.From(value)); remove => Disconnect(SignalName.ModificationProcessed, Callable.From(value)); }
+
+    /// <summary>A direction along a bone's own axes (Godot's SkeletonModifier3D.BoneAxis).</summary>
+    public enum BoneAxis { PlusX = 0, MinusX = 1, PlusY = 2, MinusY = 3, PlusZ = 4, MinusZ = 5 }
+
+    internal static Vector3 AxisVector(BoneAxis a) => a switch
+    {
+        BoneAxis.PlusX => new Vector3(1, 0, 0),
+        BoneAxis.MinusX => new Vector3(-1, 0, 0),
+        BoneAxis.PlusY => new Vector3(0, 1, 0),
+        BoneAxis.MinusY => new Vector3(0, -1, 0),
+        BoneAxis.PlusZ => new Vector3(0, 0, 1),
+        _ => new Vector3(0, 0, -1),
+    };
 
     /// <summary>When false the skeleton skips this modifier.</summary>
     public bool Active { get; set; } = true;

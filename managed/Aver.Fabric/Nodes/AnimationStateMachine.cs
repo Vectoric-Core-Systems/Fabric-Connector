@@ -319,6 +319,18 @@ public class AnimationNodeStateMachine : AnimationRootNode
 /// <summary>Where a state machine is and what it is doing; read and driven from scripts as <c>parameters/playback</c> (Godot's AnimationNodeStateMachinePlayback).</summary>
 public class AnimationNodeStateMachinePlayback : Resource
 {
+    public new class SignalName : Resource.SignalName
+    {
+        public static readonly StringName StateStarted = "state_started";
+        public static readonly StringName StateFinished = "state_finished";
+    }
+
+    /// <summary>Emitted with the state's name when it becomes the current one.</summary>
+    public event Action<StringName> StateStarted { add => Connect(SignalName.StateStarted, Callable.From(value)); remove => Disconnect(SignalName.StateStarted, Callable.From(value)); }
+
+    /// <summary>Emitted with the state's name when the playback leaves it for another state or the end.</summary>
+    public event Action<StringName> StateFinished { add => Connect(SignalName.StateFinished, Callable.From(value)); remove => Disconnect(SignalName.StateFinished, Callable.From(value)); }
+
     internal AnimationNodeStateMachine? Machine;
     internal string Base = "";
 
@@ -437,9 +449,20 @@ public class AnimationNodeStateMachinePlayback : Resource
         return now;
     }
 
+    // state_finished / state_started, in that order, when the current state changes (a jump, a start or a transition); the end state starts nothing.
+    private void StateChange(string from, string to)
+    {
+        // Start and End are the machine's pseudo-states: they play nothing and raise nothing.
+        static bool Real(string s) => s.Length > 0 && s != AnimationNodeStateMachine.StartState && s != AnimationNodeStateMachine.EndState;
+        if (Real(from) && from != to) EmitSignal(SignalName.StateFinished, from);
+        if (Real(to)) EmitSignal(SignalName.StateStarted, to);
+    }
+
     private void DoStart(Frame f, string state, bool reset)
     {
+        string was = _playing ? _current : "";
         _current = state;
+        StateChange(was, state);
         _playing = true;
         _fadingFrom = "";
         _path.Clear();
@@ -472,7 +495,9 @@ public class AnimationNodeStateMachinePlayback : Resource
             // No way from here: jump.
             _fadingFrom = "";
             _path.Clear();
+            string was = _current;
             _current = target;
+            StateChange(was, target);
             if (_travelReset) NodeOf(target)?.ResetState(f.Tree, f.Base + target + "/");
             if (target == AnimationNodeStateMachine.EndState) _playing = false;
         }
@@ -543,6 +568,7 @@ public class AnimationNodeStateMachinePlayback : Resource
         _fadeElapsed = 0;
         _fadeCurve = t.XfadeCurve;
         _current = to;
+        StateChange(old, to);
         if (to == AnimationNodeStateMachine.EndState)
         {
             _playing = false;

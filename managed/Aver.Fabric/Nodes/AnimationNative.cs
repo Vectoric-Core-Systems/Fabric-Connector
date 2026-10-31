@@ -122,6 +122,16 @@ internal static class PanimNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_key_args_clear(int clip, int track, int key);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_key_set_offsets(int clip, int track, int key, double start, double end);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_key_offsets(int clip, int track, int key, double[] out2);
+
+    // ---- markers (ABI version 2) ----
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_add(int clip, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, double time);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_remove(int clip, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_count(int clip);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern IntPtr aver_panim_marker_name(int clip, int index);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_time(int clip, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, out double seconds);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_set_time(int clip, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, double seconds);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_set_color(int clip, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, double r, double g, double b, double a);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_panim_marker_color(int clip, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, double[] outRgba4);
 }
 
 /// <summary>The player half of Aver.Anim.Abi.</summary>
@@ -171,6 +181,16 @@ internal static class PplayerNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_pplayer_length(int player);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_pplayer_playing_speed(int player);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_pplayer_custom_speed(int player);
+
+    // ---- sections (ABI version 2) ----
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_play_section(int player, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, double start, double end, double customBlend, double customSpeed, int fromEnd);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_play_section_markers(int player, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string startMarker, [MarshalAs(UnmanagedType.LPUTF8Str)] string endMarker, double customBlend, double customSpeed, int fromEnd);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_set_section(int player, double start, double end);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_set_section_markers(int player, [MarshalAs(UnmanagedType.LPUTF8Str)] string startMarker, [MarshalAs(UnmanagedType.LPUTF8Str)] string endMarker);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_reset_section(int player);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_has_section(int player);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_pplayer_section_start(int player);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_pplayer_section_end(int player);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_capture_track_count(int player, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_pplayer_capture_track_type(int player, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, int index);

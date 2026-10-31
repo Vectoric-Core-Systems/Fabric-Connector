@@ -310,6 +310,18 @@ target_compile_definitions(FabricTreeTest PRIVATE
 set_target_properties(FabricTreeTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricSkinTest -- wave 7 (skeleton, animation, ragdoll) through the converter on tests/fabric/data/SkinGame: a skinned glTF model's Skeleton3D bound to the
+# importer's skeleton, its LINEAR / CUBICSPLINE / STEP animations as property clips on bone paths, PhysicalBone3D nodes written as the skeleton's .ocragdoll,
+# and an Animation resource's markers saved with its clip. Runs the tool as a process, like FabricTreeTest.
+add_executable(FabricSkinTest src/FabricSkinTest.cpp)
+target_link_libraries(FabricSkinTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricSkinTest)
+target_compile_definitions(FabricSkinTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricSkinTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricCorpusPatternsTest -- the patterns two Godot demo projects showed, on tests/fabric/data/CorpusGame: children and overrides below the nodes of an
 # instanced glTF model, Godot 3 key codes and joypad numbers, libraries/ properties, a curve's _limits. Runs the tool as a process, like FabricTreeTest.
 add_executable(FabricCorpusPatternsTest src/FabricCorpusPatternsTest.cpp)

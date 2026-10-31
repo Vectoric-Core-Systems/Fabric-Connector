@@ -139,8 +139,7 @@ int main() {
     check(classOf({"Main", "Boom"}) == "SpringArm3D", "SpringArm3D");
     check(classOf({"Main", "Mirror"}) == "RemoteTransform3D", "RemoteTransform3D");
     check(classOf({"Main", "Lamp", "Seen"}) == "VisibleOnScreenEnabler3D", "VisibleOnScreenEnabler3D");
-    check(classOf({"Main", "Skeleton3D", "Look"}) == "Node3D" && propOf(w, find(w, {"Main", "Skeleton3D", "Look"}), "_class") != nullptr,
-          "a modifier the runtime lacks (LookAtModifier3D) is a Node3D carrier that names its class");
+    check(classOf({"Main", "Skeleton3D", "Look"}) == "LookAtModifier3D", "LookAtModifier3D is placed as its own class (wave 7: the runtime has it now)");
 
     // ---- the tree ----------------------------------------------------------------------------------------------------------------------
     AVER_INFO("-- the AnimationTree --");
@@ -245,11 +244,11 @@ int main() {
         check(has("\"type\":\"AnimationNodeStateMachine\"", "\"kind\":\"resource\"", "\"rating\":\"converted\""), "the state machine resource is rated converted");
         check(has("\"type\":\"AnimationNodeBlendTree\"", "\"kind\":\"resource\"", "\"rating\":\"converted\""), "the blend tree resource is rated converted");
         check(has("\"type\":\"Curve3D\"", "\"kind\":\"resource\"", "\"rating\":\"converted\""), "the curve resource is rated converted");
-        check(has("\"type\":\"Skeleton3D\"", "\"rating\":\"approximated\"", "not connected to a skinned mesh"), "Skeleton3D is approximated, with its reason");
+        check(has("\"type\":\"Skeleton3D\"", "\"rating\":\"approximated\"", "any other skeleton is script-level only and moves no vertices"), "Skeleton3D is approximated, with its reason");
         check(has("\"type\":\"Skeleton3D\"", "\"rating\":\"converted\"", "\"property\":\"bones/1/name\""), "a bone property is rated converted");
         check(has("\"type\":\"SkeletonIK3D\"", "\"rating\":\"approximated\"", "FABRIK"), "SkeletonIK3D is approximated, with its reason");
         check(has("\"type\":\"SkeletonIK3D\"", "\"rating\":\"approximated\"", "\"property\":\"override_tip_basis\""), "override_tip_basis is approximated");
-        check(has("\"type\":\"LookAtModifier3D\"", "\"rating\":\"unsupported\"", "LookAtModifier3D"), "LookAtModifier3D is unsupported");
+        check(has("\"type\":\"LookAtModifier3D\"", "\"rating\":\"approximated\"", "direct pose"), "LookAtModifier3D is approximated: the direct pose, not Godot's solve");
         check(has("\"type\":\"VisibleOnScreenEnabler3D\"", "\"rating\":\"approximated\"", "frustum"), "the on-screen enabler is approximated, with its reason");
         check(has("\"type\":\"PathFollow3D\"", "\"rating\":\"converted\"", "\"property\":\"rotation_mode\""), "PathFollow3D properties are rated converted");
         check(has("\"type\":\"SpringArm3D\"", "\"rating\":\"converted\"", "\"property\":\"shape\""), "SpringArm3D shape is rated converted");

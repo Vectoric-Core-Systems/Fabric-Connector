@@ -228,7 +228,7 @@ public class GeometryInstance3D : VisualInstance3D
 
 /// <summary>A node that draws a mesh (Godot's MeshInstance3D). On entering the tree it gives its entity a mesh renderer for
 /// <see cref="Mesh"/>'s asset path.</summary>
-public class MeshInstance3D : GeometryInstance3D
+public partial class MeshInstance3D : GeometryInstance3D
 {
     private Mesh? _mesh;
 
@@ -244,6 +244,7 @@ public class MeshInstance3D : GeometryInstance3D
     public void SetBlendShapeValueByName(string name, float value)
     {
         _blendShapes[name] = value;
+        ShapeIndex(name);
         if (NodeHost.Current.IsEngine && Self.IsValid) Self.SetMorphWeight(name, value);
     }
 
@@ -251,9 +252,21 @@ public class MeshInstance3D : GeometryInstance3D
 
     internal override bool TryDynamicSet(string name, Variant value)
     {
+        if (name == "aver_blend_shapes") { SetShapeNames(value.AsString()); return true; }   // the mesh's blend shape names, '|' between them
+        if (name == "aver_skinned") { _skinned = value.AsBool(); return true; }   // the converter marks the meshes the importer skinned to a bound Skeleton3D
         if (!name.StartsWith("blend_shapes/", StringComparison.Ordinal)) return base.TryDynamicSet(name, value);
         SetBlendShapeValueByName(name["blend_shapes/".Length..], value.AsSingle());
         return true;
+    }
+
+    // Skinning (wave 7, F13): a skinned mesh below a Skeleton3D that is bound to the engine's skeleton is posed by that node.
+    private bool _skinned;
+
+    private void BindSkin()
+    {
+        if (!_skinned || !NodeHost.Current.IsEngine || GetParent() is not Skeleton3D sk || sk.EngineSkeletonAsset.Length == 0) return;
+        foreach (Entity e in RenderEntities)
+            if (e.IsValid && e.HasComponent(Component.MeshRenderer)) sk.AttachSkin(e);
     }
 
     internal override bool TryDynamicGet(string name, out Variant value)
@@ -274,7 +287,11 @@ public class MeshInstance3D : GeometryInstance3D
     internal static string? MeshAssetOf(Mesh? mesh) =>
         mesh == null ? null : mesh.EngineAssetPath ?? (mesh.ResourcePath.Length == 0 ? null : AssetPath(mesh.ResourcePath));
 
-    private void ApplyMesh() => PushMeshAndMaterial(MeshAssetOf(_mesh));
+    private void ApplyMesh()
+    {
+        PushMeshAndMaterial(MeshAssetOf(_mesh));
+        BindSkin();
+    }
 
     internal override void OnMaterialOverrideChanged() => ApplyMesh();
 

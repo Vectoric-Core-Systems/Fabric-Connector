@@ -21,6 +21,8 @@ struct ModelResult {
     std::vector<ModelPart> parts;
     std::vector<std::string> notes;   // anything the importer dropped, for the report
     double rootScale = 1.0;           // the import's nodes/root_scale when nodes/apply_root_scale is on: already applied to the meshes and the parts' positions; the node tree applies it to translations
+    // The skeletons the importer wrote beside the meshes (content-relative .ocskel paths), found by the converter in the output folder; skinned meshes bind to them.
+    std::vector<std::string> skeletons;
 };
 
 // What the converter borrows from AverAssetC.cpp (the model importer lives in that file's anonymous namespace).

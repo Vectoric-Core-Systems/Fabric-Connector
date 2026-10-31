@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-700 public types and 7632 public members, read from `managed/Aver.Fabric/` (134 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+720 public types and 7838 public members, read from `managed/Aver.Fabric/` (139 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -74,6 +74,19 @@
 - `public static readonly StringName Canceled`
 - `public static readonly StringName CustomAction`
 
+### AimModifier3D
+
+`public class AimModifier3D : BoneConstraint3D` - Points a bone's forward axis at a reference (Godot's AimModifier3D).
+
+- `public void SetForwardAxis(int index, BoneAxis axis)`
+- `public BoneAxis GetForwardAxis(int index)`
+- `public void SetUseEuler(int index, bool on)`
+- `public bool IsUsingEuler(int index)`
+- `public void SetPrimaryRotationAxis(int index, Vector3.Axis axis)`
+- `public Vector3.Axis GetPrimaryRotationAxis(int index)`
+- `public void SetUseSecondaryRotation(int index, bool on)`
+- `public bool IsUsingSecondaryRotation(int index)`
+
 ### AnimatableBody3D
 
 `public class AnimatableBody3D : StaticBody3D` - A body moved by script or animation that pushes others (Godot's AnimatableBody3D).
@@ -84,6 +97,10 @@
 
 `public class Animation : Resource` - One animation: tracks of keys, a length and a loop mode (Godot's Animation).
 
+- `public void CopyTrack(int trackIdx, Animation toAnimation)` - Copies a track (path, type, interpolation, update mode, flags and every key with its transition, handles, arguments and offsets) to the end of another animation.
+- `public bool TrackIsCompressed(int trackIdx)` - Always false: tracks are stored plainly (compression only saves memory in Godot).
+- `public void Compress(uint pageSize = 8192, uint fps = 120, float splitTolerance = 4.0f)` - Godot packs the 3D tracks into pages to save memory and drops nothing visible; the values here are unchanged, so this does nothing.
+- `public void Optimize(float allowedVelocityErr = 0.01f, float allowedAngularErr = 0.01f, int precision = 3)` - Removes the keys of linear position, rotation and scale tracks that interpolation between their neighbours reproduces: within allowedVelocityErr (metres for position, a ratio for scale) or allowedAngularErr (radians for rotation).
 - `public Animation()`
 - `public override Resource Duplicate(bool subresources = false)`
 - `public void Clear()` - Removes every track and resets the length and loop mode.
@@ -91,6 +108,16 @@
 - `public LoopModeEnum LoopMode { get; set; }`
 - `public float Step { get; set; }`
 - `public bool CaptureIncluded { get; }` - True when a track is in capture update mode.
+- `public void AddMarker(StringName name, double time)` - Adds a marker at time seconds.
+- `public void RemoveMarker(StringName name)`
+- `public bool HasMarker(StringName name)`
+- `public double GetMarkerTime(StringName name)` - The time of a marker; 0 (with an error) when there is none of that name.
+- `public Color GetMarkerColor(StringName name)`
+- `public void SetMarkerColor(StringName name, Color color)`
+- `public string[] GetMarkerNames()` - The names of the markers, ordered by time.
+- `public StringName GetMarkerAtTime(double time)` - The marker at exactly time (within a microsecond), else an empty name.
+- `public StringName GetNextMarker(double time)` - The first marker after time, else an empty name.
+- `public StringName GetPrevMarker(double time)` - The last marker before time, else an empty name.
 - `public int GetTrackCount()`
 - `public int AddTrack(TrackType type, int atPosition = -1)`
 - `public void RemoveTrack(int trackIdx)`
@@ -416,6 +443,7 @@ Values: `Interpolated = 0`, `Discrete = 1`, `DiscreteCarry = 2`
 `public class AnimationNodeBlendTree : AnimationRootNode` - A graph of blend nodes wired from an output (Godot's AnimationNodeBlendTree).
 
 - `public const string OutputName = "output"`
+- `public event Action<StringName> NodeChanged` - Emitted with a node's name when it is added, removed, renamed (the new name) or has an input wired or unwired.
 - `public Vector2 GraphOffset { get; set; }`
 - `public AnimationNodeBlendTree()`
 - `public override string GetCaption()`
@@ -438,11 +466,32 @@ Values: `Interpolated = 0`, `Discrete = 1`, `DiscreteCarry = 2`
 
 Values: `Ok = 0`, `NoInput = 1`, `NoInputIndex = 2`, `NoOutput = 3`, `SameNode = 4`, `ConnectionExists = 5`
 
+### AnimationNodeBlendTree.SignalName
+
+`public new class SignalName : AnimationNode.SignalName`
+
+- `public static readonly StringName NodeChanged`
+
 ### AnimationNodeEndState
 
 `public class AnimationNodeEndState : AnimationRootNode` - The state that ends a machine: reaching it stops the playback (Godot's AnimationNodeEndState).
 
 - `public override string GetCaption()`
+
+### AnimationNodeExtension
+
+`public class AnimationNodeExtension : AnimationNode` - The base of a custom animation node written in script (Godot's AnimationNodeExtension).
+
+- `public override string GetCaption()`
+- `public virtual float[] _ProcessAnimationNode(double[] playbackInfo, bool testOnly)` - Overridden by scripts to process one pass; the result is not used.
+- `public static bool IsLooping(float[] nodeInfo)` - Whether the node info (the array a processing pass returns) says the node loops.
+- `public static float GetRemainingTime(float[] nodeInfo, bool breakLoop = false)` - The time left in the node, from its info array (length minus position).
+
+### AnimationNodeExtension.PlaybackInfoIndex
+
+`public enum PlaybackInfoIndex`
+
+Values: `Time = 0`, `Delta = 1`, `SeekTime = 2`, `IsExternalSeeking = 3`, `Looped = 4`, `Weight = 5`
 
 ### AnimationNodeOneShot
 
@@ -526,6 +575,8 @@ Values: `Root = 0`, `Nested = 1`, `Grouped = 2`
 
 `public class AnimationNodeStateMachinePlayback : Resource` - Where a state machine is and what it is doing; read and driven from scripts as parameters/playback (Godot's AnimationNodeStateMachinePlayback).
 
+- `public event Action<StringName> StateStarted` - Emitted with the state's name when it becomes the current one.
+- `public event Action<StringName> StateFinished` - Emitted with the state's name when the playback leaves it for another state or the end.
 - `public void Travel(StringName toNode, bool resetOnTeleport = true)` - Goes to a state through the transitions (the shortest way).
 - `public void Start(StringName node, bool reset = true)` - Starts playing at a state, at once on the next pass.
 - `public void Next()` - Takes the next transition now: the travel path's next step or the first automatic transition whose conditions hold.
@@ -536,6 +587,13 @@ Values: `Root = 0`, `Nested = 1`, `Grouped = 2`
 - `public float GetCurrentLength()`
 - `public StringName GetFadingFromNode()`
 - `public StringName[] GetTravelPath()` - The states travel() will pass through next, in order, ending at its target.
+
+### AnimationNodeStateMachinePlayback.SignalName
+
+`public new class SignalName : Resource.SignalName`
+
+- `public static readonly StringName StateStarted`
+- `public static readonly StringName StateFinished`
 
 ### AnimationNodeStateMachineTransition
 
@@ -638,6 +696,16 @@ Values: `Immediate = 0`, `Sync = 1`, `AtEnd = 2`
 - `public float GetPlayingSpeed()`
 - `public void Play(StringName? name = null, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)` - Plays an animation.
 - `public void PlayBackwards(StringName? name = null, double customBlend = -1)` - Plays an animation backwards from its end.
+- `public void PlaySection(StringName? name = null, double startTime = -1, double endTime = -1, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)` - Plays startTime to endTime of an animation (a negative time is the animation's start or end).
+- `public void PlaySectionBackwards(StringName? name = null, double startTime = -1, double endTime = -1, double customBlend = -1)`
+- `public void PlaySectionWithMarkers(StringName? name = null, StringName? startMarker = null, StringName? endMarker = null, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false)` - Plays between two of the animation's markers (an empty marker name is the animation's start or end).
+- `public void PlaySectionWithMarkersBackwards(StringName? name = null, StringName? startMarker = null, StringName? endMarker = null, double customBlend = -1)`
+- `public void SetSection(double startTime = -1, double endTime = -1)` - Changes the section of the animation that is playing or assigned.
+- `public void SetSectionWithMarkers(StringName? startMarker = null, StringName? endMarker = null)`
+- `public void ResetSection()` - Plays the whole animation again.
+- `public bool HasSection()`
+- `public float GetSectionStartTime()`
+- `public float GetSectionEndTime()`
 - `public void PlayWithCapture(StringName? name = null, double duration = -1.0, double customBlend = -1, float customSpeed = 1.0f, bool fromEnd = false, Tween.TransitionType transType = Tween.TransitionType.Linear, Tween.EaseType easeType = Tween.EaseType.In)` - Plays an animation after capturing the current values of its capture-mode tracks and fading from them over duration.
 - `public void Stop(bool keepState = false)`
 - `public void Pause()`
@@ -1889,6 +1957,45 @@ Values: `Disabled = 0`, `Alpha = 1`, `AlphaScissor = 2`, `AlphaHash = 3`, `Alpha
 - `public Skeleton3D? GetSkeleton()` - The skeleton it follows.
 - `public void OnSkeletonUpdate()` - Moves the node to the bone now.
 
+### BoneConstraint3D
+
+`public class BoneConstraint3D : SkeletonModifier3D` - The base of the modifiers that apply a bone from a reference bone or node, one setting per apply bone (Godot's BoneConstraint3D).
+
+- `public int SettingCount { get; set; }`
+- `public int GetSettingCount()`
+- `public void SetSettingCount(int count)`
+- `public void ClearSetting(int index)`
+- `public void SetAmount(int index, float amount)`
+- `public float GetAmount(int index)`
+- `public void SetApplyBoneName(int index, StringName name)`
+- `public StringName GetApplyBoneName(int index)`
+- `public void SetApplyBone(int index, int bone)`
+- `public int GetApplyBone(int index)`
+- `public void SetReferenceBoneName(int index, StringName name)`
+- `public StringName GetReferenceBoneName(int index)`
+- `public void SetReferenceBone(int index, int bone)`
+- `public int GetReferenceBone(int index)`
+- `public void SetReferenceNode(int index, NodePath path)`
+- `public NodePath GetReferenceNode(int index)`
+- `public override void _ProcessModification()`
+
+### BoneConstraint3D.ReferenceTypeEnum
+
+`public enum ReferenceTypeEnum`
+
+Values: `Bone = 0`, `Node = 1`
+
+### BoneConstraint3D.Setting
+
+`public class Setting` - One apply bone with its reference and amount; subclasses add their own fields.
+
+- `public string ApplyBone`
+- `public string ReferenceBone`
+- `public ReferenceTypeEnum ReferenceType`
+- `public NodePath ReferenceNode`
+- `public float Amount`
+- `public Dictionary<string, Variant> Extra`
+
 ### BoxContainer
 
 `public class BoxContainer : Container` - Lays children out in a row or a column (Godot's BoxContainer).
@@ -2779,11 +2886,55 @@ Values: `ShrinkBegin = 0`, `Fill = 1`, `Expand = 2`, `ExpandFill = 3`, `ShrinkCe
 
 Values: `Inherited = 3`, `Auto = 0`, `Ltr = 1`, `Rtl = 2`
 
+### ConvertTransformModifier3D
+
+`public class ConvertTransformModifier3D : BoneConstraint3D` - Maps a value of the reference's transform onto a value of the bone's, through a range (Godot's ConvertTransformModifier3D).
+
+- `public void SetApplyTransformMode(int index, TransformMode mode)`
+- `public TransformMode GetApplyTransformMode(int index)`
+- `public void SetApplyAxis(int index, Vector3.Axis axis)`
+- `public Vector3.Axis GetApplyAxis(int index)`
+- `public void SetApplyRangeMin(int index, float v)`
+- `public float GetApplyRangeMin(int index)`
+- `public void SetApplyRangeMax(int index, float v)`
+- `public float GetApplyRangeMax(int index)`
+- `public void SetReferenceTransformMode(int index, TransformMode mode)`
+- `public TransformMode GetReferenceTransformMode(int index)`
+- `public void SetReferenceAxis(int index, Vector3.Axis axis)`
+- `public Vector3.Axis GetReferenceAxis(int index)`
+- `public void SetReferenceRangeMin(int index, float v)`
+- `public float GetReferenceRangeMin(int index)`
+- `public void SetReferenceRangeMax(int index, float v)`
+- `public float GetReferenceRangeMax(int index)`
+
+### ConvertTransformModifier3D.TransformMode
+
+`public enum TransformMode`
+
+Values: `Position = 0`, `Rotation = 1`, `Scale = 2`
+
 ### ConvexPolygonShape3D
 
 `public class ConvexPolygonShape3D : Shape3D`
 
 - `public Vector3[] Points { get; set; }`
+
+### CopyTransformModifier3D
+
+`public class CopyTransformModifier3D : BoneConstraint3D` - Copies a reference's position, rotation or scale onto a bone, per axis (Godot's CopyTransformModifier3D).
+
+- `public const int TransformFlagPosition`
+- `public const int AxisFlagX`
+- `public void SetCopyFlags(int index, int flags)`
+- `public int GetCopyFlags(int index)`
+- `public void SetAxisFlags(int index, int flags)`
+- `public int GetAxisFlags(int index)`
+- `public void SetInvertFlags(int index, int flags)`
+- `public int GetInvertFlags(int index)`
+- `public void SetRelative(int index, bool relative)`
+- `public bool IsRelative(int index)`
+- `public void SetAdditive(int index, bool additive)`
+- `public bool IsAdditive(int index)`
 
 ### Corner
 
@@ -4767,6 +4918,36 @@ Values: `Disabled = 0`, `Subdiv4 = 1`, `Subdiv8 = 2`, `Subdiv16 = 3`, `Subdiv32 
 
 Values: `Always = 0`, `OnHover = 1`, `Never = 2`
 
+### LookAtModifier3D
+
+`public class LookAtModifier3D : SkeletonModifier3D` - Turns a bone to face a node (Godot's LookAtModifier3D).
+
+- `public NodePath TargetNode { get; set; }`
+- `public StringName BoneName { get; set; }`
+- `public BoneAxis ForwardAxis { get; set; }`
+- `public Vector3.Axis PrimaryRotationAxis { get; set; }`
+- `public bool UseSecondaryRotation { get; set; }`
+- `public OriginFromEnum OriginFrom { get; set; }`
+- `public StringName OriginBoneName { get; set; }`
+- `public NodePath OriginExternalNode { get; set; }`
+- `public Vector3 OriginOffset { get; set; }`
+- `public float OriginSafeMargin { get; set; }`
+- `public float Duration { get; set; }` - Seconds to turn to a new target (0: at once); approximated by exponential smoothing.
+- `public bool UseAngleLimitation { get; set; }`
+- `public float PrimaryLimitAngle { get; set; }` - The widest the bone may turn from its rest direction, radians (the symmetric primary limit).
+- `public bool SymmetryLimitation { get; set; }`
+- `public Tween.TransitionType TransitionType { get; set; }`
+- `public Tween.EaseType EaseType { get; set; }`
+- `public float GetInterpolationRemaining()`
+- `public bool IsInterpolating()`
+- `public override void _ProcessModification()`
+
+### LookAtModifier3D.OriginFromEnum
+
+`public enum OriginFromEnum`
+
+Values: `Self = 0`, `SpecificBone = 1`, `ExternalNode = 2`
+
 ### MarginContainer
 
 `public class MarginContainer : Container` - Insets its children by four margins (Godot's MarginContainer; the margins are theme constants margin_left, margin_top, ...).
@@ -4984,6 +5165,14 @@ Values: `Points = 0`, `Lines = 1`, `LineStrip = 2`, `Triangles = 3`, `TriangleSt
 - `public int GetSurfaceOverrideMaterialCount()`
 - `public Material? GetSurfaceOverrideMaterial(int surface)`
 - `public void SetSurfaceOverrideMaterial(int surface, Material? material)`
+- `public NodePath SkeletonPath { get; set; }` - The path to the Skeleton3D that poses this mesh (default "..", the node's parent).
+- `public Skin? Skin { get; set; }`
+- `public SkinReference? GetSkinReference()`
+- `public int GetBlendShapeCount()`
+- `public int FindBlendShapeByName(StringName name)` - The index of a blend shape by name, or -1 (a name the node has not seen is not a blend shape of its mesh).
+- `public float GetBlendShapeValue(int blendShape)`
+- `public void SetBlendShapeValue(int blendShape, float value)`
+- `public string GetBlendShapeName(int blendShape)`
 
 ### MeshLibrary
 
@@ -6190,6 +6379,56 @@ Values: `Region = 0`, `Link = 1`
 `public enum Monitor` - Godot's Performance.Monitor.
 
 Values: `TimeFps = 0`, `TimeProcess = 1`, `TimePhysicsProcess = 2`, `TimeNavigationProcess = 3`, `MemoryStatic = 4`, `MemoryStaticMax = 5`, `MemoryMessageBufferMax = 6`, `ObjectCount = 7`, `ObjectResourceCount = 8`, `ObjectNodeCount = 9`, `ObjectOrphanNodeCount = 10`, `RenderTotalObjectsInFrame = 11`, `RenderTotalPrimitivesInFrame = 12`, `RenderTotalDrawCallsInFrame = 13`, `RenderVideoMemUsed = 14`, `RenderTextureMemUsed = 15`, `RenderBufferMemUsed = 16`, `Physics2DActiveObjects = 17`, `Physics2DCollisionPairs = 18`, `Physics2DIslandCount = 19`, `Physics3DActiveObjects = 20`, `Physics3DCollisionPairs = 21`, `Physics3DIslandCount = 22`, `AudioOutputLatency = 23`, `NavigationActiveMaps = 24`, `NavigationRegionCount = 25`, `NavigationAgentCount = 26`, `NavigationLinkCount = 27`, `NavigationPolygonCount = 28`, `NavigationEdgeCount = 29`, `NavigationEdgeMergeCount = 30`, `NavigationEdgeConnectionCount = 31`, `NavigationEdgeFreeCount = 32`, `NavigationObstacleCount = 33`, `PipelineCompilationsCanvas = 34`, `PipelineCompilationsMesh = 35`, `PipelineCompilationsSurface = 36`, `PipelineCompilationsDraw = 37`, `PipelineCompilationsSpecialization = 38`, `Navigation2DActiveMaps = 39`, `Navigation2DRegionCount = 40`, `Navigation2DAgentCount = 41`, `Navigation2DLinkCount = 42`, `Navigation2DPolygonCount = 43`, `Navigation2DEdgeCount = 44`, `Navigation2DEdgeMergeCount = 45`, `Navigation2DEdgeConnectionCount = 46`, `Navigation2DEdgeFreeCount = 47`, `Navigation2DObstacleCount = 48`, `Navigation3DActiveMaps = 49`, `Navigation3DRegionCount = 50`, `Navigation3DAgentCount = 51`, `Navigation3DLinkCount = 52`, `Navigation3DPolygonCount = 53`, `Navigation3DEdgeCount = 54`, `Navigation3DEdgeMergeCount = 55`, `Navigation3DEdgeConnectionCount = 56`, `Navigation3DEdgeFreeCount = 57`, `Navigation3DObstacleCount = 58`, `Max = 59`
+
+### PhysicalBone3D
+
+`public class PhysicalBone3D : PhysicsBody3D` - One bone of a ragdoll (Godot's PhysicalBone3D).
+
+- `public StringName BoneName { get; set; }`
+- `public JointTypeEnum JointType { get; set; }`
+- `public Transform3D JointOffset { get; set; }`
+- `public Transform3D BodyOffset { get; set; }`
+- `public float Mass { get; set; }`
+- `public float Friction { get; set; }`
+- `public float Bounce { get; set; }`
+- `public float GravityScale { get; set; }`
+- `public bool CanSleep { get; set; }`
+- `public bool CustomIntegrator { get; set; }`
+- `public DampMode LinearDampMode { get; set; }`
+- `public DampMode AngularDampMode { get; set; }`
+- `public float LinearDamp { get; set; }`
+- `public float AngularDamp { get; set; }`
+- `public Vector3 LinearVelocity { get; set; }`
+- `public Vector3 AngularVelocity { get; set; }`
+- `public Variant GetJointConstraint(string name)` - The joint's constraint values as the scene stores them (joint_constraints/swing_span and so on); the converter turns the ones the engine has into the .ocragdoll limits.
+- `public int GetBoneId()`
+- `public bool IsSimulatingPhysics()` - True while the skeleton's ragdoll is running.
+- `public bool GetSimulatePhysics()`
+- `public void ApplyCentralImpulse(Vector3 impulse)` - Pushes the bone's part; a bone the ragdoll has no part for passes it to the nearest ancestor part.
+- `public void ApplyImpulse(Vector3 impulse, Vector3 position = default)` - The engine applies an impulse at the part's centre, so the point is not used.
+
+### PhysicalBone3D.DampMode
+
+`public enum DampMode`
+
+Values: `Combine = 0`, `Replace = 1`
+
+### PhysicalBone3D.JointTypeEnum
+
+`public enum JointTypeEnum`
+
+Values: `None = 0`, `Pin = 1`, `Cone = 2`, `Hinge = 3`, `Slider = 4`, `Joint6Dof = 5`
+
+### PhysicalBoneSimulator3D
+
+`public class PhysicalBoneSimulator3D : SkeletonModifier3D` - The node that runs a skeleton's physical bones (Godot 4.3).
+
+- `public PhysicalBoneSimulator3D()`
+- `public void PhysicalBonesStartSimulation(Collections.Array<StringName>? bones = null)`
+- `public void PhysicalBonesStopSimulation()`
+- `public bool IsSimulatingPhysics()`
+- `public void PhysicalBonesAddCollisionException(Rid body)`
+- `public void PhysicalBonesRemoveCollisionException(Rid body)`
 
 ### PhysicalSkyMaterial
 
@@ -7481,6 +7720,12 @@ Values: `Left = 0`, `Top = 1`, `Right = 2`, `Bottom = 3`
 
 `public class Skeleton3D : Node3D` - A hierarchy of bones with rest and current poses (Godot's Skeleton3D).
 
+- `public void PhysicalBonesStartSimulation(Collections.Array<StringName>? bones = null)` - Makes the skeleton a ragdoll (Godot 4.2's Skeleton3D method; 4.3 moved it to PhysicalBoneSimulator3D).
+- `public void PhysicalBonesStopSimulation()`
+- `public void PhysicalBonesAddCollisionException(Rid body)` - Bodies the ragdoll never collides with; the engine's ragdoll parts never collide with each other, and exceptions against other bodies are not kept.
+- `public void PhysicalBonesRemoveCollisionException(Rid body)`
+- `public bool IsSimulatingPhysics()`
+- `public string EngineSkeletonAsset { get; }` - The content path of the engine skeleton (.ocskel) the imported model's skinned meshes are bound to; empty when the node is not bound.
 - `public event Action SkeletonUpdated`
 - `public event Action PoseUpdated`
 - `public event Action<long> BoneEnabledChanged`
@@ -7524,6 +7769,17 @@ Values: `Left = 0`, `Top = 1`, `Right = 2`, `Bottom = 3`
 - `public Variant GetBoneMeta(int boneIdx, StringName key)`
 - `public void ForceUpdateAllBoneTransforms()` - Recomputes the global poses now (they are otherwise recomputed when read) and tells followers.
 - `public void AdvanceModifiers(double delta)` - Runs the modifiers that are children of this skeleton, in order, then tells followers (BoneAttachment3D) the pose changed.
+- `public StringName[] GetBoneMetaList(int boneIdx)`
+- `public bool HasBoneMeta(int boneIdx, StringName key)`
+- `public StringName GetConcatenatedBoneNames()` - The bone names joined by commas, in bone order (Godot's get_concatenated_bone_names).
+- `public void UnparentBoneAndRest(int boneIdx)` - Takes the bone out of its parent's chain and keeps its place in the world: the rest becomes its global rest.
+- `public Skin CreateSkinFromRestTransforms()` - A skin whose binds are the inverses of the bones' global rest poses.
+- `public SkinReference RegisterSkin(Skin skin)` - The skin as bound to this skeleton.
+- `public void ForceUpdateBoneChildTransform(int boneIdx)` - Recomputes the global poses of the children of a bone; poses are always recomputed when read, so this only tells followers.
+- `public void Advance(double delta)` - Runs the modifiers once for delta seconds now (Godot's advance).
+- `public bool AnimatePhysicalBones { get; set; }` - Stored: physical bones follow the animation through the engine's ragdoll, which has no per-bone animation switch.
+- `public void SetAnimatePhysicalBones(bool enabled)`
+- `public bool GetAnimatePhysicalBones()`
 
 ### Skeleton3D.ModifierCallbackModeProcessEnum
 
@@ -7571,11 +7827,40 @@ Values: `Physics = 0`, `Idle = 1`
 - `public Skeleton3D? GetSkeleton()`
 - `public virtual void _ProcessModification()` - Overridden by modifiers: edit the skeleton's pose here.
 
+### SkeletonModifier3D.BoneAxis
+
+`public enum BoneAxis` - A direction along a bone's own axes (Godot's SkeletonModifier3D.BoneAxis).
+
+Values: `PlusX = 0`, `MinusX = 1`, `PlusY = 2`, `MinusY = 3`, `PlusZ = 4`, `MinusZ = 5`
+
 ### SkeletonModifier3D.SignalName
 
 `public new class SignalName : Node3D.SignalName`
 
 - `public static readonly StringName ModificationProcessed`
+
+### Skin
+
+`public class Skin : Resource` - The bones a mesh is bound to and their bind poses (Godot's Skin).
+
+- `public void SetBindCount(int count)`
+- `public int GetBindCount()`
+- `public void AddBind(int bone, Transform3D pose)`
+- `public void AddNamedBind(StringName name, Transform3D pose)`
+- `public void SetBindBone(int bindIndex, int bone)`
+- `public int GetBindBone(int bindIndex)`
+- `public void SetBindName(int bindIndex, StringName name)`
+- `public StringName GetBindName(int bindIndex)`
+- `public void SetBindPose(int bindIndex, Transform3D pose)`
+- `public Transform3D GetBindPose(int bindIndex)`
+- `public void ClearBinds()`
+
+### SkinReference
+
+`public class SkinReference : RefCounted` - A skin as bound to one skeleton (Godot's SkinReference).
+
+- `public Skin? GetSkin()`
+- `public Rid GetSkeleton()`
 
 ### Sky
 
