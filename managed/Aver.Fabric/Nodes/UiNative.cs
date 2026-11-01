@@ -265,6 +265,8 @@ internal static class UiNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern ulong aver_ui_image_acquire([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8Path);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_image_release(ulong id);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_size(ulong id, int[] outWH);
+    // A host's call, never Fabric's: here so a test's table lands in the very library Fabric calls (this assembly's resolver can load another copy).
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_image_host(IntPtr acquire, IntPtr release, IntPtr size, IntPtr use);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void aver_ui_textured_rect(float x, float y, float w, float h, ulong texture, float u0, float v0, float u1, float v1, uint rgba);
 }

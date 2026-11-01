@@ -24,19 +24,22 @@ static class UiImageTests
     // An Aver.UI.Abi from before the image service has no table to install (the library beside the tests is replaced only when the process has not loaded it yet).
     private static bool HasImageTable()
     {
-        try { aver_ui_set_image_host(null, null, null, null); return true; }
+        try { UiNative.aver_ui_set_image_host(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero); return true; }
         catch (EntryPointNotFoundException) { return false; }
     }
 
     // ---- a fake image table, installed in the real library ----
+    // Through Fabric's own binding: a DllImport of this assembly can resolve to another copy of the library, whose table Fabric would never see.
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate ulong AcquireFn([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void ReleaseFn(ulong id);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SizeFn(ulong id, IntPtr outWH);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate ulong UseFn([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
 
-    [DllImport("Aver.UI.Abi", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void aver_ui_set_image_host(AcquireFn? acquire, ReleaseFn? release, SizeFn? size, UseFn? use);
+    private static void aver_ui_set_image_host(AcquireFn? acquire, ReleaseFn? release, SizeFn? size, UseFn? use) =>
+        UiNative.aver_ui_set_image_host(Ptr(acquire), Ptr(release), Ptr(size), Ptr(use));
+
+    private static IntPtr Ptr(Delegate? d) => d == null ? IntPtr.Zero : Marshal.GetFunctionPointerForDelegate(d);
 
     private static readonly List<string> s_acquired = new();
     private static readonly List<ulong> s_released = new();
