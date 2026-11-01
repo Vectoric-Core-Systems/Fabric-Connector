@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-778 public types and 8383 public members, read from `managed/Aver.Fabric/` (150 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+778 public types and 8384 public members, read from `managed/Aver.Fabric/` (150 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -3634,6 +3634,7 @@ Values: `Xyz = 0`, `Xzy = 1`, `Yxz = 2`, `Yzx = 3`, `Zxy = 4`, `Zyx = 5`
 
 - `public const string ClassName = "FabricGameMode"` - The registry name the converter writes as the project's GAME.MODE.
 - `public override void OnBeginPlay(BeginReason reason)`
+- `public override void OnTick(float dt)`
 - `public override void OnPostLogin(Entity controller)`
 - `public override void OnEndPlay(EndReason reason)`
 
