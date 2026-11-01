@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <sstream>
@@ -419,6 +420,21 @@ int main() {
                   resourceRated("CurveTexture", "converted") && resourceRated("CanvasTexture", "approximated"),
               "every procedural texture class is reported, noise as approximated");
         check(rated("rendering/textures/default_filters/anisotropic_filtering_level", "converted"), "the project's anisotropy setting is reported");
+    }
+
+    // The plan's target for E1: every .webp of the 32-demo corpus decodes. The corpus is not part of this repository; the check runs when AVER_GODOT_CORPUS names it (read only).
+    if (const char* corpus = std::getenv("AVER_GODOT_CORPUS"); corpus && *corpus) {
+        AVER_INFO("-- every .webp under {} --", corpus);
+        size_t files = 0, bad = 0;
+        for (std::filesystem::recursive_directory_iterator it(corpus, ec), end; it != end; it.increment(ec)) {
+            if (ec) break;
+            if (!it->is_regular_file(ec) || it->path().extension() != ".webp") continue;
+            ++files;
+            ImageData img;
+            std::string why;
+            if (!decodeImage(it->path().string(), img, &why) || !img.valid()) { ++bad; AVER_ERROR("  cannot decode {}: {}", it->path().string(), why); }
+        }
+        check(files > 0 && bad == 0, "all " + std::to_string(files) + " .webp files of the corpus decode (" + std::to_string(bad) + " do not)");
     }
 
     AVER_INFO("FabricWave2Test: {} checks, {} failures", g_checks, g_failures);

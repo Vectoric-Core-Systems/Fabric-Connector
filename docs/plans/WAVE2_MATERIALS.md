@@ -1,6 +1,8 @@
 # Wave 2: images, textures and materials (Fabric side)
 
-Status: built and tested headless on branch `parity/wave-2`. The engine side is in the engine repository's `docs/plans/GODOT_PARITY.md` (wave 2) and `docs/ABI.md` ("Finding an instance, sampler state, and the FX record's texture decode"), on its branch `parity/wave-2b`. Items: P1 sampler state, P2 surface material overrides, P14 script material parameters, F26 procedural texture resources and texture aliases, F35 smaller BaseMaterial3D conversions, E8 runtime `Image` / `ImageTexture`. E1 (WebP) is done in the main session, not here.
+Status: built and tested headless on branch `parity/wave-2`. The engine side is in the engine repository's `docs/plans/GODOT_PARITY.md` (wave 2) and `docs/ABI.md` ("Finding an instance, sampler state, and the FX record's texture decode"), on its branch `parity/wave-2b`. Items: P1 sampler state, P2 surface material overrides, P14 script material parameters, F26 procedural texture resources and texture aliases, F35 smaller BaseMaterial3D conversions, E8 runtime `Image` / `ImageTexture`, and the converter half of E1 (the engine's loader already decodes WebP, SVG and OpenEXR).
+
+**E1 in the converter.** `.webp`, `.svg` and `.exr` pictures are copied (`copyTexture`) and cooked into materials (`loadImage`) like PNG, after the engine's loader has been shown to decode each one (an unreadable file is reported unsupported and the slot stays empty). WebP is rated converted; SVG (rasterised at its own size, no text or filters) and OpenEXR (read as 8 bits a channel) are approximated. Every `.webp` under the 32-demo corpus (87 files) decodes: `FabricWave2Test` checks them when `AVER_GODOT_CORPUS` names the corpus. The test builds its pictures from reference-encoder vectors (lossy, lossless, lossy with alpha, lossless with alpha) and a broken file.
 
 The rule of the plan holds: the engine gained neutral capabilities with unchanged defaults (a sampler word in the `.ocmat` FX record, an emissive scale, a channel choice, a per-entity override list, runtime textures); every Godot value and mapping below is this repository's.
 
@@ -39,8 +41,11 @@ On a mesh with one surface, `surface_material_override/0` is the `material_overr
 - `Aver.Fabric.Tests`, `Wave2Tests.cs`: Image pixels, blit, resize, convert and PNG; ImageTexture with a recording host; gradient, curve, atlas, noise and canvas textures; the material push with a recording backend (find by name, handle caching, pending changes, stale handles, texture slots); the FX read-back; the surface-override names.
 - `tests/fabric` `FabricWave2Test` on `tests/fabric/data/Wave2Game` (the converter as a process, real PNGs written over the fixture's stand-ins): sampler, emission, channel and sRGB flags in the `.ocmat`; the baked gradient, noise, atlas, canvas and curve pictures decoded and checked; the surface overrides in the level; the project's anisotropy; the report ratings. `FabricConvertTest` and `FabricMaterialFxTest` were updated for the emissive scale and the converted texture filter.
 
+Counts at the time of writing: `Aver.Fabric.Tests` 6220 checks, `FabricWave2Test` 54 checks, the 36 tests of the Fabric ctest all passing. The 32-demo reconversion (dry run) against the wave 7 baseline: unsupported rows fell in every demo that had any texture or surface-override row (for example `surface_material_override` unsupported 144 to 0, `.webp` textures unsupported 69 to 0, `Texture2D` resource rows unsupported 108 to 8). The script compile errors per demo fell or stayed the same, but the baseline (`parity-w7`) was converted from the wave 7 branch alone, so that fall is mostly the waves merged into 08-gdint since, not wave 2.
+
 ## Headed checks for the owner
 
+- A WebP-textured level (any corpus demo): the textures show, with alpha where the file has it.
 - A pixel-art scene: a material with `texture_filter = nearest` draws crisp texels; the same material in a reflection or GI is smooth (the raster-only limit).
 - `procedural_materials` demo: the gradient and noise textures show on their meshes.
 - A multi-material mesh with `surface_material_override/1`: only that slot changes; `material_override` replaces all.
