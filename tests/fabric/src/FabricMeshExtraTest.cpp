@@ -195,7 +195,7 @@ int main() {
             return false;
         };
         check(has("\"property\":\"vertex_color_use_as_albedo\"", "\"rating\":\"converted\"", "vertexcolor"), "vertex_color_use_as_albedo is rated converted");
-        check(has("\"property\":\"vertex_color_is_srgb\"", "\"rating\":\"approximated\"", "linear"), "vertex_color_is_srgb is rated approximated");
+        check(has("\"property\":\"vertex_color_is_srgb\"", "\"rating\":\"converted\"", "sRGB to linear"), "vertex_color_is_srgb is converted (the vcsrgb flag, wave 2)");
         check(!has("\"property\":\"vertex_color_use_as_albedo\"", "\"rating\":\"unsupported\"", ""), "and is no longer listed as unsupported");
     }
 

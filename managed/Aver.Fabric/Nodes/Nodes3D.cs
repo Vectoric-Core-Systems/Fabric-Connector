@@ -292,11 +292,16 @@ public partial class MeshInstance3D : GeometryInstance3D
     /// <summary>The surfaces of the mesh (at least 1).</summary>
     public int GetSurfaceOverrideMaterialCount() => Math.Max(1, _mesh?.GetSurfaceCount() ?? 0);
 
-    public Material? GetSurfaceOverrideMaterial(int surface) => _surfaceOverrides.TryGetValue(surface, out Material? m) ? m : null;
+    // A mesh with one surface draws one material, so its surface 0 override is the material override (which is how the converter writes it).
+    private bool SingleSurface => _mesh != null && _mesh.GetSurfaceCount() <= 1;
+
+    public Material? GetSurfaceOverrideMaterial(int surface) =>
+        surface == 0 && SingleSurface ? MaterialOverride : _surfaceOverrides.TryGetValue(surface, out Material? m) ? m : null;
 
     public void SetSurfaceOverrideMaterial(int surface, Material? material)
     {
         if (surface < 0) return;
+        if (surface == 0 && SingleSurface) { MaterialOverride = material; return; }
         if (material == null) _surfaceOverrides.Remove(surface);
         else _surfaceOverrides[surface] = material;
         ApplySurfaceOverrides();

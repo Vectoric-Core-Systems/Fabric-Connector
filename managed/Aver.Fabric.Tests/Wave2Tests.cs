@@ -376,9 +376,19 @@ static class Wave2Tests
 
     // ---- P2 ----
 
+    private sealed class ThreeSurfaces : Mesh
+    {
+        public override int GetSurfaceCount() => 3;
+    }
+
     private static void SurfaceOverrides()
     {
-        var mi = new MeshInstance3D();
+        var single = new MeshInstance3D { Mesh = new BoxMesh() };
+        var only = new StandardMaterial3D { ResourcePath = "res://Materials/M_Only.ocmat" };
+        single.SetSurfaceOverrideMaterial(0, only);
+        T.Check("on a one-surface mesh surface 0 is the material override (how the converter writes it)", ReferenceEquals(single.MaterialOverride, only) && ReferenceEquals(single.GetSurfaceOverrideMaterial(0), only) && single.SurfaceOverrideNames().Count == 0);
+
+        var mi = new MeshInstance3D { Mesh = new ThreeSurfaces() };
         var a = new StandardMaterial3D { ResourcePath = "res://Materials/M_A.ocmat" };
         var b = new StandardMaterial3D { ResourcePath = "res://Materials/M_B.ocmat" };
         mi.SetSurfaceOverrideMaterial(2, b);

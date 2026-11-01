@@ -63,7 +63,9 @@ public class Image : Resource
     public static Image LoadFromFile(string path)
     {
         string file = FabricPaths.IsVirtual(path) ? ResourceLoader.FindFile(path) ?? FabricPaths.Globalize(path) : path;
-        FwImage? loaded = FwImage.Load(file);
+        FwImage? loaded;
+        try { loaded = FwImage.Load(file); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { loaded = null; }   // no engine to decode with
         return loaded == null ? new Image() : new Image(loaded, Format.Rgba8, false);
     }
 
@@ -262,10 +264,17 @@ internal interface IRuntimeTextureHost
 
 internal sealed class EngineTextureHost : IRuntimeTextureHost
 {
-    public bool Create(string key, Image image, bool srgb, bool mipmaps) => image.Engine != null && FwTexture.Create(key, image.Engine, srgb, mipmaps) != null;
-    public bool Update(string key, Image image, bool srgb) => image.Engine != null && FwTexture.Find(key) is { } t && t.Update(image.Engine, srgb);
-    public bool Destroy(string key) => FwTexture.Find(key)?.Destroy() ?? false;
-    public ulong GpuHandle(string key) => FwTexture.Find(key)?.GpuHandle ?? 0;
+    // Outside the engine (a test host, a tool) the native library or its entry points are not there: the texture then exists only as its pixels.
+    private static T Guard<T>(Func<T> call, T none)
+    {
+        try { return call(); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException) { return none; }
+    }
+
+    public bool Create(string key, Image image, bool srgb, bool mipmaps) => Guard(() => image.Engine != null && FwTexture.Create(key, image.Engine, srgb, mipmaps) != null, false);
+    public bool Update(string key, Image image, bool srgb) => Guard(() => image.Engine != null && FwTexture.Find(key) is { } t && t.Update(image.Engine, srgb), false);
+    public bool Destroy(string key) => Guard(() => FwTexture.Find(key)?.Destroy() ?? false, false);
+    public ulong GpuHandle(string key) => Guard(() => FwTexture.Find(key)?.GpuHandle ?? 0UL, 0UL);
 }
 
 /// <summary>A texture made from an <see cref="Image"/> (Godot's ImageTexture). The pixels reach the GPU on the next frame after they are set; the texture is read by a material
