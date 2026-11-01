@@ -152,6 +152,21 @@ The placement's transform is **parent-relative** for a nested placement, as Godo
 
 `NodeHost.Current` is the engine host unless a test or tool installs `ManagedNodeHost`, which runs the same enter/ready/exit order in-process (`T.Reset()` does this). Everything that touches the engine (spawning, components, physics bodies, `FromEntity`) is behind `Self.IsValid && NodeHost.Current.IsEngine` and is **not** exercised headless; see the status table in `FABRIC_CONNECTOR.md`.
 
+### The game mode
+
+A converted project names `GAME.MODE FabricGameMode` (the converter writes it; `Nodes/FabricGameMode.cs`). Without a GameMode the editor's Play runs the engine's drone pawn. The mode, a controller and a pawn are declared by the extension's managed entry (`managed.entry` `Aver.Fabric.FabricExtension` in `extension.json`; `actorBase` still declares the nodes).
+
+| Piece | What it does |
+|---|---|
+| `FabricGameMode` (`[AverGameMode("FabricGameMode", DefaultPawnClass = "", PlayerControllerClass = "FabricPlayerController")]`) | declares **no default pawn**, so the engine spawns none and starts no drone (the editor's drone is the engine-default mode's pawn only). At begin play it sets the view mode to first person with no eye offset and no boom (the camera's own pose, not a boom behind a pawn); at the end of play it puts the previous view mode back and stops following a camera. |
+| `FabricPlayerController` | a concrete controller (the engine's `PlayerController` is abstract). It reads no input and moves nothing: Godot's input map (`INPUT.SCHEME`) and the project's scripts drive the game. |
+| `FabricViewPawn` | the carrier the view is published through. The engine places the play camera only from a possessed pawn (`legacyPlayCamera`), and from that pawn's published view entity when it has one, so `OnPostLogin` spawns this mesh-less, body-less, input-less pawn at the origin and the controller possesses it (skipped when a level names a pawn of its own). Nothing in the game uses it. |
+| `FabricView` | the view follows `Camera3D`'s current camera: every `MakeCurrent` / `Current = true` / `ClearCurrent` publishes the camera's entity with `ExtensionHost.SetViewEntity` (none when no camera is current). |
+
+The current camera is Godot's: the camera made current last; when none was, the first `Camera3D` to enter the tree (in enter order, which is tree order for a loaded level); when the current one leaves the tree or is cleared, the first other camera in the tree, and a camera that left keeps `current` and takes the view again if it returns. A `Camera3D` under a `SubViewport` is that viewport's camera and never the window's. The lens, cull mask and offsets of the current camera reach the engine through its `CCamera` component (`kCameraDrivesView`).
+
+The mode finds its controller by name when the bridge seals it, in the order of the assembly's types, so `FabricPlayerController` is declared above `FabricGameMode` in the file (`GameModeTests` checks the metadata order). The view mode (`aver_fw_set_view`) is a process-wide setting the framework publishes only through `Aver.Framework`'s internal `Fw`, so `FabricView` declares the two functions it needs (`ViewNative`, `Aver.Framework` library). Headless, the engine calls are skipped and `FabricView.Followed` carries the result (`GameModeTests`). **Not verified**: a headed Play (the camera following the current `Camera3D` through the possessed carrier, no drone, the view mode restored on Stop).
+
 ## 4. For the next packages
 
 - **Scene converter**: write levels exactly as in section 1; the checklist is class placement + `_name` + Props (+ `_owner`, `_unique`, `_connections`, Groups) for every node; sub-scenes flattened; resources as `Resource(path)`/`Object(...)`; transforms through the map of 1.5.

@@ -59,8 +59,9 @@ The menu item is greyed out when `AverAssetC` is not beside the editor (build th
 ## Run the converted project
 
 1. Open `<out-dir>/<Name>/<Name>.ocproject` in the editor (the dialog's *Open converted project*, or the project browser).
-2. **Tools > Compile Scripts** builds `Content/Scripts/Scripts.csproj` (the converter writes it when it finds the engine checkout; otherwise the editor creates one with the first script you make). The scripts compile against `Aver.Fabric`.
-3. Open the start level (`Maps/<your main scene>.ocworld`) and press Play, or **File > Launch in Aver Engine Runtime**.
+2. The converter has already built the scripts: it writes `Content/Scripts/Scripts.csproj` (when it finds the engine checkout) and builds it into `<Name>/Binaries/Scripts` with the command line of **Tools > Compile Scripts** (`dotnet build -c Release`), so the project opens with its script classes declared. A conversion whose scripts have compile errors, a `--dry-run`, a `--scenes-only` run or a missing engine checkout builds nothing; **Tools > Compile Scripts** builds after you fix the lines. The scripts compile against `Aver.Fabric`. A build that fails after a clean check is one more unsupported row in the report.
+3. The project needs no upgrade: it has the Content folders the editor expects (`Maps`, `Meshes`, `Materials`, `Textures`, `Sounds`, `Scripts`), empty ones included.
+4. Open the start level (`Maps/<your main scene>.ocworld`) and press Play, or **File > Launch in Aver Engine Runtime**. The project's `GAME.MODE` is `FabricGameMode`: Play spawns no default pawn and no flying drone, and the view is the level's **current `Camera3D`** (the one made current; when none is, the first `Camera3D` in the tree, as in Godot). Godot's input map (`Input/<Name>.ocinput`) and your scripts drive the game as they do in Godot. A level with no `Camera3D` shows the world from the origin.
 
 Converted scripts are ordinary C# in `Content/Scripts`. Where a script uses something the runtime does not have yet, the converter leaves a `// FABRIC:` comment on that line and reports it; the script is still written, so you can fix the line by hand and compile.
 

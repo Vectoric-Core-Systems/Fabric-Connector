@@ -78,13 +78,15 @@ static class PhysicsWrapperTests
     private static void CameraCurrent()
     {
         Camera3D a = MakeCamera(), b = MakeCamera();
-        T.Check("no camera is current until one is made current", !a.IsCurrent() && !b.IsCurrent() && SceneTree.Instance.Root.GetCamera3D() == null);
+        T.Check("with none made current, the first camera in the tree is (Godot)", a.IsCurrent() && !b.IsCurrent() && SceneTree.Instance.Root.GetCamera3D() == a);
         a.MakeCurrent();
         T.Check("make_current", a.IsCurrent() && a.Current && SceneTree.Instance.Root.GetCamera3D() == a);
         b.Current = true;
         T.Check("making another current clears the first", b.IsCurrent() && !a.IsCurrent() && SceneTree.Instance.Root.GetCamera3D() == b);
         b.ClearCurrent();
-        T.Check("clear_current leaves none", !b.IsCurrent() && SceneTree.Instance.Root.GetCamera3D() == null);
+        T.Check("clear_current hands the view to the first other camera in the tree", !b.IsCurrent() && a.IsCurrent() && SceneTree.Instance.Root.GetCamera3D() == a);
+        a.ClearCurrent(enableNext: false);
+        T.Check("without enable_next it leaves none", !a.IsCurrent() && SceneTree.Instance.Root.GetCamera3D() == null);
     }
 
     private static void AngularSign()

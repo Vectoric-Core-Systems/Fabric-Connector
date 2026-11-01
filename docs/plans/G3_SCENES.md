@@ -43,6 +43,7 @@ Output is deterministic: the same input gives the same files byte for byte (test
 <out-dir>/<Name>/Fabric/nodes.json       each scene's nodes as placed (path, class, script, owner, %Unique, assigned .tscn files), for typed $Path in scripts (G3_SCRIPTS.md "Typed node access")
 <out-dir>/<Name>/Fabric/project.json     autoloads, layer names, tonemap, start level, level and prefab lists
 <out-dir>/<Name>/Content/
+    Maps/ Meshes/ Materials/ Textures/ Sounds/ Scripts/   always created, empty or not: the folders the editor's project upgrade (ProjectScaffold inspectProject) expects, so a converted project opens with nothing to upgrade
     Maps/<scene path>.ocworld        one level per .tscn: res://props/crate.tscn -> Maps/props/crate.ocworld
     Prefabs/<scene path>.ocprefab    one per instanced .tscn (structure only, see Instanced scenes)
     Meshes/Generated/<Type>_<hash>.ocmesh    PrimitiveMesh sub-resources
@@ -64,6 +65,7 @@ Output is deterministic: the same input gives the same files byte for byte (test
 |---|---|
 | `application/config/name` | `NAME`, `WINDOW.TITLE` |
 | `application/run/main_scene` | `STARTMAP Maps/<scene>.ocworld` |
+| (always) | `GAME.MODE FabricGameMode`: Aver.Fabric's game mode (G3_RUNTIME.md "The game mode"). Play has no default pawn and no drone; the view is Godot's current `Camera3D`. Godot's input map and the scripts drive the game |
 | `display/window/size/viewport_width` `viewport_height` `resizable` `mode` | `WINDOW.SIZE` `WINDOW.RESIZABLE` `WINDOW.FULLSCREEN` (mode 3 or 4) |
 | `physics/3d/default_gravity` times `default_gravity_vector` | `PHYSICS.GRAVITY`, through the axis map and times 100 (9.8 down is `0 0 -980`) |
 | `physics/common/physics_ticks_per_second` | `PHYSICS.FIXEDSTEP` = 1 / ticks |

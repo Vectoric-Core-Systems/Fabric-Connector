@@ -116,7 +116,37 @@ bool Converter::convertScripts() {
     // The tool merged its entries into the report file; ours is read back from it.
     Report merged;
     if (merged.readJsonl(outDir_ + "/FabricReport.jsonl")) report_ = std::move(merged);
+
+    // The tool only compiles the scripts as a check. Build them for real, into the folder and the way the editor's Tools > Compile Scripts does, so the project
+    // opens with its script classes declared. Skipped when the check found errors (the same build would fail) and in a dry run, which writes nothing.
+    const bool clean = summary.find("\"compiled\":true") != std::string::npos && jsonNumber(summary, "errors", 0) == 0;
+    if (!options_.dryRun && clean) buildScripts(dotnet);
     return true;
+}
+
+void Converter::buildScripts(const std::string& dotnet) {
+    std::error_code ec;
+    const fsys::path csproj = fsys::absolute(fsys::path(projectDir_) / "Content" / "Scripts" / "Scripts.csproj", ec);
+    if (!fileExists(csproj.string())) {
+        AVER_WARN("fabric: the scripts were not built into Binaries/Scripts: {} does not exist (the engine checkout was not found); use Tools > Compile Scripts", csproj.string());
+        return;
+    }
+    const std::string outDir = (fsys::absolute(fsys::path(projectDir_), ec) / "Binaries" / "Scripts").string();
+    AVER_INFO("fabric: building the scripts into {}", outDir);
+    // The editor's command line (ToolsMenu::startCompile): Release, and no compiler server or reused MSBuild nodes outliving the build.
+    const std::vector<std::string> args = {"build", csproj.string(), "-c", "Release", "-p:UseSharedCompilation=false", "-nodeReuse:false", "--nologo", "-o", outDir};
+    std::string firstError;
+    const ProcessOutput out = runProcess(dotnet, args, [&](const std::string& line) {
+        if (firstError.empty() && line.find(": error ") != std::string::npos) firstError = line;
+    });
+    if (out.started && out.exitCode == 0) {
+        AVER_INFO("fabric: scripts built into {}", outDir);
+        return;
+    }
+    const std::string why = out.started ? "dotnet build exited " + std::to_string(out.exitCode) + (firstError.empty() ? std::string() : ": " + firstError) : "could not start dotnet";
+    AVER_ERROR("fabric: the scripts were not built into Binaries/Scripts: {}", why);
+    report_.add("script", "Content/Scripts/Scripts.csproj", "", "csharp", "", Rating::Unsupported,
+                "the scripts compiled in the conversion check but the project build failed, so Binaries/Scripts is not written (" + why + "); run Tools > Compile Scripts", 0);
 }
 
 }  // namespace aver::fabric

@@ -143,6 +143,7 @@ static class Program
         failures += ScriptSubtypeTests.RunAll(); // members of a derived script through a declared base, enum size, Tween constants, frame_post_draw
         failures += ConverterBugTests.RunAll(); // converter bugs C1 to C20 of the parity plan: names, singletons, enums, coercions, base-typed receivers, packed arrays, utility functions
         failures += FabricApiTests.RunAll(); // wave 1 package API: the Godot members Aver.Fabric lacked (enums, singletons, files, threads, string / vector / variant methods)
+        failures += GameModeTests.RunAll();  // FabricGameMode (GAME.MODE): registers, no default pawn, the view follows the current Camera3D
         failures += GdextTests.RunAll();     // F5: the GDExtension host from C# (wire form always; the native host and test plugin when built)
         failures += Wave5Tests.RunAll();     // wave 5: joints, SoftBody3D, primitive meshes, lines and points, shape owners, space parameters, Geometry helpers, physics interpolation
 
