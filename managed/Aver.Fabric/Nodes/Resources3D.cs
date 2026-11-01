@@ -250,10 +250,22 @@ public class ORMMaterial3D : BaseMaterial3D
 public class Texture2D : Resource
 {
     private Vector2? _fileSize;
+    private bool _pngRead;
 
-    /// <summary>The size in pixels. A PNG file texture reads it from the file's header (G5 U1: a 9-patch needs it); the engine loads the pixels, so any other
-    /// file format is zero; a <see cref="ViewportTexture"/> reports the size its view is drawn at.</summary>
-    public virtual Vector2 GetSize() => _fileSize ??= ReadPngSize();
+    /// <summary>The size in pixels. A PNG file texture reads it from the file's header (G5 U1: a 9-patch needs it); any other format is sized by the engine
+    /// once it has decoded the picture for the UI (zero until then, and outside the engine); a <see cref="ViewportTexture"/> reports the size its view is drawn at.</summary>
+    public virtual Vector2 GetSize()
+    {
+        if (_fileSize is { } known) return known;
+        if (!_pngRead)
+        {
+            _pngRead = true;
+            Vector2 png = ReadPngSize();
+            if (png.X > 0 && png.Y > 0) return (_fileSize = png).Value;
+        }
+        if (UiImages.SizeOf(EngineHandle) is { } engine) return (_fileSize = engine).Value;
+        return Vector2.Zero;
+    }
 
     private Vector2 ReadPngSize()
     {
@@ -270,19 +282,33 @@ public class Texture2D : Resource
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { return Vector2.Zero; }
     }
 
+    private ulong _hostHandle;
+    private int _resolvedEpoch = -1;   // the UiImages epoch HandleResolver's answer was taken in; -1 when the host set the handle itself
+
     /// <summary>The engine's texture handle for UI drawing (the id <c>aver_ui_textured_rect</c> takes), 0 when the host has not given the texture one.
     /// The host sets it, or <see cref="HandleResolver"/> finds it by path on first use (G5 U1: style boxes with a texture need it).</summary>
-    public ulong HostHandle { get; set; }
+    public ulong HostHandle
+    {
+        get => _hostHandle;
+        set { _hostHandle = value; _resolvedEpoch = -1; }
+    }
 
-    /// <summary>Set by a host that can look a texture up by its resource path.</summary>
-    public static Func<Texture2D, ulong>? HandleResolver { get; set; }
+    /// <summary>Finds a texture's engine handle by its resource path. In the engine it is <see cref="UiImages.Resolve"/>: the project's file, loaded and
+    /// premultiplied by the engine's UI image table, one reference per path until the play session ends (P39). A test or another host replaces it.</summary>
+    public static Func<Texture2D, ulong>? HandleResolver { get; set; } = UiImages.Resolve;
 
     internal virtual ulong EngineHandle
     {
         get
         {
-            if (HostHandle == 0 && HandleResolver != null && ResourcePath.Length > 0) HostHandle = HandleResolver(this);
-            return HostHandle;
+            // A handle taken in an earlier play session was released with it; the texture asks again.
+            if (_resolvedEpoch >= 0 && _resolvedEpoch != UiImages.Epoch) { _hostHandle = 0; _resolvedEpoch = -1; }
+            if (_hostHandle == 0 && HandleResolver != null && ResourcePath.Length > 0)
+            {
+                _hostHandle = HandleResolver(this);
+                _resolvedEpoch = UiImages.Epoch;
+            }
+            return _hostHandle;
         }
     }
 

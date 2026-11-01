@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-787 public types and 8458 public members, read from `managed/Aver.Fabric/` (153 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+787 public types and 8459 public members, read from `managed/Aver.Fabric/` (154 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -6686,6 +6686,7 @@ Values: `Disabled = 0`, `Instance = 1`, `Main = 2`, `MainInherited = 3`
 
 `public class PanelContainer : Container` - A container that draws the theme's "panel" style box and keeps its children inside its margins (Godot's PanelContainer).
 
+- `public PanelContainer()`
 - `public override void _Draw()`
 
 ### PanoramaSkyMaterial
@@ -9427,7 +9428,7 @@ Values: `CharsBeforeShaping = 0`, `CharsAfterShaping = 1`, `GlyphsAuto = 2`, `Gl
 
 - `public virtual Vector2 GetSize()` - The size in pixels.
 - `public ulong HostHandle { get; set; }` - The engine's texture handle for UI drawing (the id aver_ui_textured_rect takes), 0 when the host has not given the texture one.
-- `public static Func<Texture2D, ulong>? HandleResolver { get; set; }` - Set by a host that can look a texture up by its resource path.
+- `public static Func<Texture2D, ulong>? HandleResolver { get; set; }` - Finds a texture's engine handle by its resource path.
 - `public int GetWidth()`
 - `public int GetHeight()`
 

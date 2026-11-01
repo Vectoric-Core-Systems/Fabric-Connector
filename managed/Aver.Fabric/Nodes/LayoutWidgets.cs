@@ -381,7 +381,7 @@ public class TextureRect : Control
     }
 }
 
-/// <summary>A texture drawn as a nine-patch (Godot's NinePatchRect). The picture appears once the host gives the texture an engine handle (U1's StyleBoxTexture rule).</summary>
+/// <summary>A texture drawn as a nine-patch (Godot's NinePatchRect). The picture comes from the engine's UI image table: the texture's content path is loaded and uploaded by the engine on first draw (P39).</summary>
 public class NinePatchRect : Control
 {
     public enum AxisStretchMode { Stretch = 0, Tile = 1, TileFit = 2 }

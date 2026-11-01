@@ -93,6 +93,12 @@ static class Program
             Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
             return failures;
         }
+        if (args.Length == 1 && args[0] == "ui-images") // only the P39 suite
+        {
+            failures = UiImageTests.RunAll();
+            Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
+            return failures;
+        }
         if (args.Length == 1 && args[0] == "widgets") // only the G5 U2 suites
         {
             failures = WidgetTests.RunAll() + RichTextTests.RunAll();
@@ -140,6 +146,7 @@ static class Program
         failures += MultiplayerTests.RunAll(); // G6 NET2: SceneMultiplayer, RPC, authority over ENet loopback, a lossy UDP proxy and an in-memory link (branches of one tree)
         failures += ReplicationTests.RunAll(); // G6 NET2: MultiplayerSpawner, MultiplayerSynchronizer, SceneReplicationConfig, a converted GDScript with @rpc
         failures += UiTests.RunAll();         // G5 U1: Control layout, containers, themes, style boxes, stretch, the GUI (input, focus, tooltips, drag and drop) over Aver.UI.Abi
+        failures += UiImageTests.RunAll();    // P39: Texture2D content paths as the engine's UI textures (resolver wiring, sessions, the real image table)
         failures += WidgetTests.RunAll();     // G5 U2: Label, Range, buttons, menus, dialogs, LineEdit, TextEdit, ItemList, Tree, tabs, layout widgets, colour picker, fonts
         failures += RichTextTests.RunAll();   // G5 U2: BBCode, RichTextLabel layout, effects, meta and hints
         failures += ConvertScriptsTests.RunAll(); // F3: Aver.Fabric.Convert, GodotSharp scripts rewritten, compiled against this runtime and run

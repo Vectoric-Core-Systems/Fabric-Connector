@@ -94,7 +94,45 @@ internal static class UiNative
     }
 
     /// <summary>Forgets a failed probe (a test that has just copied the library beside itself).</summary>
-    internal static void Reprobe() { if (s_state == 2) s_state = 0; }
+    internal static void Reprobe() { if (s_state == 2) s_state = 0; s_imageEntryMissing = false; }
+
+    // ---- the engine's UI images (ui_abi.h "images"): a content path as a texture id ----
+    private static bool s_imageEntryMissing;   // an engine from before the image service: no entry points to call
+
+    /// <summary>True when the host has installed an image table (the editor's Play and the shipped game do). Not cached: the table can come later.</summary>
+    internal static bool ImageAvailable
+    {
+        get
+        {
+            if (!Available || s_imageEntryMissing) return false;
+            try { return aver_ui_image_available() == 1; }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_imageEntryMissing = true; return false; }
+        }
+    }
+
+    /// <summary>The texture id for a content-relative path, with one reference held until <see cref="ImageRelease"/>; 0 when the engine could not load it.</summary>
+    internal static ulong ImageAcquire(string contentPath)
+    {
+        if (!ImageAvailable) return 0;
+        try { return aver_ui_image_acquire(contentPath); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_imageEntryMissing = true; return 0; }
+    }
+
+    internal static void ImageRelease(ulong id)
+    {
+        if (id == 0 || s_imageEntryMissing || !Available) return;
+        try { aver_ui_image_release(id); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_imageEntryMissing = true; }
+    }
+
+    /// <summary>The source image's size in pixels, or null for an id the engine does not know.</summary>
+    internal static Vector2? ImageSize(ulong id)
+    {
+        if (id == 0 || !ImageAvailable) return null;
+        var wh = new int[2];
+        try { return aver_ui_image_size(id, wh) == 1 ? new Vector2(wh[0], wh[1]) : null; }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_imageEntryMissing = true; return null; }
+    }
 
     // The single game thread owns one native copy of the box being passed: no allocation per draw.
     private static IntPtr Pin(in UiStyleBoxStruct sb)
@@ -223,6 +261,10 @@ internal static class UiNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     internal static extern float aver_ui_text_block_fx(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
                                                        float outlineSize, uint outlineRgba, uint shadowRgba, float shadowOffX, float shadowOffY, float shadowOutlineSize, float[]? outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_available();
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern ulong aver_ui_image_acquire([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8Path);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_image_release(ulong id);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_size(ulong id, int[] outWH);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     internal static extern void aver_ui_textured_rect(float x, float y, float w, float h, ulong texture, float u0, float v0, float u1, float v1, uint rgba);
 }

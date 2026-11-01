@@ -391,6 +391,7 @@ public partial class SceneTree : GodotObject
         ProjectSettings.ResetForTests();
         Node.ResetGroups();
         Gui.ResetForTests();
+        UiImages.ResetForTests();
         ThemeDB.ResetForTests();
         Input.ResetForTests();
         WindowControl.ResetForTests();

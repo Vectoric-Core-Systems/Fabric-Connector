@@ -102,6 +102,7 @@ public sealed class FabricGameMode : AverGameMode
     {
         if (reason != BeginReason.Reload) FabricView.UseCameraPose();
         FabricView.Sync();
+        UiImages.NewSession();   // a UI texture handle from the last session is dead: every texture asks for its handle again
         // What a Stop left behind (nodes whose entities the editor destroyed without an end edge) is not part of this session.
         SceneTree.Instance.ReapGoneTopLevel();
         // The engine forgets its persistent actors when a session stops; the autoloads of the level being played are the same nodes.
@@ -118,5 +119,9 @@ public sealed class FabricGameMode : AverGameMode
         if (Spawn<FabricViewPawn>(new Vec3(0, 0, 0)) is { } pawn) pc.Possess(pawn);
     }
 
-    public override void OnEndPlay(EndReason reason) => FabricView.Restore();
+    public override void OnEndPlay(EndReason reason)
+    {
+        FabricView.Restore();
+        UiImages.NewSession();   // gives the engine its UI texture references back
+    }
 }
