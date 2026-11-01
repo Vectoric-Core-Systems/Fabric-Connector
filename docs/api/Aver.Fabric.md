@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-787 public types and 8461 public members, read from `managed/Aver.Fabric/` (155 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+787 public types and 8461 public members, read from `managed/Aver.Fabric/` (156 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
