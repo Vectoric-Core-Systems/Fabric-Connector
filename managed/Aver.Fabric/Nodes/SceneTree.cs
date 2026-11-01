@@ -265,19 +265,22 @@ public class Window : Viewport
     // The window's size in device pixels: the engine's UI rectangle when there is one, else the window's size.
     internal Vector2 WindowPixels => EnginePixels ?? new Vector2(Size.X, Size.Y);
 
-    private static Vector2? EnginePixels
+    private static Vector2? EnginePixels => EngineRect() is { } r && r[2] > 0 && r[3] > 0 ? new Vector2(r[2], r[3]) : null;
+
+    // Where the engine's UI rectangle sits in the backbuffer: the editor's viewport is below its toolbars, the game's at the corner. Drawing is
+    // offset by it; the pointer arrives already relative to it.
+    internal static Vector2 EngineOrigin => EngineRect() is { } r ? new Vector2(r[0], r[1]) : Vector2.Zero;
+
+    private static float[]? EngineRect()
     {
-        get
+        if (!NodeHost.Current.IsEngine || !UiNative.Available) return null;
+        try
         {
-            if (!NodeHost.Current.IsEngine || !UiNative.Available) return null;
-            try
-            {
-                var xywh = new float[4];
-                UiNative.aver_ui_viewport(xywh);
-                return xywh[2] > 0 && xywh[3] > 0 ? new Vector2(xywh[2], xywh[3]) : null;
-            }
-            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
+            var xywh = new float[4];
+            UiNative.aver_ui_viewport(xywh);
+            return xywh;
         }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
     }
 
     private (Rect2 Screen, Vector2 Content, Vector2 Render, Vector2 Scale, bool Letterboxed) Compute()

@@ -390,10 +390,15 @@ void Converter::writeFontSet(const std::string& defaultFontAsset) {
         const size_t dot = n.find_last_of('.');
         return dot == std::string::npos || dot == 0 ? n : n.substr(0, dot);
     };
-    std::string defaultFamily = defaultFontAsset.empty() ? std::string() : familyOf(defaultFontAsset);
-    if (defaultFamily.empty()) defaultFamily = familyOf(*fontFiles_.begin());
+    // No gui/theme/custom_font: Godot draws with its own built-in font, so the default here is the engine's (uiDefaultFontSetText), not a project
+    // font. A project font as the default puts its metrics on every button and label that never named it (a tall CJK line height grew them).
+    std::string defaultFamily = defaultFontAsset.empty() ? std::string("Default") : familyOf(defaultFontAsset);
     std::string text = "OCFONTS 1\nDEFAULT " + defaultFamily + "\n";
     std::set<std::string> seen;
+    if (defaultFontAsset.empty()) {
+        text += "FAMILY Default\nFACE @exe/Roboto-Regular.ttf\nFACE @exe/Roboto-Medium.ttf weight=bold\nSYSTEM auto\nBITMAP legacy\n";
+        seen.insert("default");
+    }
     for (const std::string& asset : fontFiles_) {
         const std::string family = familyOf(asset);
         if (!seen.insert(lower(family)).second) {

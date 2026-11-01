@@ -813,8 +813,14 @@ internal static class Gui
     {
         FlushLayout();
         Window window = SceneTree.Instance.Root;
+        Vector2 origin = Window.EngineOrigin;
         Transform2D toWindow = window.ContentToWindowTransform();
-        if (window.IsLetterboxed()) DrawLetterbox(window.WindowPixels, window.GetContentScreenRect());
+        toWindow.Origin += origin;
+        Rect2 content = window.GetContentScreenRect();
+        content.Position += origin;
+        if (window.IsLetterboxed()) DrawLetterbox(origin, window.WindowPixels, content);
+        // Godot shows nothing of the UI outside the content rectangle: a control larger than the window stops at its edge, not in a letterbox bar.
+        UiNative.aver_ui_push_clip((int)MathF.Floor(content.Position.X), (int)MathF.Floor(content.Position.Y), (int)MathF.Ceiling(content.End.X), (int)MathF.Ceiling(content.End.Y));
         foreach (Node n in window.ChildrenSnapshot()) DrawNode(n, toWindow);
         if (s_popups.Count > 0)
         {
@@ -824,16 +830,18 @@ internal static class Gui
             UiNative.aver_ui_set_layer(previous);
         }
         if (s_tooltipVisible && s_customTooltip == null) DrawDefaultTooltip(window, toWindow);
+        UiNative.aver_ui_pop_clip();
     }
 
-    // The bars of a letterboxed window are black, over whatever the scene drew there (Godot clips the whole picture to the content rectangle).
-    private static void DrawLetterbox(Vector2 window, Rect2 content)
+    // The bars of a letterboxed window are black, over whatever the scene drew there.
+    private static void DrawLetterbox(Vector2 origin, Vector2 window, Rect2 content)
     {
         const uint black = 0xFF000000;
-        if (content.Position.X > 0f) UiNative.aver_ui_rect(0, 0, content.Position.X, window.Y, black);
-        if (window.X - content.End.X > 0f) UiNative.aver_ui_rect(content.End.X, 0, window.X - content.End.X, window.Y, black);
-        if (content.Position.Y > 0f) UiNative.aver_ui_rect(content.Position.X, 0, content.Size.X, content.Position.Y, black);
-        if (window.Y - content.End.Y > 0f) UiNative.aver_ui_rect(content.Position.X, content.End.Y, content.Size.X, window.Y - content.End.Y, black);
+        Vector2 end = origin + window;
+        if (content.Position.X > origin.X) UiNative.aver_ui_rect(origin.X, origin.Y, content.Position.X - origin.X, window.Y, black);
+        if (end.X > content.End.X) UiNative.aver_ui_rect(content.End.X, origin.Y, end.X - content.End.X, window.Y, black);
+        if (content.Position.Y > origin.Y) UiNative.aver_ui_rect(content.Position.X, origin.Y, content.Size.X, content.Position.Y - origin.Y, black);
+        if (end.Y > content.End.Y) UiNative.aver_ui_rect(content.Position.X, content.End.Y, content.Size.X, end.Y - content.End.Y, black);
     }
 
     private static void DrawNode(Node node, Transform2D toWindow, Node? popupRoot = null)

@@ -250,6 +250,21 @@ int main() {
     check(has("\"type\":\"StyleBoxFlat\"", "\"property\":\"bogus_stylebox_option\"", "\"rating\":\"unsupported\""), "an unknown style box property is unsupported");
     check(has("\"type\":\"FontFile\"", "\"rating\":\"converted\"", "font set"), "the font file is rated converted: it becomes a family of the engine's font set");
     check(slurp(content + "/UI/Fonts.ocfonts").find("FAMILY ui\nFACE Fonts/ui/fonts/ui.ttf\n") != std::string::npos, "UI/Fonts.ocfonts names the font a family after its file");
+    check(slurp(content + "/UI/Fonts.ocfonts").find("DEFAULT ui\n") != std::string::npos, "the project theme's default font is the default family");
+    {
+        // Without the project theme Godot draws with its built-in font: the default family is the engine's own, not the font the project ships.
+        const std::string bare = (outRoot / "UiGameNoTheme").string();
+        std::filesystem::copy(src, bare, std::filesystem::copy_options::recursive, ec);
+        std::string godot = slurp(bare + "/project.godot");
+        const size_t at = godot.find("theme/custom=");
+        if (at != std::string::npos) godot.erase(at, godot.find('\n', at) - at);
+        put(bare + "/project.godot", std::vector<u8>(godot.begin(), godot.end()));
+        const std::string out2 = (outRoot / "out-no-theme").string();
+        std::string bareLog;
+        check(runCapture("\"" + exe.string() + "\" fabric \"" + bare + "\" \"" + out2 + "\" --scenes-only", bareLog) == 0, "the theme-less copy converts");
+        check(slurp(out2 + "/UiGame/Content/UI/Fonts.ocfonts").find("DEFAULT Default\nFAMILY Default\nFACE @exe/Roboto-Regular.ttf\n") != std::string::npos,
+              "no theme or custom font: the default family is the engine's built-in font, as Godot's is its own");
+    }
     check(has("\"node\":\".\"", "\"property\":\"anchor_right\"", "\"rating\":\"converted\""), "anchors are rated converted");
     check(has("\"node\":\".\"", "\"property\":\"tooltip_text\"", "\"rating\":\"converted\""), "tooltip_text is rated converted");
     check(has("\"node\":\"Hud\"", "\"property\":\"theme_override_styles/panel\"", "\"rating\":\"converted\""), "a theme override is rated converted");
