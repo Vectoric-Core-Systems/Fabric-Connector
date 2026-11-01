@@ -100,6 +100,7 @@ public sealed class FabricGameMode : AverGameMode
 
     public override void OnBeginPlay(BeginReason reason)
     {
+        SceneTree.StartAfterEndedSession();
         if (reason != BeginReason.Reload) FabricView.UseCameraPose();
         FabricView.Sync();
         UiImages.NewSession();   // a UI texture handle from the last session is dead: every texture asks for its handle again
@@ -123,5 +124,7 @@ public sealed class FabricGameMode : AverGameMode
     {
         FabricView.Restore();
         UiImages.NewSession();   // gives the engine its UI texture references back
+        // A stopped session leaves nothing for the next (a second Play kept the first one's tree, so the game's _ready never ran and no menu came).
+        if (reason == EndReason.Stop) SceneTree.EndSession();
     }
 }

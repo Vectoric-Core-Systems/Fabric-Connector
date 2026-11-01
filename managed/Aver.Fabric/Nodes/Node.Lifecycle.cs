@@ -57,7 +57,11 @@ public partial class Node
     // ---- framework hooks to Godot's order ----
 
     /// <inheritdoc/>
-    public override void OnEnterTree() => NotifyEnterTree();
+    public override void OnEnterTree()
+    {
+        SceneTree.StartAfterEndedSession();
+        NotifyEnterTree();
+    }
 
     /// <inheritdoc/>
     public override void OnBeginPlay(BeginReason reason)

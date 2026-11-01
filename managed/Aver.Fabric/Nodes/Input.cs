@@ -234,6 +234,15 @@ public static class Input
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return false; }
     }
 
+    // A play session's end: the engine gets its free-cursor request back, and the next session starts from Godot's default pointer.
+    internal static void EndSession()
+    {
+        try { s_cursorScope?.Dispose(); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+        s_cursorScope = null;
+        ResetForTests();
+    }
+
     internal static void ResetForTests()
     {
         s_actions.Clear(); s_keys.Clear(); s_mouseButtons.Clear(); s_joyButtons.Clear(); s_joyAxes.Clear(); s_builtin.Clear();

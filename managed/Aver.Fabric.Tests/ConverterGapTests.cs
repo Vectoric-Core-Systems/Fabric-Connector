@@ -25,6 +25,7 @@ static class ConverterGapTests
         T.Run("converter gap: AnimatedSprite3D plays SpriteFrames with Godot's frame clock and signals", AnimatedSpritePlayback);
         T.Run("converter gap: ProjectSettings.get_setting returns every setting of project.godot, with Godot's type", ProjectSettingsKept);
         T.Run("converter gap: a second Play does not leave the first session's autoloads and scene in the tree", SecondSessionTree);
+        T.Run("converter gap: a stopped session's tree, GUI, pointer and resources are gone before the next session's nodes enter", StoppedSessionSlate);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -392,6 +393,35 @@ static class ConverterGapTests
         T.Check("session 2: the top level holds exactly the three live nodes, in order",
                 string.Join(",", root.GetChildren().Select(c => c.Name.ToString())) == "GameManager,SettingsManager,MainRoot");
         T.Check("the dead session's nodes were retired, not left half alive", !stale.Gm.IsInsideTree() && !stale.Main.IsInsideTree() && !stale.Ui.IsInsideTree());
+        T.Reset();
+    }
+
+    // godot-fps's second Play kept the first session's live nodes (the level, its HUD, autoloads that had readied): no _ready, no menu.
+    private static void StoppedSessionSlate()
+    {
+        T.Reset();
+        SceneTree first = SceneTree.Instance;
+        Node gm = new() { Name = "GameManager", Persistent = true };
+        first.Root.AddChild(gm);
+        first.Root.AddChild(new Control { Name = "Hud" });
+        Input.MouseMode = Input.MouseModeEnum.Captured;
+        int deferred = 0;
+        Callable.From(() => deferred++).CallDeferred();
+
+        SceneTree.StartAfterEndedSession();
+        T.Check("without a Stop nothing is wiped", SceneTree.Instance == first && first.Root.GetChildCount() == 2);
+
+        SceneTree.EndSession();
+        T.Check("Stop gives the pointer back at once", Input.MouseMode == Input.MouseModeEnum.Visible);
+        T.Check("the tree waits for the session's other actors to retire", SceneTree.Instance == first);
+        SceneTree.StartAfterEndedSession();
+        SceneTree next = SceneTree.Instance;
+        T.Check("the next session starts from an empty tree", next != first && next.Root.GetChildCount() == 0 && next.Root.GetNodeOrNull("GameManager") == null);
+        T.Check("with no Control left from the last one", !Gui.AllControls().Any());
+        T.Frame();
+        T.Check("and none of its deferred calls", deferred == 0);
+        SceneTree.StartAfterEndedSession();
+        T.Check("the wipe happens once per Stop", SceneTree.Instance == next);
         T.Reset();
     }
 }

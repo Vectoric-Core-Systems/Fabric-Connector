@@ -387,6 +387,29 @@ public partial class SceneTree : GodotObject
         }
     }
 
+    private static bool s_sessionEnded;
+
+    /// <summary>A play session ended (the editor's Stop). Every Godot run starts from an empty tree, so nothing of this one reaches the next: its nodes and
+    /// autoloads, deferred calls, the GUI's controls, the pointer it asked for, the current camera, groups, project settings a script changed and the
+    /// resources it loaded. The game mode ends before the session's other actors, so the slate is wiped by <see cref="StartAfterEndedSession"/> once
+    /// they have retired; the cursor request goes back at once.</summary>
+    internal static void EndSession()
+    {
+        Input.EndSession();
+        s_sessionEnded = true;
+    }
+
+    /// <summary>The first node entering after an ended session (the editor reloads the level at Stop), or the next session's start, wipes the slate.</summary>
+    internal static void StartAfterEndedSession()
+    {
+        if (!s_sessionEnded) return;
+        s_sessionEnded = false;
+        Reset();
+        ResourceLoader.ClearCache();
+        // call_deferred and await continuations ride the framework's queue, which outlives a Play; a Godot run starts with none.
+        Aver.Framework.Hosting.ExtensionHost.ResetDeferred();
+    }
+
     internal static void Reset()
     {
         s_instance = null;
