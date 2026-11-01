@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-787 public types and 8461 public members, read from `managed/Aver.Fabric/` (156 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+814 public types and 8686 public members, read from `managed/Aver.Fabric/` (159 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -1045,6 +1045,17 @@ Values: `Always = 0`, `Never = 1`, `AtLeastOneWalkable = 2`, `OnlyIfNoObstacles 
 
 Values: `Euclidean = 0`, `Manhattan = 1`, `Octile = 2`, `Chebyshev = 3`, `Max = 4`
 
+### AtlasTexture
+
+`public class AtlasTexture : Texture2D` - A region of another texture (Godot's AtlasTexture).
+
+- `public Texture2D? Atlas { get; set; }`
+- `public Rect2 Region { get; set; }`
+- `public Rect2 Margin { get; set; }`
+- `public bool FilterClip { get; set; }`
+- `public override Vector2 GetSize()`
+- `public override Image GetImage()`
+
 ### AudioBusLayout
 
 `public class AudioBusLayout : Resource` - A saved bus layout (Godot's AudioBusLayout), held as the engine's .ocbus text.
@@ -1758,11 +1769,28 @@ Values: `Normal = 0`, `Pressed = 1`, `Hover = 2`, `Disabled = 3`, `HoverPressed 
 
 `public class BaseMaterial3D : Material`
 
+- `public bool EmissionEnabled { get; set; }`
+- `public Color Emission { get; set; }` - The glow colour (sRGB, as Godot stores it).
+- `public float EmissionEnergyMultiplier { get; set; }`
+- `public bool NormalEnabled { get; set; }`
+- `public float NormalScale { get; set; }`
+- `public Texture2D? NormalTexture { get; set; }`
+- `public Texture2D? RoughnessTexture { get; set; }`
+- `public Texture2D? MetallicTexture { get; set; }`
+- `public TextureChannel RoughnessTextureChannel { get; set; }`
+- `public TextureChannel MetallicTextureChannel { get; set; }`
+- `public bool AoEnabled { get; set; }`
+- `public Texture2D? AoTexture { get; set; }`
+- `public TextureChannel AoTextureChannel { get; set; }`
+- `public TextureFilterEnum TextureFilter { get; set; }` - How the material's textures are filtered (Godot's texture_filter).
+- `public bool TextureRepeat { get; set; }` - False clamps a texture lookup outside 0..1 to the edge (Godot's texture_repeat).
+- `public void SetTexture(TextureParam param, Texture2D? texture)`
+- `public Texture2D? GetTexture(TextureParam param)`
 - `public Color AlbedoColor { get; set; }`
 - `public float Metallic { get; set; }`
 - `public float Roughness { get; set; }`
 - `public bool VertexColorUseAsAlbedo { get; set; }` - Multiplies the albedo and opacity by the mesh's vertex colour.
-- `public bool VertexColorIsSrgb { get; set; }` - Godot converts an sRGB vertex colour to linear first; the engine multiplies the colour as stored (linear).
+- `public bool VertexColorIsSrgb { get; set; }` - The vertex colour is sRGB-encoded and is decoded to linear before it multiplies the albedo (FX vcsrgb; raster draws).
 - `public Texture2D? AlbedoTexture { get; set; }` - The albedo map.
 - `public Texture2D? EmissionTexture { get; set; }`
 - `public Vector3 Uv1Scale { get; set; }`
@@ -1906,6 +1934,24 @@ Values: `Unshaded = 0`, `PerPixel = 1`, `PerVertex = 2`
 `public enum SpecularModeEnum`
 
 Values: `SchlickGgx = 0`, `Toon = 1`, `Disabled = 2`
+
+### BaseMaterial3D.TextureChannel
+
+`public enum TextureChannel`
+
+Values: `Red = 0`, `Green = 1`, `Blue = 2`, `Alpha = 3`, `Grayscale = 4`, `Max = 5`
+
+### BaseMaterial3D.TextureFilterEnum
+
+`public enum TextureFilterEnum`
+
+Values: `Nearest = 0`, `Linear = 1`, `NearestWithMipmaps = 2`, `LinearWithMipmaps = 3`, `NearestWithMipmapsAnisotropic = 4`, `LinearWithMipmapsAnisotropic = 5`, `Max = 6`
+
+### BaseMaterial3D.TextureParam
+
+`public enum TextureParam`
+
+Values: `Albedo = 0`, `Metallic = 1`, `Roughness = 2`, `Emission = 3`, `Normal = 4`, `Rim = 5`, `Clearcoat = 6`, `Flowmap = 7`, `AmbientOcclusion = 8`, `Heightmap = 9`, `SubsurfaceScattering = 10`, `SubsurfaceTransmittance = 11`, `Backlight = 12`, `Refraction = 13`, `DetailMask = 14`, `DetailAlbedo = 15`, `DetailNormal = 16`, `Orm = 17`, `Max = 18`
 
 ### BaseMaterial3D.TransparencyEnum
 
@@ -2302,6 +2348,20 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 
 - `public static readonly StringName VisibilityChanged`
 
+### CanvasTexture
+
+`public class CanvasTexture : Texture2D` - A texture with companion maps for 2D lighting (Godot's CanvasTexture).
+
+- `public Texture2D? DiffuseTexture { get; set; }`
+- `public Texture2D? NormalTexture { get; set; }`
+- `public Texture2D? SpecularTexture { get; set; }`
+- `public Color SpecularColor { get; set; }`
+- `public float SpecularShininess { get; set; }`
+- `public int TextureFilter { get; set; }`
+- `public int TextureRepeat { get; set; }`
+- `public override Vector2 GetSize()`
+- `public override Image GetImage()`
+
 ### CapsuleMesh
 
 `public class CapsuleMesh : PrimitiveMesh` - A cylinder with a hemisphere on each end (Godot's CapsuleMesh); the height is the whole length.
@@ -2689,6 +2749,13 @@ Values: `HsvRectangle = 0`, `HsvWheel = 1`, `VhsCircle = 2`, `OkhslCircle = 3`, 
 - `public static Color WebPurple { get; }`
 - `public static Color White { get; }`
 - `public static Color Yellow { get; }`
+
+### CompressedTexture2D
+
+`public class CompressedTexture2D : Texture2D` - A file texture that the project's import compressed (Godot's CompressedTexture2D).
+
+- `public Error Load(string path)` - Points the texture at a picture file (Godot's load).
+- `public string GetLoadPath()`
 
 ### ConcavePolygonShape3D
 
@@ -3215,6 +3282,22 @@ Values: `Free = 0`, `Linear = 1`
 - `public Vector3 GetClosestPoint(Vector3 toPoint)` - The point of the baked curve nearest to toPoint.
 - `public float GetClosestOffset(Vector3 toPoint)` - How far along the baked curve the point nearest to toPoint is.
 
+### CurveTexture
+
+`public class CurveTexture : GeneratedTexture`
+
+- `public Curve? Curve { get; set; }`
+- `public int Width { get; set; }`
+- `public TextureModeEnum TextureMode { get; set; }`
+- `public override Vector2 GetSize()`
+- `public override Image GetImage()`
+
+### CurveTexture.TextureModeEnum
+
+`public enum TextureModeEnum`
+
+Values: `Rgb = 0`, `Red = 1`
+
 ### CylinderMesh
 
 `public class CylinderMesh : PrimitiveMesh` - A cylinder with its own top and bottom radius (Godot's CylinderMesh; a cone when one is 0).
@@ -3736,6 +3819,56 @@ Values: `Xyz = 0`, `Xzy = 1`, `Yxz = 2`, `Yzx = 3`, `Zxy = 4`, `Zyx = 5`
 
 `public sealed class FabricViewPawn : AverPawn` - What the engine's camera follows while a controller possesses it.
 
+### FastNoiseLite
+
+`public class FastNoiseLite : Noise` - Godot's FastNoiseLite.
+
+- `public NoiseTypeEnum NoiseType { get; set; }`
+- `public int Seed { get; set; }`
+- `public float Frequency { get; set; }`
+- `public Vector3 Offset { get; set; }`
+- `public FractalTypeEnum FractalType { get; set; }`
+- `public int FractalOctaves { get; set; }`
+- `public float FractalLacunarity { get; set; }`
+- `public float FractalGain { get; set; }`
+- `public float FractalWeightedStrength { get; set; }`
+- `public float FractalPingPongStrength { get; set; }`
+- `public CellularDistanceFunctionEnum CellularDistanceFunction { get; set; }`
+- `public float CellularJitter { get; set; }`
+- `public CellularReturnTypeEnum CellularReturnType { get; set; }`
+- `public bool DomainWarpEnabled { get; set; }` - Stored: domain warping is not applied.
+- `public override float GetNoise2D(float x, float y)`
+
+### FastNoiseLite.CellularDistanceFunctionEnum
+
+`public enum CellularDistanceFunctionEnum`
+
+Values: `Euclidean = 0`, `EuclideanSquared = 1`, `Manhattan = 2`, `Hybrid = 3`
+
+### FastNoiseLite.CellularReturnTypeEnum
+
+`public enum CellularReturnTypeEnum`
+
+Values: `CellValue = 0`, `Distance = 1`, `Distance2 = 2`, `Distance2Add = 3`, `Distance2Sub = 4`, `Distance2Mul = 5`, `Distance2Div = 6`
+
+### FastNoiseLite.DomainWarpTypeEnum
+
+`public enum DomainWarpTypeEnum`
+
+Values: `Simplex = 0`, `SimplexReduced = 1`, `BasicGrid = 2`
+
+### FastNoiseLite.FractalTypeEnum
+
+`public enum FractalTypeEnum`
+
+Values: `None = 0`, `Fbm = 1`, `Ridged = 2`, `PingPong = 3`
+
+### FastNoiseLite.NoiseTypeEnum
+
+`public enum NoiseTypeEnum`
+
+Values: `Simplex = 0`, `SimplexSmooth = 1`, `Cellular = 2`, `Perlin = 3`, `ValueCubic = 4`, `Value = 5`
+
 ### FileAccess
 
 `public class FileAccess : RefCounted` - A file open for reading, writing or both (Godot's FileAccess).
@@ -4113,6 +4246,12 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 - `public static void SetMember(Variant target, string name, Variant value)`
 - `public static Variant CallMethod(Variant target, string method, params Variant[] args)` - A method call on a value whose type is not known: objects by name (Godot's or C#'s), and the common methods of the built-in types.
 
+### GeneratedTexture
+
+`public abstract class GeneratedTexture : Texture2D` - A texture whose picture a script's data decides, held as an ImageTexture made on first use.
+
+- `public abstract override Image GetImage()` - Makes the picture.
+
 ### Generic6DOFJoint3D
 
 `public class Generic6DOFJoint3D : Joint3D` - Six axes, each locked, limited, sprung or driven (Godot's Generic6DOFJoint3D).
@@ -4465,6 +4604,43 @@ Values: `Srgb = 0`, `LinearSrgb = 1`, `Oklab = 2`
 
 Values: `Linear = 0`, `Constant = 1`, `Cubic = 2`
 
+### GradientTexture1D
+
+`public class GradientTexture1D : GeneratedTexture`
+
+- `public Gradient? Gradient { get; set; }`
+- `public int Width { get; set; }`
+- `public bool UseHdr { get; set; }`
+- `public override Vector2 GetSize()`
+- `public override Image GetImage()`
+
+### GradientTexture2D
+
+`public class GradientTexture2D : GeneratedTexture`
+
+- `public Gradient? Gradient { get; set; }`
+- `public int Width { get; set; }`
+- `public int Height { get; set; }`
+- `public FillEnum Fill { get; set; }`
+- `public RepeatEnum Repeat { get; set; }`
+- `public Vector2 FillFrom { get; set; }`
+- `public Vector2 FillTo { get; set; }`
+- `public bool UseHdr { get; set; }`
+- `public override Vector2 GetSize()`
+- `public override Image GetImage()`
+
+### GradientTexture2D.FillEnum
+
+`public enum FillEnum`
+
+Values: `Linear = 0`, `Radial = 1`, `Square = 2`
+
+### GradientTexture2D.RepeatEnum
+
+`public enum RepeatEnum`
+
+Values: `None = 0`, `Repeat = 1`, `Mirror = 2`
+
 ### GridContainer
 
 `public class GridContainer : Container` - A grid with a fixed number of columns (Godot's GridContainer).
@@ -4578,6 +4754,71 @@ Values: `Left = 0`, `Center = 1`, `Right = 2`, `Fill = 3`
 
 - `public string Path { get; }`
 - `public IconAttribute(string path)`
+
+### Image
+
+`public class Image : Resource` - A picture in memory (Godot's Image).
+
+- `public Image()`
+- `public static Image Create(int width, int height, bool useMipmaps, Format format)` - A new image of the given size, every channel 0 (Godot's Image.Create).
+- `public static Image CreateEmpty(int width, int height, bool useMipmaps, Format format)` - Godot's Image.CreateEmpty: the same as Create.
+- `public static Image CreateFromData(int width, int height, bool useMipmaps, Format format, byte[] data)` - An image over a copy of data, which must hold the bytes of the stored format (the first level only).
+- `public static Image LoadFromFile(string path)` - Reads a picture file by the engine's decoder (PNG, JPEG, TGA, BMP, ...), res:// and user:// paths included.
+- `public Error Load(string path)` - The error code of Load (Godot's instance method).
+- `public bool IsEmpty()`
+- `public int GetWidth()`
+- `public int GetHeight()`
+- `public Vector2I GetSize()`
+- `public Rect2I GetUsedRect()`
+- `public Format GetFormat()`
+- `public bool HasMipmaps()`
+- `public int GetMipmapCount()`
+- `public void GenerateMipmaps(bool renormalize = false)` - Marks the image as wanting a mip chain; the texture made from it builds the chain.
+- `public void ClearMipmaps()`
+- `public byte[] GetData()` - The pixel bytes of the stored format, rows top first.
+- `public void SetData(int width, int height, bool useMipmaps, Format format, byte[] data)` - Replaces the whole image (Godot's set_data).
+- `public Color GetPixel(int x, int y)`
+- `public Color GetPixelv(Vector2I point)`
+- `public void SetPixel(int x, int y, Color color)` - Writes a pixel; a point outside the image is ignored (Godot reports an error and does nothing).
+- `public void SetPixelv(Vector2I point, Color color)`
+- `public void Fill(Color color)`
+- `public void FillRect(Rect2I rect, Color color)`
+- `public void BlitRect(Image src, Rect2I srcRect, Vector2I dst)` - Copies srcRect of src to dst; whatever falls outside either image is skipped.
+- `public void CopyFrom(Image src)`
+- `public Image GetRegion(Rect2I region)` - Godot's Image.get_region: the clipped rectangle as a new image (empty when nothing is left).
+- `public void Resize(int width, int height, Interpolation interpolation = Interpolation.Bilinear)`
+- `public void ResizeToPo2(bool square = false, Interpolation interpolation = Interpolation.Bilinear)`
+- `public void Convert(Format format)` - Changes the pixel format, keeping the picture.
+- `public void FlipX()`
+- `public void FlipY()`
+- `public override Resource Duplicate(bool subresources = false)`
+- `public byte[] SavePngToBuffer()` - The image as a PNG file (8-bit RGBA, or grey for L8/R8).
+- `public Error SavePng(string path)`
+
+### Image.Format
+
+`public enum Format`
+
+Values: `L8 = 0`, `La8 = 1`, `R8 = 2`, `Rg8 = 3`, `Rgb8 = 4`, `Rgba8 = 5`, `Rgba4444 = 6`, `Rgb565 = 7`, `Rf = 8`, `Rgf = 9`, `Rgbf = 10`, `Rgbaf = 11`, `Rh = 12`, `Rgh = 13`, `Rgbh = 14`, `Rgbah = 15`, `Rgbe9995 = 16`, `Max = 17`
+
+### Image.Interpolation
+
+`public enum Interpolation`
+
+Values: `Nearest = 0`, `Bilinear = 1`, `Cubic = 2`, `Trilinear = 3`, `Lanczos = 4`
+
+### ImageTexture
+
+`public class ImageTexture : Texture2D` - A texture made from an Image (Godot's ImageTexture).
+
+- `public static ImageTexture CreateFromImage(Image image)`
+- `public void SetImage(Image image)` - Makes the texture of the image, or replaces the pixels (and the size) when it has one already.
+- `public void Update(Image image)` - Replaces the pixels with those of image, which must be the size and format this texture was made with (Godot's update).
+- `public override Image GetImage()`
+- `public void SetSizeOverride(Vector2I size)`
+- `public override Vector2 GetSize()`
+- `public Image.Format GetFormat()`
+- `public void Release()` - Frees the engine texture.
 
 ### ImmediateMesh
 
@@ -5518,7 +5759,7 @@ Values: `Points = 0`, `Lines = 1`, `LineStrip = 2`, `Triangles = 3`, `TriangleSt
 - `public Mesh? Mesh { get; set; }`
 - `public void SetBlendShapeValueByName(string name, float value)`
 - `public float GetBlendShapeValueByName(string name)`
-- `public int GetSurfaceOverrideMaterialCount()` - The surfaces of the mesh (at least 1: the single slot the engine draws).
+- `public int GetSurfaceOverrideMaterialCount()` - The surfaces of the mesh (at least 1).
 - `public Material? GetSurfaceOverrideMaterial(int surface)`
 - `public void SetSurfaceOverrideMaterial(int surface, Material? material)`
 - `public Material? GetActiveMaterial(int surface)` - The material a surface is drawn with: the material override, else the surface's override, else the mesh's own material for it (Godot's get_active_material).
@@ -6469,6 +6710,36 @@ Values: `Inherit = 0`, `Pausable = 1`, `WhenPaused = 2`, `Always = 3`, `Disabled
 - `public override int GetHashCode()`
 - `public override string ToString()`
 
+### Noise
+
+`public class Noise : Resource` - The base of the noise resources (Godot's Noise): values from -1 to 1 at a point.
+
+- `public virtual float GetNoise1D(float x)`
+- `public virtual float GetNoise2D(float x, float y)`
+- `public virtual float GetNoise3D(float x, float y, float z)`
+- `public float GetNoise2Dv(Vector2 v)`
+- `public float GetNoise3Dv(Vector3 v)`
+- `public Image GetImage(int width, int height, bool invert = false, bool in3dSpace = false, bool normalize = true)` - A picture of the noise: 0..1 grey, normalised to the picture's own range when normalize is set.
+
+### NoiseTexture2D
+
+`public class NoiseTexture2D : GeneratedTexture`
+
+- `public Noise? Noise { get; set; }`
+- `public int Width { get; set; }`
+- `public int Height { get; set; }`
+- `public bool Invert { get; set; }`
+- `public bool Seamless { get; set; }` - Stored: the picture is not made tileable.
+- `public float SeamlessBlendSkirt { get; set; }`
+- `public bool In3dSpace { get; set; }`
+- `public bool AsNormalMap { get; set; }`
+- `public float BumpStrength { get; set; }`
+- `public bool Normalize { get; set; }`
+- `public Gradient? ColorRamp { get; set; }`
+- `public bool GenerateMipmaps { get; set; }`
+- `public override Vector2 GetSize()`
+- `public override Image GetImage()`
+
 ### Occluder3D
 
 `public class Occluder3D : Resource` - A shape that hides what is behind it from the renderer (Godot's Occluder3D).
@@ -7015,6 +7286,13 @@ Values: `ContactRecycleRadius = 0`, `ContactMaxSeparation = 1`, `ContactMaxAllow
 `public enum Param`
 
 Values: `Bias = 0`, `Damping = 1`, `ImpulseClamp = 2`
+
+### PlaceholderTexture2D
+
+`public class PlaceholderTexture2D : Texture2D` - A texture that stands in for another of a given size (Godot's PlaceholderTexture2D): it has a size and no picture.
+
+- `public Vector2 Size { get; set; }`
+- `public override Vector2 GetSize()`
 
 ### Plane
 
@@ -9424,15 +9702,23 @@ Values: `NoTrimming = 0`, `TrimChar = 1`, `TrimWord = 2`, `TrimEllipsis = 3`, `T
 
 Values: `CharsBeforeShaping = 0`, `CharsAfterShaping = 1`, `GlyphsAuto = 2`, `GlyphsLtr = 3`, `GlyphsRtl = 4`
 
-### Texture2D
+### Texture
 
-`public class Texture2D : Resource`
+`public class Texture : Resource` - Godot's Texture: the base of every texture.
 
-- `public virtual Vector2 GetSize()` - The size in pixels.
-- `public ulong HostHandle { get; set; }` - The engine's texture handle for UI drawing (the id aver_ui_textured_rect takes), 0 when the host has not given the texture one.
-- `public static Func<Texture2D, ulong>? HandleResolver { get; set; }` - Finds a texture's engine handle by its resource path.
+- `public virtual Vector2 GetSize()`
 - `public int GetWidth()`
 - `public int GetHeight()`
+
+### Texture2D
+
+`public class Texture2D : Texture`
+
+- `public virtual Image GetImage()` - The pixels of the texture as an Image (Godot's get_image): a file texture is read from its file; a texture a script built or generated gives its own pixels; a texture of a view or one whose file cannot be read gives an empty image.
+- `public virtual bool HasAlpha()`
+- `public override Vector2 GetSize()` - The size in pixels.
+- `public ulong HostHandle { get; set; }` - The engine's texture handle for UI drawing (the id aver_ui_textured_rect takes), 0 when the host has not given the texture one.
+- `public static Func<Texture2D, ulong>? HandleResolver { get; set; }` - Finds a texture's engine handle by its resource path.
 
 ### Texture3D
 
