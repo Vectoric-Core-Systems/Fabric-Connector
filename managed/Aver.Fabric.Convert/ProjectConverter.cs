@@ -141,12 +141,46 @@ public static class ProjectConverter
         return items;
     }
 
+    /// <summary>The full path with every symlink along it resolved (the parts that do not exist yet are kept as given).</summary>
+    internal static string RealPath(string path)
+    {
+        string full = Path.GetFullPath(path);
+        string root = Path.GetPathRoot(full) ?? "";
+        string cur = root;
+        var pending = new Stack<string>();
+        PushParts(pending, full[root.Length..]);
+        for (int hops = 0; pending.Count > 0;)
+        {
+            string next = Path.Combine(cur, pending.Pop());
+            FileSystemInfo info = Directory.Exists(next) ? new DirectoryInfo(next) : new FileInfo(next);
+            string? link = null;
+            try { link = info.Exists ? info.LinkTarget : null; } catch (IOException) { }
+            if (link == null || ++hops > 40) { cur = next; continue; }
+            string target = Path.GetFullPath(link, cur);
+            string tRoot = Path.GetPathRoot(target) ?? "";
+            cur = tRoot;
+            PushParts(pending, target[tRoot.Length..]);
+        }
+        return cur;
+    }
+
+    // The folder names of a relative path onto the stack, the first on top.
+    private static void PushParts(Stack<string> stack, string relative)
+    {
+        string[] parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        for (int i = parts.Length - 1; i >= 0; --i) stack.Push(parts[i]);
+    }
+
     private static void WriteScriptsProject(string outDir, string engine, string refs, List<string> written)
     {
         string dir = Path.Combine(outDir, "Content", "Scripts");
         string csproj = Path.Combine(dir, "Scripts.csproj");
         if (File.Exists(csproj)) return;
         Directory.CreateDirectory(dir);
+        // The relative paths are made between real locations (symlinks followed), so they hold wherever the build resolves them from: macOS's temp folder
+        // (/var is /private/var) is a symlink, and a `..` run counted along the link's path leaves the wrong folder.
+        string realDir = RealPath(dir);
+        engine = RealPath(engine);
         var sb = new StringBuilder();
         sb.Append("<Project Sdk=\"Microsoft.NET.Sdk\">\n\n");
         sb.Append("  <!-- Written by Aver.Fabric.Convert for a converted Godot project. Tools > Compile Scripts builds this file; the converted scripts\n");
@@ -156,14 +190,14 @@ public static class ProjectConverter
         foreach (string name in new[] { "Aver.Scripting", "Aver.Framework", "Aver.UI", "Aver.Materials" })
         {
             string target = Path.Combine(engine, "scripting", "csharp", name, name + ".csproj");
-            sb.Append("    <ProjectReference Include=\"").Append(Path.GetRelativePath(dir, target).Replace('/', '\\')).Append("\" />\n");
+            sb.Append("    <ProjectReference Include=\"").Append(Path.GetRelativePath(realDir, target).Replace('/', '\\')).Append("\" />\n");
         }
         sb.Append("  </ItemGroup>\n\n");
         // Aver.Fabric is the extension's file, not an engine project: a HintPath to the installed assembly, relative to this folder like the
         // engine references. Private=false because the host loads that one assembly (a copy in Binaries/Scripts would be a second Aver.Fabric).
         string? fabric = References.Find(refs, "Aver.Fabric.dll");
         if (fabric != null)
-            sb.Append("  <ItemGroup>\n    <Reference Include=\"Aver.Fabric\">\n      <HintPath>").Append(Path.GetRelativePath(dir, fabric).Replace('/', '\\'))
+            sb.Append("  <ItemGroup>\n    <Reference Include=\"Aver.Fabric\">\n      <HintPath>").Append(Path.GetRelativePath(realDir, RealPath(fabric)).Replace('/', '\\'))
               .Append("</HintPath>\n      <Private>false</Private>\n    </Reference>\n  </ItemGroup>\n\n");
         else
             sb.Append("  <!-- Aver.Fabric.dll was not found when this project was converted: add a Reference to Extensions\\FabricConnector\\managed\\Aver.Fabric.dll. -->\n\n");

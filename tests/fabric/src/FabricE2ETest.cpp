@@ -208,6 +208,10 @@ int main() {
               std::string("Content/Scripts/") + cs + ".cs was written with no compile error marked in it");
     check(fileExists(content + "/Scripts/Scripts.csproj"), "Scripts.csproj was written beside them (or the engine checkout was not found: see the report)") ;
     check(fileExists(proj + "/Binaries/Scripts/Scripts.dll"), "the scripts were built into Binaries/Scripts, where Tools > Compile Scripts puts them, so the classes are declared on open");
+    if (!fileExists(proj + "/Binaries/Scripts/Scripts.dll")) {   // the build tool's own words, and the project it was given
+        AVER_INFO("the conversion's output:\n{}", run1.text);
+        AVER_INFO("Scripts.csproj:\n{}", slurp(content + "/Scripts/Scripts.csproj"));
+    }
     for (const char* folder : {"Maps", "Meshes", "Materials", "Textures", "Sounds", "Scripts"})
         check(fsys::is_directory(content + "/" + folder, ec), std::string("Content/") + folder + " exists, so the editor's project upgrade has nothing to create");
     check(pd.gameMode == "FabricGameMode", "GAME.MODE is FabricGameMode (no default pawn, no drone: Godot's own input and scripts drive the game)");
@@ -296,6 +300,7 @@ int main() {
         check(scripts.exitCode == 0 && !summaryLine(scripts.text).empty() && !contains(summaryLine(scripts.text), "not converted") && fileExists(out3 + "/E2EGame/Content/Scripts/Player.cs") &&
                   fileExists(out3 + "/E2EGame/Binaries/Scripts/Scripts.dll"),
               "--scripts-only then converts and builds the scripts in that project");
+        if (!fileExists(out3 + "/E2EGame/Binaries/Scripts/Scripts.dll")) AVER_INFO("the --scripts-only output:\n{}", scripts.text);
         const std::vector<Entry> finalReport = readReport(out3 + "/FabricReport.jsonl");
         check(std::count_if(finalReport.begin(), finalReport.end(), [](const Entry& e) { return e.kind == "script" && e.rating == "converted"; }) == 3 &&
                   std::none_of(finalReport.begin(), finalReport.end(), [](const Entry& e) { return e.reason.find("--scenes-only") != std::string::npos; }),

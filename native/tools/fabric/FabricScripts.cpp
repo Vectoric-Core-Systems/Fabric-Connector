@@ -126,23 +126,35 @@ bool Converter::convertScripts() {
 
 void Converter::buildScripts(const std::string& dotnet) {
     std::error_code ec;
-    const fsys::path csproj = fsys::absolute(fsys::path(projectDir_) / "Content" / "Scripts" / "Scripts.csproj", ec);
+    fsys::path csproj = fsys::absolute(fsys::path(projectDir_) / "Content" / "Scripts" / "Scripts.csproj", ec);
     if (!fileExists(csproj.string())) {
         AVER_WARN("fabric: the scripts were not built into Binaries/Scripts: {} does not exist (the engine checkout was not found); use Tools > Compile Scripts", csproj.string());
         return;
     }
-    const std::string outDir = (fsys::absolute(fsys::path(projectDir_), ec) / "Binaries" / "Scripts").string();
+    // The real path (symlinks followed): the project's relative references to the engine were counted from it, and a build that walks `..` along a link
+    // (macOS's temp folder, /var, is one) would leave a different folder.
+    if (const fsys::path real = fsys::canonical(csproj, ec); !ec) csproj = real;
+    const fsys::path realProject = fsys::canonical(fsys::path(projectDir_), ec);
+    const std::string outDir = ((ec ? fsys::absolute(fsys::path(projectDir_), ec) : realProject) / "Binaries" / "Scripts").string();
     AVER_INFO("fabric: building the scripts into {}", outDir);
     // The editor's command line (ToolsMenu::startCompile): Release, and no compiler server or reused MSBuild nodes outliving the build.
     const std::vector<std::string> args = {"build", csproj.string(), "-c", "Release", "-p:UseSharedCompilation=false", "-nodeReuse:false", "--nologo", "-o", outDir};
     std::string firstError;
+    std::vector<std::string> errors, tail;   // the error lines, and the last lines of the output for a failure that prints none
     const ProcessOutput out = runProcess(dotnet, args, [&](const std::string& line) {
-        if (firstError.empty() && line.find(": error ") != std::string::npos) firstError = line;
+        if (line.empty()) return;
+        if (line.find(": error ") != std::string::npos || line.find("error MSB") != std::string::npos || line.find("error NU") != std::string::npos) {
+            if (firstError.empty()) firstError = line;
+            if (errors.size() < 12) errors.push_back(line);
+        }
+        tail.push_back(line);
+        if (tail.size() > 15) tail.erase(tail.begin());
     });
     if (out.started && out.exitCode == 0) {
         AVER_INFO("fabric: scripts built into {}", outDir);
         return;
     }
+    for (const std::string& line : errors.empty() ? tail : errors) AVER_ERROR("fabric: dotnet build: {}", line);
     const std::string why = out.started ? "dotnet build exited " + std::to_string(out.exitCode) + (firstError.empty() ? std::string() : ": " + firstError) : "could not start dotnet";
     AVER_ERROR("fabric: the scripts were not built into Binaries/Scripts: {}", why);
     report_.add("script", "Content/Scripts/Scripts.csproj", "", "csharp", "", Rating::Unsupported,

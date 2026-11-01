@@ -129,7 +129,12 @@ static class DisplayTests
         w.ContentScaleSize = new Vector2I(640, 360);
         w.Size = new Vector2I(1280, 720);
         Input.ParseInputEvent(new InputEventMouseMotion { Position = new Vector2(640, 360), Relative = new Vector2(1, 1) });
-        T.Check("the viewport pointer is in content space under a stretch", w.GetMousePosition() == new Vector2(320, 180));
+        // The stretch is the engine library's (Aver.UI.Abi). The first suite that asks stages it beside the test assembly, and on Linux (whose loader does not
+        // look in the working directory) that is not this one, which runs before the UI suites: stage it here, as they do.
+        if (UiTests.EnsureNative())
+            T.Check("the viewport pointer is in content space under a stretch", w.GetMousePosition() == new Vector2(320, 180));
+        else
+            Console.WriteLine("  SKIP: the viewport pointer under a stretch (build/bin/Aver.UI.Abi was not found; build the Aver.UI.Abi target)");
         SceneTree.Reset();
     }
 

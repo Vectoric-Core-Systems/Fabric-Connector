@@ -543,6 +543,23 @@ static class ConvertScriptsTests
             File.WriteAllText(csproj, "<Project />");
             Cli(out _, out _, "scripts", "--project", Path.Combine(T.DataDir(), "csharp"), "--out", proj, "--refs", Refs, "--engine", repo);
             T.Check("an existing Scripts.csproj is never overwritten", File.ReadAllText(csproj) == "<Project />");
+
+            // A project reached through a symlink (macOS's temp folder, /var, is one) gets the paths of its real location: counted along the link's own path,
+            // a `..` run leaves the wrong folder. The link here is shallow and its target deep, so the two counts differ.
+            string deep = Path.Combine(root, "a", "b", "c");
+            Directory.CreateDirectory(deep);
+            string link = Path.Combine(root, "Link");
+            bool linked = false;
+            try { Directory.CreateSymbolicLink(link, deep); linked = true; } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            if (linked)
+            {
+                Cli(out _, out string seLinked, "scripts", "--project", Path.Combine(T.DataDir(), "csharp"), "--out", Path.Combine(link, "Q"), "--refs", Refs, "--engine", repo);
+                Cli(out _, out _, "scripts", "--project", Path.Combine(T.DataDir(), "csharp"), "--out", Path.Combine(deep, "Q"), "--refs", Refs, "--engine", repo);
+                string viaLink = Path.Combine(link, "Q", "Content", "Scripts", "Scripts.csproj");
+                string viaReal = Path.Combine(deep, "Q", "Content", "Scripts", "Scripts.csproj");
+                T.Check("a project reached through a symlink has the references of its real folder",
+                        File.Exists(viaLink) && File.Exists(viaReal) && File.ReadAllText(viaLink) == File.ReadAllText(viaReal), seLinked);
+            }
         }
         finally { try { Directory.Delete(root, true); } catch (IOException) { } }
     }
