@@ -1,0 +1,15 @@
+; Engine configuration file.
+; A fixture for wave 2 (docs/plans/WAVE2_MATERIALS.md): material sampler state, the F35 fields, procedural textures, per-surface material overrides (FabricWave2Test).
+
+config_version=5
+
+[application]
+
+config/name="Wave2 Game"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[rendering]
+
+textures/default_filters/anisotropic_filtering_level=4
+textures/default_filters/texture_mipmap_bias=-0.5

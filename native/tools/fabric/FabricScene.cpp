@@ -784,6 +784,7 @@ struct PlacedVisual {
     std::string mesh, material;
     std::vector<Xform> instances;   // MultiMeshInstance3D: one transform per instance (Godot local space); a mesh node has one identity entry
     size_t visibleCount = 0;        // instances shown; the rest are placed hidden
+    std::vector<std::pair<int, std::string>> surfaces;   // P2: mesh material slot -> material name, from surface_material_override/N (none when material_override is set)
 };
 
 bool endsWithOcMesh(const std::string& s) { return s.size() > 7 && s.compare(s.size() - 7, 7, ".ocmesh") == 0; }
@@ -796,6 +797,10 @@ bool planPlacedVisual(Report& report, const FNode& fn, const std::vector<std::pa
         return nullptr;
     };
     if (const Var* mat = find("material_override"); mat && mat->type == VType::Resource) out.material = stemOf(mat->s);
+    else if (fn.type == "MeshInstance3D")
+        for (const auto& kv : props)
+            if (kv.first.rfind("surface_material_override/", 0) == 0 && kv.second.type == VType::Resource)
+                out.surfaces.emplace_back(std::atoi(kv.first.c_str() + std::strlen("surface_material_override/")), stemOf(kv.second.s));
     if (fn.type == "MultiMeshInstance3D") {
         const Var* mm = find("multimesh");
         if (!mm || mm->type != VType::Object || mm->s != "MultiMesh") return false;
@@ -847,6 +852,15 @@ std::string viewportKeyOf(const std::string& level, const FNode& n) {
     for (char& c : key)   // the key travels inside a .ocmat texture reference and a level Prop: keep it to plain characters
         if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '.' && c != '/' && c != ':' && c != '-') c = '_';
     return key;
+}
+
+size_t Converter::meshSlotCount(const std::string& meshAsset) {
+    if (const auto it = meshSlotCounts_.find(meshAsset); it != meshSlotCounts_.end()) return it->second;
+    fmt::OcMeshData md;
+    size_t n = 0;
+    if (fmt::loadOcMesh(contentDir_ + "/" + meshAsset, md)) n = std::max<size_t>(1, md.materialSlots.size());
+    meshSlotCounts_[meshAsset] = n;
+    return n;
 }
 
 void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::OcWorldData& level, LevelScan& scan) {
@@ -1037,22 +1051,37 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     std::vector<std::unique_ptr<FNode>> synthetic;
     geometryNode(fn, props, synthetic, cc);
 
-    // MeshInstance3D: surface overrides. The runtime holds one material per mesh instance.
+    // MeshInstance3D: surface overrides (P2). Each surface_material_override/N stays a property of the node (Aver.Fabric's MeshInstance3D applies it to mesh material slot N),
+    // and the placed mesh below the node carries the same slots as a SurfaceMaterials record, so the editor shows them too. A material_override replaces every surface, as in Godot.
     if (fn.type == "MeshInstance3D") {
-        std::vector<std::pair<std::string, Var>> overrides;
+        const bool wholeOverride = findProp("material_override") != nullptr;
+        const Var* meshProp = findProp("mesh");
+        const size_t slots = meshProp && meshProp->type == VType::Resource ? meshSlotCount(meshProp->s) : 0;   // 0: not an .ocmesh the converter wrote
         for (auto it = props.begin(); it != props.end();) {
-            if (it->first.rfind("surface_material_override/", 0) == 0) { overrides.push_back(*it); it = props.erase(it); }
-            else ++it;
-        }
-        for (auto& [k, v] : overrides) {
-            if (k == "surface_material_override/0" && !findProp("material_override")) {
-                props.emplace_back("material_override", v);
-                report_.add("property", fn.reportFile, fn.reportPath, fn.type, k, Rating::Approximated,
-                            "written as material_override: a mesh instance holds one material in the runtime", 0);
-            } else {
-                report_.add("property", fn.reportFile, fn.reportPath, fn.type, k, Rating::Unsupported,
-                            "only the first surface's material override is carried", 0);
+            if (it->first.rfind("surface_material_override/", 0) != 0) { ++it; continue; }
+            const int slot = std::atoi(it->first.c_str() + std::strlen("surface_material_override/"));
+            const Var value = it->second;
+            if (slot < 0 || slot >= 16) {
+                report_.add("property", fn.reportFile, fn.reportPath, fn.type, it->first, Rating::Unsupported, "the engine overrides the first 16 mesh material slots", 0);
+                it = props.erase(it);
+                continue;
             }
+            if (slots == 1) {   // a mesh with one surface: surface 0's override is the mesh's material
+                it = props.erase(it);
+                if (slot != 0) {
+                    report_.add("property", fn.reportFile, fn.reportPath, fn.type, "surface_material_override/" + std::to_string(slot), Rating::Unsupported, "the mesh has one surface", 0);
+                } else if (wholeOverride) {
+                    report_.add("property", fn.reportFile, fn.reportPath, fn.type, "surface_material_override/0", Rating::Approximated, "material_override replaces every surface, so this override is not drawn (as in Godot)", 0);
+                } else {
+                    props.emplace_back("material_override", value);
+                    report_.add("property", fn.reportFile, fn.reportPath, fn.type, "surface_material_override/0", Rating::Converted, "the mesh has one surface: written as material_override", 0);
+                }
+                continue;
+            }
+            report_.add("property", fn.reportFile, fn.reportPath, fn.type, it->first, wholeOverride ? Rating::Approximated : Rating::Converted,
+                        wholeOverride ? "material_override replaces every surface, so this override is kept but not drawn (as in Godot)"
+                                      : "drawn in place of mesh material slot " + std::to_string(slot) + " (not for a level-of-detail, soft-body or GPU-cluster draw)", 0);
+            ++it;
         }
     }
 
@@ -1383,6 +1412,12 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
             fmt::OcWorldPlacement vis;
             vis.asset = visual.mesh;
             vis.material = visual.material;
+            if (!visual.surfaces.empty()) {   // P2
+                fmt::OcPlacedComponent sm;
+                sm.type = "SurfaceMaterials";
+                for (const auto& [slot, name] : visual.surfaces) sm.kv.emplace_back("slot" + std::to_string(slot), name);
+                vis.components.push_back(std::move(sm));
+            }
             vis.parent = index;
             vis.collide = false;
             vis.visible = !hidden && i < visual.visibleCount;

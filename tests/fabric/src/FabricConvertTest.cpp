@@ -469,8 +469,9 @@ int main() {
         check(!matFile.empty() && fmt::loadOcmat(content + "/" + matFile, floorMat, &ex, &err), "the sub-resource material loads: " + err);
         check(near(floorMat.metallicFactor, 0.25) && near(floorMat.roughnessFactor, 0.6), "metallic and roughness");
         check(floorMat.alphaMode == pbr::AlphaMode::Mask && near(floorMat.alphaCutoff, 0.4) && floorMat.twoSided, "alpha scissor with its threshold, and cull mode disabled as two-sided");
-        check(near(floorMat.emissiveFactor[0], 2) && floorMat.emissiveFactor[1] > 0.3 && floorMat.emissiveFactor[1] < 0.5 && near(floorMat.emissiveFactor[2], 0),
-              "emission colour (linear) times the energy multiplier");
+        check(near(floorMat.emissiveFactor[0] * floorMat.emissiveEnergy, 2) && floorMat.emissiveFactor[1] * floorMat.emissiveEnergy > 0.3 &&
+                  floorMat.emissiveFactor[1] * floorMat.emissiveEnergy < 0.5 && near(floorMat.emissiveFactor[2], 0) && near(floorMat.emissiveEnergy, 2),
+              "emission colour (linear) as the factor, the energy multiplier as the material's emissive energy");
         const std::string tex = floorMat.textures[static_cast<u32>(pbr::TextureSlot::BaseColor)].path;
         check(tex == "Textures/ConvertGame/albedo.png" && fileExists(content + "/" + tex), "the albedo texture was copied through the material cook and is referenced");
     }

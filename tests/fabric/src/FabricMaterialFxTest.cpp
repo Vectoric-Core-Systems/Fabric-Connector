@@ -193,7 +193,8 @@ int main() {
         check(rated("rim_enabled", "approximated") && rated("anisotropy_enabled", "approximated") && rated("backlight_enabled", "approximated") && rated("refraction_enabled", "approximated") &&
                   rated("clearcoat_enabled", "approximated") && rated("heightmap_deep_parallax", "approximated"), "rim, anisotropy, backlight, refraction, clearcoat and deep parallax are approximated");
         check(rated("heightmap_enabled", "converted") && rated("detail_enabled", "converted") && rated("detail_mask", "unsupported"), "heightmap and detail converted, the detail mask unsupported");
-        check(rated("texture_filter", "approximated") && rated("specular_mode", "converted") && rated("diffuse_mode", "approximated"), "texture filter, specular and diffuse modes rated");
+        check(rated("texture_filter", "converted") && rated("texture_repeat", "converted") && rated("specular_mode", "converted") && rated("diffuse_mode", "approximated"),
+              "texture filter and repeat (the sampler, P1), specular and diffuse modes rated");
         check(!rated("uv1_scale", "unsupported"), "uv1_scale is no longer unsupported (the G3 gap)");
     }
 

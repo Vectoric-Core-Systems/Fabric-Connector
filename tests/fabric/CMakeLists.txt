@@ -181,6 +181,19 @@ if(TARGET Aver.Formats.Material)
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
+# FabricWave2Test -- wave 2 of the Godot parity plan through the converter on tests/fabric/data/Wave2Game: the sampler and the F35 fields in the .ocmat, procedural and
+# alias textures baked to pictures, per-surface material overrides in the level, the project's anisotropy. Runs the tool as a process, like FabricMaterialFxTest.
+if(TARGET Aver.Formats.Material)
+  add_executable(FabricWave2Test src/FabricWave2Test.cpp)
+  target_link_libraries(FabricWave2Test PRIVATE Aver.Formats.Godot Aver.Formats Aver.Formats.Material Aver.Render.PBR.Materials Aver.Platform Aver.Core)
+  fabric_needs_converter(FabricWave2Test)
+  target_compile_definitions(FabricWave2Test PRIVATE
+    AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+    AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+  set_target_properties(FabricWave2Test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+
 # FabricGeometryTest -- G4 R7 (ArrayMesh, MultiMesh, trail meshes, CSG, Sprite3D, Label3D, GridMap) through the converter on tests/fabric/data/GeomGame.
 # Runs the tool as a process, like FabricConvertTest.
 add_executable(FabricGeometryTest src/FabricGeometryTest.cpp)

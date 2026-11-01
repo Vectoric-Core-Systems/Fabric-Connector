@@ -168,6 +168,7 @@ static class Program
         failures += GameModeTests.RunAll();  // FabricGameMode (GAME.MODE): registers, no default pawn, the view follows the current Camera3D
         failures += GdextTests.RunAll();     // F5: the GDExtension host from C# (wire form always; the native host and test plugin when built)
         failures += Wave5Tests.RunAll();     // wave 5: joints, SoftBody3D, primitive meshes, lines and points, shape owners, space parameters, Geometry helpers, physics interpolation
+        failures += Wave2Tests.RunAll();     // wave 2: Image and ImageTexture, the procedural and alias textures, a material's values reaching the engine, sampler fields, surface overrides
 
         Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
         return failures;

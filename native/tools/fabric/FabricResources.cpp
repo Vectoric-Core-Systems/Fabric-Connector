@@ -1,6 +1,7 @@
 // Godot resources to Aver assets: textures, materials, primitive meshes, imported models, collision shapes.
 #include "FabricInternal.hpp"
 #include "FabricMeshGen.hpp"
+#include "FabricProcTex.hpp"
 
 #include "aver/core/Hash.hpp"
 #include "aver/formats/OcAnim.hpp"
@@ -282,12 +283,269 @@ std::string Converter::copyTexture(const std::string& resPath, const Where& w) {
     return asset;
 }
 
+// ---- F26: procedural texture resources -----------------------------------------------------------------------------------
+
+bool isProceduralTextureType(const std::string& t) {
+    return t == "GradientTexture1D" || t == "GradientTexture2D" || t == "NoiseTexture2D" || t == "CurveTexture" || t == "AtlasTexture" || t == "CanvasTexture" ||
+           t == "NoiseTexture3D" || t == "CurveXYZTexture";
+}
+
+namespace {
+
+// A resource value (sub-resource or external .tres) as its class and properties.
+struct ResRef {
+    std::string type, key, res;
+    const std::vector<gd::GodotProperty>* props = nullptr;
+    const gd::GodotDocBase* doc = nullptr;
+};
+
+bool resolveRef(Converter& c, const Var& v, const gd::GodotDocBase& doc, ResRef& out) {
+    if (v.type == VType::SubResource) {
+        const gd::GodotSubResource* sr = doc.findSub(v.s);
+        if (!sr) return false;
+        out = {sr->type, doc.file + "#" + sr->id, {}, &sr->props, &doc};
+        return true;
+    }
+    if (v.type == VType::ExtResource) {
+        const gd::GodotExtResource* e = doc.findExt(v.s);
+        if (!e) return false;
+        const std::string res = c.fs_.resolve(*e, &c.diag_, doc.file);
+        const std::string ext = extOf(res);
+        if (res.empty() || (ext != ".tres" && ext != ".res")) return false;
+        const gd::GodotResource* r = c.resourceDoc(res);
+        if (!r) return false;
+        out = {r->header.type, res, res, &r->props, r};
+        return true;
+    }
+    return false;
+}
+
+proctex::Gradient gradientOf(Converter& c, const Var* v, const gd::GodotDocBase& doc, bool* found = nullptr) {
+    proctex::Gradient g;
+    g.offsets = {0.0f, 1.0f};
+    g.colors = {{0, 0, 0, 1}, {1, 1, 1, 1}};
+    ResRef r;
+    if (found) *found = false;
+    if (!v || !resolveRef(c, *v, doc, r) || r.type != "Gradient") return g;
+    if (found) *found = true;
+    const Var* offs = findProp(*r.props, "offsets");
+    const Var* cols = findProp(*r.props, "colors");
+    if (offs && cols && !offs->nums.empty() && cols->nums.size() >= offs->nums.size() * 4) {
+        g.offsets.clear();
+        g.colors.clear();
+        for (size_t i = 0; i < offs->nums.size(); ++i) {
+            g.offsets.push_back(static_cast<float>(offs->nums[i]));
+            g.colors.push_back({static_cast<float>(cols->nums[i * 4]), static_cast<float>(cols->nums[i * 4 + 1]), static_cast<float>(cols->nums[i * 4 + 2]),
+                                static_cast<float>(cols->nums[i * 4 + 3])});
+        }
+    }
+    g.mode = static_cast<int>(numOf(findProp(*r.props, "interpolation_mode"), 0));
+    return g;
+}
+
+// Godot's FastNoiseLite.NoiseType numbers to proctex's.
+int noiseTypeOf(int godot) {
+    switch (godot) {
+        case 0: return 4;   // simplex
+        case 1: return 5;   // simplex smooth
+        case 2: return 3;   // cellular
+        case 3: return 2;   // perlin
+        case 4: return 1;   // value cubic
+        default: return 0;  // value
+    }
+}
+
+}  // namespace
+
+std::string Converter::textureSource(const Var* v, const gd::GodotDocBase& doc, const Where& w) {
+    if (!v) return {};
+    if (v->type == VType::ExtResource) {
+        const gd::GodotExtResource* e = doc.findExt(v->s);
+        if (!e) return {};
+        const std::string res = fs_.resolve(*e, &diag_, doc.file);
+        ResRef r;
+        if (resolveRef(*this, *v, doc, r) && isProceduralTextureType(r.type)) return proceduralTexture(*v, doc, w);
+        return res;
+    }
+    if (v->type == VType::SubResource) return proceduralTexture(*v, doc, w);
+    return {};
+}
+
+std::string Converter::proceduralTexture(const Var& v, const gd::GodotDocBase& doc, const Where& w) {
+    ResRef r;
+    if (!resolveRef(*this, v, doc, r) || !isProceduralTextureType(r.type)) return {};
+    if (const auto it = proceduralRefs_.find(r.key); it != proceduralRefs_.end()) return it->second;
+    proceduralRefs_[r.key] = {};   // a failure below is final
+#if AVER_HAVE_MATERIAL_COMPILE
+    const auto& P = *r.props;
+    const auto get = [&](const char* n) { return findProp(P, n); };
+    const auto rate = [&](Rating rating, const std::string& why) { report_.add("resource", r.doc->file, w.node, r.type, "", rating, why, 0); };
+    const std::string base = r.res.empty() ? stemOf(doc.file) + "_" + r.key.substr(r.key.find('#') + 1) : stemOf(r.res);
+    const std::string name = "gen://" + safeName(base, "texture") + "_" + fnvHex(r.key);
+    proctex::Picture pic;
+    std::string alias;   // CanvasTexture: the file it stands for
+    const auto intOf = [&](const char* n, int def) { return static_cast<int>(numOf(get(n), def)); };
+
+    if (r.type == "GradientTexture1D") {
+        pic = proctex::gradient1D(gradientOf(*this, get("gradient"), *r.doc), intOf("width", 256));
+        rate(Rating::Converted, "baked to a PNG at convert time (the gradient sampled at the texture's width)");
+    } else if (r.type == "GradientTexture2D") {
+        double fx = 0, fy = 0, tx = 1, ty = 0;
+        if (const Var* f = get("fill_from"); f && f->nums.size() >= 2) { fx = f->nums[0]; fy = f->nums[1]; }
+        if (const Var* t = get("fill_to"); t && t->nums.size() >= 2) { tx = t->nums[0]; ty = t->nums[1]; }
+        pic = proctex::gradient2D(gradientOf(*this, get("gradient"), *r.doc), intOf("width", 64), intOf("height", 64), intOf("fill", 0), static_cast<float>(fx),
+                                  static_cast<float>(fy), static_cast<float>(tx), static_cast<float>(ty), intOf("repeat", 0));
+        rate(Rating::Converted, "baked to a PNG at convert time (linear, radial or square fill, with the repeat mode)");
+    } else if (r.type == "NoiseTexture2D") {
+        ResRef nr;
+        const Var* nv = get("noise");
+        if (!nv || !resolveRef(*this, *nv, *r.doc, nr) || nr.type != "FastNoiseLite") {
+            rate(Rating::Unsupported, "the texture has no FastNoiseLite noise to bake");
+            return {};
+        }
+        const auto& NP = *nr.props;
+        const auto n = [&](const char* k, double d) { return numOf(findProp(NP, k), d); };
+        proctex::NoiseParams np;
+        np.type = noiseTypeOf(static_cast<int>(n("noise_type", 1)));
+        np.seed = static_cast<int>(n("seed", 0));
+        np.frequency = static_cast<float>(n("frequency", 0.01));
+        if (const Var* o = findProp(NP, "offset"); o && o->nums.size() >= 3) for (int k = 0; k < 3; ++k) np.offset[k] = static_cast<float>(o->nums[static_cast<size_t>(k)]);
+        np.fractal = static_cast<int>(n("fractal_type", 1));
+        np.octaves = std::clamp(static_cast<int>(n("fractal_octaves", 5)), 1, 10);
+        np.lacunarity = static_cast<float>(n("fractal_lacunarity", 2.0));
+        np.gain = static_cast<float>(n("fractal_gain", 0.5));
+        np.weightedStrength = static_cast<float>(n("fractal_weighted_strength", 0.0));
+        np.pingPongStrength = static_cast<float>(n("fractal_ping_pong_strength", 2.0));
+        np.cellularDistance = static_cast<int>(n("cellular_distance_function", 0));
+        np.cellularJitter = static_cast<float>(n("cellular_jitter", 1.0));
+        np.cellularReturn = static_cast<int>(n("cellular_return_type", 1));
+        bool haveRamp = false;
+        const proctex::Gradient ramp = gradientOf(*this, get("color_ramp"), *r.doc, &haveRamp);
+        proctex::NoiseOptions o;
+        o.width = intOf("width", 512);
+        o.height = intOf("height", 512);
+        o.invert = boolOf(get("invert"), false);
+        o.normalize = boolOf(get("normalize"), true);
+        o.seamless = boolOf(get("seamless"), false);
+        o.asNormalMap = boolOf(get("as_normal_map"), false);
+        o.bumpStrength = static_cast<float>(numOf(get("bump_strength"), 8.0));
+        o.ramp = haveRamp ? &ramp : nullptr;
+        if (boolOf(get("in_3d_space"), false)) rate(Rating::Approximated, "in_3d_space noise is baked as the flat slice (z = 0)");
+        pic = proctex::noiseImage(np, o);
+        rate(Rating::Approximated, "baked to a PNG at convert time with this converter's own noise (the same noise family and settings, not Godot's texels)");
+    } else if (r.type == "CurveTexture") {
+        ResRef cr;
+        const Var* cv = get("curve");
+        std::vector<proctex::CurvePoint> pts;
+        float minV = 0, maxV = 1, minD = 0, maxD = 1;
+        if (cv && resolveRef(*this, *cv, *r.doc, cr) && cr.type == "Curve") {
+            if (const Var* d = findProp(*cr.props, "_data"); d && d->type == VType::Array)
+                for (size_t i = 0; i + 4 < d->items.size(); i += 5) {
+                    proctex::CurvePoint p;
+                    p.x = static_cast<float>(d->items[i].num(0));
+                    p.y = static_cast<float>(d->items[i].num(1));
+                    p.leftTangent = static_cast<float>(d->items[i + 1].asNumber());
+                    p.rightTangent = static_cast<float>(d->items[i + 2].asNumber());
+                    p.leftMode = static_cast<int>(d->items[i + 3].asInt());
+                    p.rightMode = static_cast<int>(d->items[i + 4].asInt());
+                    pts.push_back(p);
+                }
+            minV = static_cast<float>(numOf(findProp(*cr.props, "min_value"), 0));
+            maxV = static_cast<float>(numOf(findProp(*cr.props, "max_value"), 1));
+            minD = static_cast<float>(numOf(findProp(*cr.props, "min_domain"), 0));
+            maxD = static_cast<float>(numOf(findProp(*cr.props, "max_domain"), 1));
+        }
+        if (pts.empty()) {
+            rate(Rating::Unsupported, "the texture has no curve points to bake");
+            return {};
+        }
+        pic = proctex::curve1D(pts, minD, maxD, minV, maxV, intOf("width", 256), intOf("texture_mode", 0) == 1);
+        rate(Rating::Converted, "baked to a PNG at convert time (the curve sampled across its domain; the value mapped from its range to 0..1)");
+    } else if (r.type == "AtlasTexture") {
+        const Var* av = get("atlas");
+        const std::string src = textureSource(av, *r.doc, w);
+        std::string why;
+        ImageData img;
+        const std::string disk = src.rfind("gen://", 0) == 0 ? std::string() : fs_.toDiskPath(src);
+        if (disk.empty() || !decodeImage(disk, img, &why) || !img.valid()) {
+            rate(Rating::Unsupported, "the atlas picture could not be read" + (why.empty() ? std::string() : ": " + why));
+            return {};
+        }
+        proctex::Picture whole;
+        whole.width = static_cast<int>(img.width);
+        whole.height = static_cast<int>(img.height);
+        whole.rgba = img.pixels;
+        double rx = 0, ry = 0, rw = img.width, rh = img.height, mx = 0, my = 0, mw = 0, mh = 0;
+        if (const Var* rg = get("region"); rg && rg->nums.size() >= 4 && rg->nums[2] > 0 && rg->nums[3] > 0) { rx = rg->nums[0]; ry = rg->nums[1]; rw = rg->nums[2]; rh = rg->nums[3]; }
+        if (const Var* mg = get("margin"); mg && mg->nums.size() >= 4) { mx = mg->nums[0]; my = mg->nums[1]; mw = mg->nums[2]; mh = mg->nums[3]; }
+        pic = proctex::crop(whole, static_cast<int>(rx), static_cast<int>(ry), static_cast<int>(rw), static_cast<int>(rh), static_cast<int>(mx), static_cast<int>(my),
+                            std::max(0, static_cast<int>(mw - mx)), std::max(0, static_cast<int>(mh - my)));
+        rate(Rating::Converted, "the region of the atlas cut out into a picture of its own");
+    } else if (r.type == "CanvasTexture") {
+        alias = textureSource(get("diffuse_texture"), *r.doc, w);
+        if (alias.empty()) {
+            rate(Rating::Unsupported, "the canvas texture has no diffuse picture");
+            return {};
+        }
+        rate(Rating::Approximated, "stands for its diffuse texture; the normal and specular maps are not used");
+        proceduralRefs_[r.key] = alias;
+        return alias;
+    } else {
+        rate(Rating::Unsupported, r.type + " has no 2D picture a material slot can read (a volume or three-channel curve)");
+        return {};
+    }
+    std::vector<u8> png;
+    if (!pic.valid() || !proctex::encodePng(pic, png)) {
+        rate(Rating::Unsupported, "the picture could not be encoded as a PNG");
+        return {};
+    }
+    generatedTextures_[name] = std::move(png);
+    proceduralRefs_[r.key] = name;
+    return name;
+#else
+    report_.add("resource", r.doc->file, w.node, r.type, "", Rating::Unsupported, "this build of the converter has no PNG encoder", 0);
+    return {};
+#endif
+}
+
+// A procedural texture held as a node or script value: the picture it bakes to, written into the content as a texture file.
+Var Converter::bakedTextureValue(const Var& v, const gd::GodotDocBase& doc, const Where& w) {
+    const std::string src = proceduralTexture(v, doc, w);
+    if (src.empty()) return makeNil();
+    const std::string asset = src.rfind("gen://", 0) == 0 ? generatedTextureAsset(src) : copyTexture(src, w);
+    return asset.empty() ? makeNil() : makeResource(asset);
+}
+
+// A baked texture written under Content/Textures/Generated; the asset path or "".
+std::string Converter::generatedTextureAsset(const std::string& gen) {
+    if (const auto it = generatedAssets_.find(gen); it != generatedAssets_.end()) return it->second;
+    std::string asset;
+    if (const auto b = generatedTextures_.find(gen); b != generatedTextures_.end()) {
+        asset = "Textures/Generated/" + gen.substr(6) + ".png";
+        const std::string dst = contentDir_ + "/" + asset;
+        createDirectories(std::filesystem::path(dst).parent_path().string());
+        if (!writeFileBytes(dst, b->second.data(), b->second.size())) asset.clear();
+    }
+    generatedAssets_[gen] = asset;
+    return asset;
+}
+
 namespace {
 
 // A texture file as the material cook wants it: encoded bytes verbatim.
 bool loadImage(Converter& c, const std::string& resPath, const Where& w, fmt::ImportedImage& img) {
     const std::string e = extOf(resPath);
     img.ok = false;
+    if (resPath.rfind("gen://", 0) == 0) {   // F26: a procedural texture baked in memory
+        const auto it = c.generatedTextures_.find(resPath);
+        if (it == c.generatedTextures_.end()) return false;
+        img.bytes = it->second;
+        img.ext = ".png";
+        img.suggestedName = safeName(resPath.substr(6), "texture");
+        img.sourcePath = resPath;
+        img.ok = true;
+        return true;
+    }
     if (e == ".hdr") {
         // The cook takes encoded bytes: the picture goes in as a PNG.
         const std::string disk = c.fs_.toDiskPath(resPath);
@@ -351,12 +609,7 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
 #if AVER_HAVE_MATERIAL_COMPILE
     const std::string& file = doc.file;
     const auto get = [&](const char* n) { return findProp(props, n); };
-    const auto tex = [&](const char* n) -> std::string {
-        const Var* v = get(n);
-        if (!v || v->type != VType::ExtResource) return {};
-        const gd::GodotExtResource* e = doc.findExt(v->s);
-        return e ? fs_.resolve(*e, &diag_, file) : std::string{};
-    };
+    const auto tex = [&](const char* n) -> std::string { return textureSource(get(n), doc, w); };   // a file, or a baked procedural texture (F26)
 
     fmt::ImportedMaterial m;
     std::vector<fmt::ImportedImage> images;
@@ -412,9 +665,14 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
         const char rc = channelOf(numOf(get("roughness_texture_channel"), 0)), mc = channelOf(numOf(get("metallic_texture_channel"), 0));
         bind(m.metalRoughTex, rough, rc);
         bind(m.metallicTex, metal, mc);
-        if (m.metalRoughTex.imageIndex >= 0 && m.metallicTex.imageIndex < 0 && rc != 'g' && rc != 0)
-            report_.add("property", file, w.node, type, "roughness_texture_channel", Rating::Approximated,
-                        "the .ocmat reads roughness from the green channel of its packed map; the Godot texture uses another channel", 0);
+        // F35: a lone roughness map is read through the material's own channel choice (FX roughchan). A pair is repacked above, so each scalar already sits in its channel.
+        if (m.metalRoughTex.imageIndex >= 0 && m.metallicTex.imageIndex < 0) {
+            static const char* const kChannel[] = {"r", "g", "b", "a", "gray"};
+            const int godotChannel = std::clamp(static_cast<int>(numOf(get("roughness_texture_channel"), 0)), 0, 4);
+            if (godotChannel != 1) addFx(std::string("roughchan=") + kChannel[godotChannel]);
+            rate("roughness_texture_channel", Rating::Converted, godotChannel == 1 ? "green, the packed map's own channel" : std::string("read from the ") + kChannel[godotChannel] + " channel of the map (FX roughchan)");
+            if (m.metalRoughTex.imageIndex >= 0) m.metalRoughTex.channel = 0;
+        }
     }
 
     if (boolOf(get("normal_enabled"), false)) {
@@ -439,14 +697,17 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
     }
     if (boolOf(get("emission_enabled"), false)) {
         const double energy = numOf(get("emission_energy_multiplier"), 1.0);
+        // F35: the colour is the factor and the energy is the material's own scale (PARAM emissiveEnergy), whose product is what the factor alone held before, so
+        // the look is unchanged and a script can still drive the energy.
         if (const Var* c = get("emission"); c && c->type == VType::Color && c->nums.size() >= 3)
-            for (int k = 0; k < 3; ++k) m.emissiveFactor[k] = srgbToLinear(c->nums[k]) * static_cast<float>(energy);
+            for (int k = 0; k < 3; ++k) m.emissiveFactor[k] = srgbToLinear(c->nums[k]);
         else
-            for (int k = 0; k < 3; ++k) m.emissiveFactor[k] = static_cast<float>(energy);   // Godot's emission default is black, so this is only for a texture
+            for (int k = 0; k < 3; ++k) m.emissiveFactor[k] = 1.0f;   // Godot's emission default is black, so this is only for a texture
+        m.emissiveEnergy = static_cast<float>(energy);
         bind(m.emissiveTex, tex("emission_texture"));
         if (!vpEmission.empty()) m.emissiveTex.runtimePath = vpEmission;
         report_.add("property", file, w.node, type, "emission_energy_multiplier", Rating::Approximated,
-                    "Godot's emission energy is scene-referred; the value is carried over as the .ocmat emissive factor without a unit calibration", 0);
+                    "Godot's emission energy is scene-referred; the value is carried over as the .ocmat emissiveEnergy scale without a unit calibration", 0);
     }
 
     // ---- transparency, blend, cull, depth (G4 R6) ----
@@ -513,9 +774,26 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
         report_.add("property", file, w.node, type, "vertex_color_use_as_albedo", Rating::Converted,
                     "written as the .ocmat vertexcolor flag; the albedo and opacity are multiplied by the mesh's vertex colour in the raster scene pass "
                     "(ray-traced reflections and GI hits do not see it yet)", 0);
-        if (boolOf(get("vertex_color_is_srgb"), false))
-            report_.add("property", file, w.node, type, "vertex_color_is_srgb", Rating::Approximated,
-                        "the vertex colour is multiplied as written (linear); Godot would convert an sRGB colour to linear first", 0);
+        if (boolOf(get("vertex_color_is_srgb"), false)) {
+            addFx("vcsrgb=1");
+            rate("vertex_color_is_srgb", Rating::Converted, "the vertex colour is decoded from sRGB to linear before it multiplies the albedo (raster draws; ray hits see the colour as stored)");
+        }
+    }
+
+    // P1: the sampler. Godot's texture_filter 0..5 (nearest, linear, nearest + mipmaps, linear + mipmaps, and the two anisotropic forms) and texture_repeat. A value that is
+    // not stated keeps the engine's own sampler (anisotropic, wrap): the default material then costs nothing extra. Raster draws only; ray hits keep the engine sampler.
+    if (has("texture_filter")) {
+        static const char* const kFilter[] = {"point", "bilinear", "pointmip", "trilinear", "pointmip", "aniso"};
+        static const char* const kFilterNote[] = {"nearest, no mipmaps", "linear, no mipmaps", "nearest with mipmaps", "linear with mipmaps", "nearest with mipmaps (anisotropy applies to the project level)",
+                                                  "linear with mipmaps and the project's anisotropy"};
+        const int tf = std::clamp(static_cast<int>(numOf(get("texture_filter"), 3)), 0, 5);
+        if (tf != 5) addFx(std::string("texfilter=") + kFilter[tf]);
+        rate("texture_filter", tf == 4 ? Rating::Approximated : Rating::Converted, std::string("the material sampler: ") + kFilterNote[tf] + " (raster draws; reflections and GI keep the engine sampler)");
+    }
+    if (has("texture_repeat")) {
+        const bool repeat = boolOf(get("texture_repeat"), true);
+        if (!repeat) addFx("texaddr=clamp");
+        rate("texture_repeat", Rating::Converted, repeat ? "wrap, the engine sampler's addressing" : "clamp to the edge (raster draws)");
     }
 
     // ---- subsurface scattering (existing subsurface fields) ----
@@ -728,8 +1006,6 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
         if (boolOf(get("emission_on_uv2"), false)) { addFx("emituv2=1"); rate("emission_on_uv2", Rating::Converted, "the emission map is sampled with UV2 (needs the second UV set)"); }
         if (boolOf(get("ao_on_uv2"), false)) { addFx("aouv2=1"); rate("ao_on_uv2", Rating::Converted, "the occlusion map is sampled with UV2 (needs the second UV set)"); }
         if (has("emission_intensity")) rate("emission_intensity", Rating::Approximated, "physical emission units are not calibrated; emission_energy_multiplier carries the strength");
-        if (has("texture_filter")) rate("texture_filter", Rating::Approximated, "the material sampler is shared (linear, anisotropic)");
-        if (has("texture_repeat")) rate("texture_repeat", Rating::Approximated, "the material sampler wraps");
         for (const char* n : {"albedo_texture_force_srgb"}) if (has(n)) rate(n, Rating::Approximated, "the albedo slot is always sRGB");
         for (const char* n : {"albedo_texture_msdf", "msdf_pixel_range", "msdf_outline_size"}) if (has(n)) rate(n, Rating::Unsupported, "no MSDF text rendering in materials");
         for (const char* n : {"bent_normal_enabled", "bent_normal_texture"}) if (has(n)) rate(n, Rating::Unsupported, "no bent normal map");
@@ -1240,6 +1516,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 const std::string a = shaderMaterialAsset(doc.file + "#" + sr->id, sr->props, doc, stemOf(doc.file) + "_" + sr->id, w);
                 return a.empty() ? makeNil() : makeResource(a);
             }
+            if (isProceduralTextureType(t)) return bakedTextureValue(v, doc, w);   // F26
             if (t == "ViewportTexture") {
                 // G4 R5: a ViewportTexture held as a node or script value keeps its path for Aver.Fabric's ViewportTexture. (A material's texture slot is
                 // handled in materialAsset, which writes the engine's texture reference into the .ocmat.)
@@ -1322,6 +1599,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 return makeResource(levelAssetFor(res));
             }
             if (isAudioExt(ext)) return audioFileValue(res, t, w, prop, v.line);
+            if ((ext == ".tres" || ext == ".res") && isProceduralTextureType(t)) return bakedTextureValue(v, doc, w);   // F26
             if (isImageExt(ext) || isOtherTextureExt(ext) || t.find("Texture") != std::string::npos) {
                 const std::string a = copyTexture(res, w);
                 return a.empty() ? makeNil() : makeResource(a);
@@ -1330,6 +1608,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 const gd::GodotResource* r = resourceDoc(res);
                 if (!r) return makeNil();
                 const std::string& rt = r->header.type;
+                if (isProceduralTextureType(rt)) return bakedTextureValue(v, doc, w);   // F26
                 if (isMaterial3DType(rt)) {
                     const std::string a = materialAsset(res, rt, r->props, *r, stemOf(res), w);
                     return a.empty() ? makeNil() : makeResource(a);

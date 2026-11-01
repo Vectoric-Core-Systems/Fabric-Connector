@@ -195,6 +195,7 @@ public class GeometryInstance3D : VisualInstance3D
             e.SetMesh(assetPath);
             if (MaterialOverride is { ResourcePath.Length: > 0 }) e.SetMaterial(System.IO.Path.GetFileNameWithoutExtension(MaterialOverride.ResourcePath));
         }
+        (MaterialOverride as BaseMaterial3D)?.SyncToEngine();   // what a script changed before the engine had the material (P14)
         ApplyRenderMasks();
     }
 
@@ -256,6 +257,11 @@ public partial class MeshInstance3D : GeometryInstance3D
     {
         if (name == "aver_blend_shapes") { SetShapeNames(value.AsString()); return true; }   // the mesh's blend shape names, '|' between them
         if (name == "aver_skinned") { _skinned = value.AsBool(); return true; }   // the converter marks the meshes the importer skinned to a bound Skeleton3D
+        if (name.StartsWith("surface_material_override/", StringComparison.Ordinal) && int.TryParse(name.AsSpan("surface_material_override/".Length), out int surface))
+        {
+            SetSurfaceOverrideMaterial(surface, value.As<Material?>());
+            return true;
+        }
         if (!name.StartsWith("blend_shapes/", StringComparison.Ordinal)) return base.TryDynamicSet(name, value);
         SetBlendShapeValueByName(name["blend_shapes/".Length..], value.AsSingle());
         return true;
@@ -277,22 +283,53 @@ public partial class MeshInstance3D : GeometryInstance3D
         return base.TryDynamicGet(name, out value);
     }
 
-    // Per-surface overrides. The engine draws a mesh renderer with one material, so surface 0 is the material override (it reaches the entity) and the
-    // overrides of the other surfaces are kept and read back (get_active_material, get_surface_override_material) but not drawn: approximated.
+    // Per-surface overrides (P2). Surface N is the mesh's material slot N; the engine draws that slot of the mesh with the override (a CSurfaceMaterials component on each
+    // entity that draws the node). A material_override replaces every surface, as in Godot, so the overrides are not applied while one is set. A level-of-detail, soft-body or
+    // GPU-cluster draw is a single draw of the whole mesh and keeps the entity's own material.
     private readonly Dictionary<int, Material?> _surfaceOverrides = new();
+    private readonly HashSet<int> _surfaceApplied = new();
 
-    /// <summary>The surfaces of the mesh (at least 1: the single slot the engine draws).</summary>
+    /// <summary>The surfaces of the mesh (at least 1).</summary>
     public int GetSurfaceOverrideMaterialCount() => Math.Max(1, _mesh?.GetSurfaceCount() ?? 0);
 
-    public Material? GetSurfaceOverrideMaterial(int surface) =>
-        surface == 0 ? MaterialOverride : _surfaceOverrides.TryGetValue(surface, out Material? m) ? m : null;
+    public Material? GetSurfaceOverrideMaterial(int surface) => _surfaceOverrides.TryGetValue(surface, out Material? m) ? m : null;
 
     public void SetSurfaceOverrideMaterial(int surface, Material? material)
     {
         if (surface < 0) return;
-        if (surface == 0) MaterialOverride = material;
-        else if (material == null) _surfaceOverrides.Remove(surface);
+        if (material == null) _surfaceOverrides.Remove(surface);
         else _surfaceOverrides[surface] = material;
+        ApplySurfaceOverrides();
+    }
+
+    /// <summary>The slots to override and the engine material name each is drawn with, in slot order: nothing while a material_override is set, and only the materials that
+    /// are files (an .ocmat) the engine can find by name.</summary>
+    internal List<(int Slot, string Name)> SurfaceOverrideNames()
+    {
+        var names = new List<(int, string)>();
+        if (MaterialOverride != null) return names;
+        foreach (var kv in _surfaceOverrides.OrderBy(k => k.Key))
+        {
+            if (kv.Key >= Entity.SurfaceOverrideSlots || kv.Value is not { ResourcePath.Length: > 0 } m) continue;
+            names.Add((kv.Key, System.IO.Path.GetFileNameWithoutExtension(m.ResourcePath)));
+        }
+        return names;
+    }
+
+    private void ApplySurfaceOverrides()
+    {
+        if (!Self.IsValid || !NodeHost.Current.IsEngine || PlacedPending || MeshAssetOf(_mesh) == null) return;
+        List<(int Slot, string Name)> want = SurfaceOverrideNames();
+        if (want.Count == 0 && _surfaceApplied.Count == 0) return;
+        foreach (Entity e in RenderEntities)
+        {
+            if (!e.IsValid || !e.HasComponent(Component.MeshRenderer)) continue;
+            foreach (int slot in _surfaceApplied) if (want.All(w => w.Slot != slot)) e.ClearSurfaceMaterial(slot);
+            foreach ((int slot, string name) in want) e.SetSurfaceMaterial(slot, name);
+        }
+        _surfaceApplied.Clear();
+        foreach ((int slot, _) in want) _surfaceApplied.Add(slot);
+        foreach (Material? m in _surfaceOverrides.Values) (m as BaseMaterial3D)?.SyncToEngine();
     }
 
     /// <summary>The material a surface is drawn with: the material override, else the surface's override, else the mesh's own material for it (Godot's get_active_material).</summary>
@@ -313,6 +350,7 @@ public partial class MeshInstance3D : GeometryInstance3D
     private void ApplyMesh()
     {
         PushMeshAndMaterial(MeshAssetOf(_mesh));
+        ApplySurfaceOverrides();
         BindSkin();
     }
 

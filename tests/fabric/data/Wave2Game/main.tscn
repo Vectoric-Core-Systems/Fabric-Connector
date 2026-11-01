@@ -1,0 +1,131 @@
+[gd_scene load_steps=22 format=3 uid="uid://cwave2main01"]
+
+[ext_resource type="Texture2D" path="res://textures/pixel.png" id="1_pixel"]
+[ext_resource type="Texture2D" path="res://textures/atlas.png" id="2_atlas"]
+[ext_resource type="Texture2D" path="res://textures/rough.png" id="3_rough"]
+[ext_resource type="Material" path="res://materials/red.tres" id="4_red"]
+[ext_resource type="Material" path="res://materials/blue.tres" id="5_blue"]
+
+[sub_resource type="Gradient" id="Gradient_a"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(0, 0, 0, 1, 1, 0, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradTex1"]
+gradient = SubResource("Gradient_a")
+width = 8
+
+[sub_resource type="GradientTexture2D" id="GradTex2"]
+gradient = SubResource("Gradient_a")
+width = 16
+height = 8
+fill_to = Vector2(1, 0)
+
+[sub_resource type="FastNoiseLite" id="Noise_a"]
+noise_type = 3
+seed = 5
+frequency = 0.05
+
+[sub_resource type="NoiseTexture2D" id="NoiseTex_a"]
+width = 32
+height = 16
+noise = SubResource("Noise_a")
+
+[sub_resource type="Curve" id="Curve_a"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CurveTex_a"]
+width = 16
+curve = SubResource("Curve_a")
+
+[sub_resource type="AtlasTexture" id="Atlas_a"]
+atlas = ExtResource("2_atlas")
+region = Rect2(2, 2, 2, 2)
+
+[sub_resource type="CanvasTexture" id="Canvas_a"]
+diffuse_texture = ExtResource("1_pixel")
+
+[sub_resource type="StandardMaterial3D" id="M_Pixel"]
+albedo_texture = ExtResource("1_pixel")
+texture_filter = 0
+texture_repeat = false
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+roughness_texture = ExtResource("3_rough")
+roughness_texture_channel = 2
+emission_enabled = true
+emission = Color(1, 0.5, 0, 1)
+emission_energy_multiplier = 3.0
+
+[sub_resource type="StandardMaterial3D" id="M_Proc"]
+albedo_texture = SubResource("GradTex2")
+normal_enabled = true
+normal_texture = SubResource("NoiseTex_a")
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_texture = SubResource("GradTex1")
+
+[sub_resource type="StandardMaterial3D" id="M_Atlas"]
+albedo_texture = SubResource("Atlas_a")
+
+[sub_resource type="StandardMaterial3D" id="M_Canvas"]
+albedo_texture = SubResource("Canvas_a")
+
+[sub_resource type="BoxMesh" id="BoxMesh_one"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_two"]
+_surfaces = [{
+"aabb": AABB(0, 0, 0, 1, 1, 0),
+"attribute_data": PackedByteArray("AAAAAAAAAAAAAIA/AAAAAAAAgD8AAIA/AAAAAAAAgD8="),
+"format": 34359742487,
+"index_count": 6,
+"index_data": PackedByteArray("AAACAAEAAAADAAIA"),
+"material": ExtResource("4_red"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 4,
+"vertex_data": PackedByteArray("AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAgD8AAAAAAAAAAAAAgD8AAAAAAIAAgP///78AgACA////vwCAAID///+/AIAAgP///78=")
+}, {
+"aabb": AABB(0, 0, 0, 1, 1, 0),
+"attribute_data": PackedByteArray("AAAAAAAAAAAAAIA/AAAAAAAAgD8AAIA/AAAAAAAAgD8="),
+"format": 34359742487,
+"index_count": 6,
+"index_data": PackedByteArray("AAACAAEAAAADAAIA"),
+"material": ExtResource("5_blue"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 4,
+"vertex_data": PackedByteArray("AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAgD8AAAAAAAAAAAAAgD8AAAAAAIAAgP///78AgACA////vwCAAID///+/AIAAgP///78=")
+}]
+
+[node name="Main" type="Node3D"]
+
+[node name="Pixel" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_one")
+surface_material_override/0 = SubResource("M_Pixel")
+
+[node name="Proc" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_one")
+surface_material_override/0 = SubResource("M_Proc")
+
+[node name="Atlas" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_one")
+surface_material_override/0 = SubResource("M_Atlas")
+
+[node name="Canvas" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_one")
+surface_material_override/0 = SubResource("M_Canvas")
+
+[node name="Two" type="MeshInstance3D" parent="."]
+mesh = SubResource("ArrayMesh_two")
+surface_material_override/1 = ExtResource("5_blue")
+surface_material_override/0 = SubResource("M_Atlas")
+
+[node name="Whole" type="MeshInstance3D" parent="."]
+mesh = SubResource("ArrayMesh_two")
+material_override = ExtResource("4_red")
+surface_material_override/1 = ExtResource("5_blue")
+
+[node name="Curve" type="TextureRect" parent="."]
+texture = SubResource("CurveTex_a")

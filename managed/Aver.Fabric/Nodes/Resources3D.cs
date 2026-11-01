@@ -57,20 +57,27 @@ public class Material : Resource
     public int RenderPriority { get; set; }
 }
 
-public class BaseMaterial3D : Material
+public partial class BaseMaterial3D : Material
 {
-    public Color AlbedoColor { get; set; } = new(1, 1, 1, 1);
-    public float Metallic { get; set; }
-    public float Roughness { get; set; } = 1f;
+    // The values a script changes at run time reach the engine's material of the same name (MaterialRuntime.cs, P14): the setters below mark what changed.
+    private Color _albedoColor = new(1, 1, 1, 1);
+    private float _metallic, _roughness = 1f;
+    private bool _vertexColorAsAlbedo, _vertexColorSrgb;
+    private Texture2D? _albedoTexture, _emissionTexture;
+    private Vector3 _uv1Scale = Vector3.One, _uv1Offset = Vector3.Zero, _uv2Scale = Vector3.One, _uv2Offset = Vector3.Zero;
+
+    public Color AlbedoColor { get => _albedoColor; set { _albedoColor = value; Touch(Changed_.Albedo); } }
+    public float Metallic { get => _metallic; set { _metallic = value; Touch(Changed_.Metallic); } }
+    public float Roughness { get => _roughness; set { _roughness = value; Touch(Changed_.Roughness); } }
     /// <summary>Multiplies the albedo and opacity by the mesh's vertex colour. The converter bakes it into the .ocmat <c>vertexcolor</c> flag
     /// (docs/plans/fabric/G4_RENDER.md R1); the engine applies it in the raster scene pass for meshes that carry a colour stream.</summary>
-    public bool VertexColorUseAsAlbedo { get; set; }
-    /// <summary>Godot converts an sRGB vertex colour to linear first; the engine multiplies the colour as stored (linear).</summary>
-    public bool VertexColorIsSrgb { get; set; }
-    /// <summary>The albedo map. Stored only: the converter bakes a <see cref="ViewportTexture"/> into the .ocmat as <c>@rt:viewport.&lt;key&gt;</c>, which the
-    /// engine resolves to the view's texture (G4_RENDER.md R5); assigning a texture here at run time does not change the material.</summary>
-    public Texture2D? AlbedoTexture { get; set; }
-    public Texture2D? EmissionTexture { get; set; }
+    public bool VertexColorUseAsAlbedo { get => _vertexColorAsAlbedo; set { _vertexColorAsAlbedo = value; Touch(Changed_.VertexColor); } }
+    /// <summary>The vertex colour is sRGB-encoded and is decoded to linear before it multiplies the albedo (FX vcsrgb; raster draws).</summary>
+    public bool VertexColorIsSrgb { get => _vertexColorSrgb; set { _vertexColorSrgb = value; Touch(Changed_.VertexColor); } }
+    /// <summary>The albedo map. The converter bakes a <see cref="ViewportTexture"/> into the .ocmat as <c>@rt:viewport.&lt;key&gt;</c>; a texture assigned here at run time (a file
+    /// texture, an <see cref="ImageTexture"/>, a view's texture) is named in the engine material's albedo slot.</summary>
+    public Texture2D? AlbedoTexture { get => _albedoTexture; set { _albedoTexture = value; Touch(Changed_.AlbedoTexture); } }
+    public Texture2D? EmissionTexture { get => _emissionTexture; set { _emissionTexture = value; Touch(Changed_.EmissionTexture); } }
 
     // ---- G4 R6: BaseMaterial3D features, under Godot's property names. The converter bakes them into the .ocmat FX record (see FxRecord);
     // the engine draws the baked material, so a value changed at run time is stored and not pushed (like AlbedoTexture). Distances are metres, as in Godot.
@@ -88,10 +95,10 @@ public class BaseMaterial3D : Material
     public enum AlphaAntiAliasingEnum { Off = 0, AlphaToCoverage = 1, AlphaToCoverageAndToOne = 2 }
 
     // UV transforms and triplanar
-    public Vector3 Uv1Scale { get; set; } = Vector3.One;
-    public Vector3 Uv1Offset { get; set; } = Vector3.Zero;
-    public Vector3 Uv2Scale { get; set; } = Vector3.One;
-    public Vector3 Uv2Offset { get; set; } = Vector3.Zero;
+    public Vector3 Uv1Scale { get => _uv1Scale; set { _uv1Scale = value; Touch(Changed_.Uv1); } }
+    public Vector3 Uv1Offset { get => _uv1Offset; set { _uv1Offset = value; Touch(Changed_.Uv1); } }
+    public Vector3 Uv2Scale { get => _uv2Scale; set { _uv2Scale = value; Touch(Changed_.Uv2); } }
+    public Vector3 Uv2Offset { get => _uv2Offset; set { _uv2Offset = value; Touch(Changed_.Uv2); } }
     public bool Uv1Triplanar { get; set; }
     public float Uv1TriplanarSharpness { get; set; } = 1f;
     public bool Uv1WorldTriplanar { get; set; }
@@ -103,7 +110,7 @@ public class BaseMaterial3D : Material
     public TransparencyEnum Transparency { get; set; } = TransparencyEnum.Disabled;
     public float AlphaScissorThreshold { get; set; } = 0.5f;
     public float AlphaHashScale { get; set; } = 1f;
-    public AlphaAntiAliasingEnum AlphaAntialiasingMode { get; set; } = AlphaAntiAliasingEnum.Off;
+    public AlphaAntiAliasingEnum AlphaAntialiasingMode { get => _alphaAa; set { _alphaAa = value; Touch(Changed_.Alpha); } }
     public float AlphaAntialiasingEdge { get; set; } = 0.3f;
     public BlendModeEnum BlendMode { get; set; } = BlendModeEnum.Mix;
     public CullModeEnum CullMode { get; set; } = CullModeEnum.Back;
@@ -238,9 +245,17 @@ public class BaseMaterial3D : Material
         string[] lines;
         try { lines = File.ReadAllLines(file); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+        _loading = true;
+        try { ReadOcmatLines(lines); }
+        finally { _loading = false; }
+    }
+
+    private void ReadOcmatLines(string[] lines)
+    {
         foreach (string line in lines)
         {
             string[] t = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length >= 2 && t[0] == "FX") { ReadFx(t); continue; }
             if (t.Length < 3 || t[0] != "PARAM") continue;
             var v = new float[t.Length - 2];
             bool numbers = true;
@@ -252,6 +267,8 @@ public class BaseMaterial3D : Material
                 case "baseColorFactor" when v.Length >= 4: AlbedoColor = new Color(v[0], v[1], v[2], v[3]); break;
                 case "metallicFactor": Metallic = v[0]; break;
                 case "roughnessFactor": Roughness = v[0]; break;
+                case "emissiveFactor" when v.Length >= 3: ReadEmissiveFactor(v[0], v[1], v[2]); break;
+                case "emissiveEnergy": EmissionEnergyMultiplier = v[0]; break;
             }
         }
     }
@@ -271,14 +288,24 @@ public class ORMMaterial3D : BaseMaterial3D
     public Texture2D? OrmTexture { get; set; }
 }
 
-public class Texture2D : Resource
+public class Texture2D : Texture
 {
     private Vector2? _fileSize;
     private bool _pngRead;
 
+    /// <summary>The pixels of the texture as an <see cref="Image"/> (Godot's get_image): a file texture is read from its file; a texture a script built or generated gives its own pixels;
+    /// a texture of a view or one whose file cannot be read gives an empty image.</summary>
+    public virtual Image GetImage()
+    {
+        if (ResourcePath.Length == 0) return new Image();
+        return Image.LoadFromFile(ResourcePath);
+    }
+
+    public virtual bool HasAlpha() => true;
+
     /// <summary>The size in pixels. A PNG file texture reads it from the file's header (G5 U1: a 9-patch needs it); any other format is sized by the engine
     /// once it has decoded the picture for the UI (zero until then, and outside the engine); a <see cref="ViewportTexture"/> reports the size its view is drawn at.</summary>
-    public virtual Vector2 GetSize()
+    public override Vector2 GetSize()
     {
         if (_fileSize is { } known) return known;
         if (!_pngRead)
@@ -335,10 +362,6 @@ public class Texture2D : Resource
             return _hostHandle;
         }
     }
-
-    public int GetWidth() => (int)GetSize().X;
-
-    public int GetHeight() => (int)GetSize().Y;
 }
 
 /// <summary>A collision shape resource (Godot's Shape3D). Sizes are in metres.</summary>

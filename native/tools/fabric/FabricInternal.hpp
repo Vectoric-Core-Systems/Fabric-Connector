@@ -122,6 +122,7 @@ bool isAudioExt(const std::string& ext);                // G5 S1: ".wav", ".ogg"
 bool isAudioStreamResourceType(const std::string& type);   // G5 S1: AudioStreamRandomizer, Playlist, Synchronized, Interactive, Polyphonic, Generator, WAV
 bool isStyleBoxType(const std::string& type);              // G5 U1: StyleBoxFlat, StyleBoxTexture, StyleBoxLine, StyleBoxEmpty (FabricUi.cpp)
 bool isFontExt(const std::string& ext);                    // G5 U1: ".ttf", ".otf", ".woff", ".woff2"
+bool isProceduralTextureType(const std::string& type);     // F26: GradientTexture1D/2D, NoiseTexture2D/3D, CurveTexture, CurveXYZTexture, AtlasTexture, CanvasTexture
 // Classes a project's GDExtension plugins register (FabricExtensions.cpp), name -> whether it is spatial. Such a node is placed as a
 // GDExtensionNode / GDExtensionNode3D with the Prop extension_class (docs/plans/fabric/G3_GDEXT.md section 7).
 void setExtensionClasses(const std::map<std::string, bool>& classes);
@@ -262,6 +263,20 @@ public:
     Var convertValue(const Var& v, const gd::GodotDocBase& doc, const Where& w, const std::string& prop);
     // A path to a texture file copied into Content/Textures, or "" (and a report entry).
     std::string copyTexture(const std::string& resPath, const Where& w);
+    // F26. The picture a texture-valued property stands for, as a source path: a res:// file, or "gen://<name>" for one baked in memory (a procedural texture;
+    // generatedTextures_ holds its PNG). "" when the value is not a texture the converter can read (reported where it fails).
+    std::string textureSource(const Var* value, const gd::GodotDocBase& doc, const Where& w);
+    // GradientTexture1D/2D, NoiseTexture2D, CurveTexture, AtlasTexture and CanvasTexture (a sub-resource or an external .tres) baked or aliased; the source path or "".
+    std::string proceduralTexture(const Var& value, const gd::GodotDocBase& doc, const Where& w);
+    // The value of a procedural texture held by a node or a script: the baked picture's asset path as a Resource, or nil.
+    Var bakedTextureValue(const Var& value, const gd::GodotDocBase& doc, const Where& w);
+    // A baked "gen://" texture written to Content/Textures/Generated/<name>.png; the asset path or "".
+    std::string generatedTextureAsset(const std::string& gen);
+    std::map<std::string, std::vector<u8>> generatedTextures_;
+    std::map<std::string, std::string> proceduralRefs_, generatedAssets_;
+    // How many material slots (surfaces) a mesh the converter wrote has: at least 1, 0 when the file cannot be read (cached per asset).
+    size_t meshSlotCount(const std::string& meshAsset);
+    std::map<std::string, size_t> meshSlotCounts_;
     // The cooked material for a resource of material type; the asset path "Materials/<stem>.ocmat" or "".
     std::string materialAsset(const std::string& key, const std::string& type, const std::vector<gd::GodotProperty>& props,
                               const gd::GodotDocBase& doc, const std::string& nameHint, const Where& w);

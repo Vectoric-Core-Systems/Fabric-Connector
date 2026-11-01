@@ -580,6 +580,23 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
         report_.add("setting", kProject, "", "", "rendering/anti_aliasing/quality/use_taa", Rating::Approximated,
                     std::string("RENDER.TAA ") + std::to_string(d.taa) + ": the engine's temporal anti-aliasing (AverSR) is not Godot's TAA", 0);
     }
+    // P1: the project's texture sampling defaults. Godot's anisotropic level is 0 (off) to 4 (16x); the engine's samplers read RENDER.TEXTUREANISO (1 to 16) when the renderer
+    // starts. A project that states neither keeps the engine's own (8x, no bias).
+    if (const Var* v = project_.setting("rendering/textures/default_filters/anisotropic_filtering_level")) {
+        static const int kLevels[] = {1, 2, 4, 8, 16};
+        const int level = std::clamp(static_cast<int>(numOf(v, 2)), 0, 4);
+        d.textureAniso = kLevels[level];
+        report_.add("setting", kProject, "", "", "rendering/textures/default_filters/anisotropic_filtering_level", Rating::Converted,
+                    "RENDER.TEXTUREANISO " + std::to_string(d.textureAniso) + " (read when the renderer starts)", 0);
+    }
+    if (const Var* v = project_.setting("rendering/textures/default_filters/texture_mipmap_bias")) {
+        d.hasTextureMipBias = true;
+        d.textureMipBias = static_cast<float>(std::clamp(numOf(v, 0.0), -2.0, 2.0));
+        report_.add("setting", kProject, "", "", "rendering/textures/default_filters/texture_mipmap_bias", Rating::Converted, "RENDER.TEXTUREMIPBIAS (read when the renderer starts)", 0);
+    }
+    if (project_.setting("rendering/textures/default_filters/use_nearest_mipmap_filter"))
+        report_.add("setting", kProject, "", "", "rendering/textures/default_filters/use_nearest_mipmap_filter", Rating::Approximated,
+                    "a material that names nearest filtering with mipmaps gets it through its own sampler; this default for the 2D canvas is not used", 0);
     // The clear colour is read where the start scene's Environment is written (a Clear Color background becomes a flat sky of this colour).
     if (project_.setting("rendering/environment/defaults/default_clear_color"))
         report_.add("setting", kProject, "", "", "rendering/environment/defaults/default_clear_color", Rating::Approximated,
@@ -623,7 +640,8 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
                                     "physics/3d/physics_engine", "physics/jolt_physics_3d/limits/max_bodies", "physics/jolt_physics_3d/limits/max_body_pairs",
                                     "physics/jolt_physics_3d/limits/max_contact_constraints", "physics/jolt_physics_3d/limits/temporary_memory_buffer_size",
                                     "rendering/anti_aliasing/quality/screen_space_aa", "rendering/textures/quality/screen_space_aa", "rendering/anti_aliasing/quality/use_taa",
-                                    "rendering/environment/defaults/default_clear_color"};
+                                    "rendering/environment/defaults/default_clear_color", "rendering/textures/default_filters/anisotropic_filtering_level",
+                                    "rendering/textures/default_filters/texture_mipmap_bias", "rendering/textures/default_filters/use_nearest_mipmap_filter"};
     for (const gd::GodotConfigSection& sec : project_.config.sections) {
         for (const gd::GodotProperty& e : sec.entries) {
             const std::string key = sec.name.empty() ? e.name : sec.name + "/" + e.name;
