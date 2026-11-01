@@ -1,0 +1,29 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="CameraAttributesPhysical" id="CameraAttributesPhysical_1"]
+exposure_aperture = 8.0
+exposure_shutter_speed = 200.0
+exposure_sensitivity = 200.0
+exposure_multiplier = 1.5
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+
+[node name="Main" type="Node3D"]
+
+[node name="Env" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+camera_attributes = SubResource("CameraAttributesPhysical_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7, 0.7, 0, -0.7, 0.7, 0, 5, 0)
+light_energy = 0.5
+light_temperature = 5000.0
+light_intensity_lux = 80000.0
+
+[node name="Lamp" type="OmniLight3D" parent="."]
+light_intensity_lumens = 2000.0
+light_temperature = 3000.0
+
+[node name="Spot" type="SpotLight3D" parent="."]
+light_intensity_lumens = 1500.0

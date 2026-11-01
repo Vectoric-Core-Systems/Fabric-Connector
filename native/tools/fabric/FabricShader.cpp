@@ -502,6 +502,78 @@ std::string Converter::envShaderAsset(const std::string& materialKey, int kindIn
     return asset;
 }
 
+// F23. Godot's ProceduralSkyMaterial as sky shader text, written from the property documentation of that class (not copied from Godot's generated shader): a vertical
+// blend from the horizon colour to the top colour shaped by sky_curve above the horizon, the same below it with the ground colours, both scaled by their energy, and
+// the first light's disc with a fade out to sun_angle_max shaped by sun_curve. The cover texture, its modulate and the debanding are not part of it.
+static const char* kProceduralSkyShader = R"GDSHADER(shader_type sky;
+
+uniform vec4 sky_top_color : source_color = vec4(0.385, 0.454, 0.55, 1.0);
+uniform vec4 sky_horizon_color : source_color = vec4(0.6463, 0.6558, 0.6708, 1.0);
+uniform float sky_curve = 0.15;
+uniform float sky_energy = 1.0;
+uniform vec4 ground_bottom_color : source_color = vec4(0.2, 0.169, 0.133, 1.0);
+uniform vec4 ground_horizon_color : source_color = vec4(0.6463, 0.6558, 0.6708, 1.0);
+uniform float ground_curve = 0.02;
+uniform float ground_energy = 1.0;
+uniform float sun_angle_max = 30.0;
+uniform float sun_curve = 0.15;
+
+void sky() {
+	float v_angle = acos(clamp(EYEDIR.y, -1.0, 1.0));
+	float c = 1.0 - v_angle / (PI * 0.5);
+	vec3 above = mix(sky_horizon_color.rgb, sky_top_color.rgb, clamp(1.0 - pow(1.0 - c, 1.0 / max(sky_curve, 0.0001)), 0.0, 1.0)) * sky_energy;
+	c = (v_angle - PI * 0.5) / (PI * 0.5);
+	vec3 below = mix(ground_horizon_color.rgb, ground_bottom_color.rgb, clamp(1.0 - pow(1.0 - c, 1.0 / max(ground_curve, 0.0001)), 0.0, 1.0)) * ground_energy;
+	vec3 col = EYEDIR.y >= 0.0 ? above : below;
+	if (LIGHT0_ENABLED) {
+		vec3 sun = LIGHT0_COLOR * LIGHT0_ENERGY;
+		float angle = acos(clamp(dot(LIGHT0_DIRECTION, EYEDIR), -1.0, 1.0));
+		float radius = LIGHT0_SIZE * 0.5;
+		float fade_to = sun_angle_max * PI / 180.0;
+		if (angle < radius) {
+			col = sun;
+		} else if (angle < fade_to) {
+			float f = (angle - radius) / max(fade_to - radius, 0.0001);
+			col = mix(col, sun, pow(1.0 - f, 1.0 / max(sun_curve, 0.0001)));
+		}
+	}
+	COLOR = col;
+}
+)GDSHADER";
+
+std::string Converter::proceduralSkyAsset(const std::string& key, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w) {
+#if AVER_HAVE_MATERIAL_COMPILE
+    if (const auto it = shaderMaterialAssets_.find(key); it != shaderMaterialAssets_.end()) return it->second;
+    shaderMaterialAssets_[key] = {};
+    std::vector<gd::GodotProperty> sp;
+    const auto add = [&](const char* name, Var v) { gd::GodotProperty p; p.name = std::string("shader_parameter/") + name; p.value = std::move(v); sp.push_back(std::move(p)); };
+    const auto get = [&](const char* name) -> const Var* { return getProp(props, name); };
+    for (const char* c : {"sky_top_color", "sky_horizon_color", "ground_bottom_color", "ground_horizon_color"})
+        if (const Var* v = get(c)) add(c, *v);
+    if (const Var* v = get("sky_curve")) add("sky_curve", *v);
+    if (const Var* v = get("ground_curve")) add("ground_curve", *v);
+    if (const Var* v = get("sun_angle_max")) add("sun_angle_max", *v);
+    if (const Var* v = get("sun_curve")) add("sun_curve", *v);
+    // The energies scale the colours in linear light; the environment's own background energy multiplies both.
+    const double skyE = numOf(get("sky_energy_multiplier"), 1.0) * skyBackgroundEnergy_, gndE = numOf(get("ground_energy_multiplier"), 1.0) * skyBackgroundEnergy_;
+    if (skyE != 1.0) add("sky_energy", makeFloat(skyE));
+    if (gndE != 1.0) add("ground_energy", makeFloat(gndE));
+    for (const char* k : {"sky_cover", "sky_cover_modulate"})
+        if (get(k)) report_.add("property", doc.file, w.node, "ProceduralSkyMaterial", k, Rating::Approximated, "the cover image is not part of the sky shader; kept out", 0);
+    if (get("use_debanding"))
+        report_.add("property", doc.file, w.node, "ProceduralSkyMaterial", "use_debanding", Rating::Approximated, "the sky's own dither is not part of the sky shader; the project's use_debanding is the POSTVOLUME deband", 0);
+    const std::string asset = envShaderAsset(key, 0, kProceduralSkyShader, "builtin://procedural_sky", "builtin://procedural_sky", sp, doc, "ProceduralSky", w);
+    shaderMaterialAssets_[key] = asset;
+    if (!asset.empty())
+        report_.add("resource", doc.file, w.node, "ProceduralSkyMaterial", "", Rating::Approximated,
+                    "opt-in (--procedural-sky): a sky shader program (" + asset + ") that follows Godot's procedural sky instead of Aver's two-colour dome; it is evaluated at every sky lookup (the background, reflections, ambient light, ray-driven mode), so it costs more than the dome", 0);
+    return asset;
+#else
+    (void)key; (void)props; (void)doc; (void)w;
+    return {};
+#endif
+}
+
 // GPUParticles3D with a particles ShaderMaterial as its process material: a ParticleEmitter component on the placement plus the effect file it plays. Other process
 // materials (ParticleProcessMaterial) are not converted: the node stays a carrier with its properties, as before.
 void Converter::emitGpuParticles(const FNode& fn, const std::vector<std::pair<std::string, Var>>& props, fmt::OcWorldPlacement& p, bool quiet) {

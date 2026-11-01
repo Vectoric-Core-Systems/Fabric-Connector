@@ -48,6 +48,23 @@ internal readonly struct RangeFields
     public int FadeMode { get; init; }
 }
 
+/// <summary>A mesh instance's per-instance render flags in engine terms (CMeshRenderer.renderFlags, cullMarginCm, lodBias), apart from the push so they can be checked
+/// without an engine. <c>ShadowMode</c> 0 casts, 1 casts none, 2 shadows only; <c>GiMode</c> 0 static, 1 dynamic, 2 disabled.</summary>
+internal readonly struct InstanceFlags
+{
+    public int ShadowMode { get; init; }
+    public int GiMode { get; init; }
+    public bool IgnoreOcclusion { get; init; }
+    public float CullMarginCm { get; init; }
+    public float LodBiasStops { get; init; }
+
+    /// <summary>The renderFlags word: bits 0-1 the shadow mode, bits 2-3 the GI mode, bit 4 the occlusion opt-out.</summary>
+    public int RenderFlags => (ShadowMode & 3) | ((GiMode & 3) << 2) | (IgnoreOcclusion ? 0x10 : 0);
+
+    /// <summary>True when every field is the ordinary mesh's: nothing needs writing.</summary>
+    public bool IsDefault => RenderFlags == 0 && CullMarginCm == 0f && LodBiasStops == 0f;
+}
+
 public class GeometryInstance3D : VisualInstance3D
 {
     public enum ShadowCastingSetting { Off = 0, On = 1, DoubleSided = 2, ShadowsOnly = 3 }
@@ -91,6 +108,36 @@ public class GeometryInstance3D : VisualInstance3D
             e.SetFloat("CMeshRenderer.visBeginMarginCm", r.BeginMarginCm);
             e.SetFloat("CMeshRenderer.visEndMarginCm", r.EndMarginCm);
             e.SetInt("CMeshRenderer.visFade", r.FadeMode);
+        }
+        ApplyInstanceFlags();
+    }
+
+    private bool _flagsPushed;
+
+    /// <summary>cast_shadow, gi_mode, extra_cull_margin, ignore_occlusion_culling and lod_bias as the engine stores them. Pure: no engine needed.</summary>
+    internal InstanceFlags ComputeInstanceFlags() => new()
+    {
+        // Off 0 -> 1, On 1 and DoubleSided 2 -> 0 (the double-sided variant is not modelled), ShadowsOnly 3 -> 2.
+        ShadowMode = _castShadow switch { ShadowCastingSetting.Off => 1, ShadowCastingSetting.ShadowsOnly => 2, _ => 0 },
+        // Godot's Static is Aver's default; Dynamic and Disabled both leave the voxel bake.
+        GiMode = _giMode switch { GIModeEnum.Dynamic => 1, GIModeEnum.Disabled => 2, _ => 0 },
+        IgnoreOcclusion = _ignoreOcclusion,
+        CullMarginCm = FabricSpace.ToAverLength(Mathf.Max(_extraCullMargin, 0f)),
+        LodBiasStops = RenderMapping.LodBiasStops(_lodBias),
+    };
+
+    // Written only when an instance leaves the ordinary mesh's values (or came back to them), so a project that states none of these touches nothing.
+    private void ApplyInstanceFlags()
+    {
+        InstanceFlags f = ComputeInstanceFlags();
+        if (f.IsDefault && !_flagsPushed) return;
+        _flagsPushed = !f.IsDefault;
+        foreach (Entity e in RenderEntities)
+        {
+            if (!e.HasComponent(Component.MeshRenderer)) continue;
+            e.SetInt("CMeshRenderer.renderFlags", f.RenderFlags);
+            e.SetFloat("CMeshRenderer.cullMarginCm", f.CullMarginCm);
+            e.SetFloat("CMeshRenderer.lodBias", f.LodBiasStops);
         }
     }
 
@@ -200,9 +247,19 @@ public class GeometryInstance3D : VisualInstance3D
     }
 
     public Material? MaterialOverlay { get; set; }
-    public ShadowCastingSetting CastShadow { get; set; } = ShadowCastingSetting.On;
+    private ShadowCastingSetting _castShadow = ShadowCastingSetting.On;
+    private GIModeEnum _giMode = GIModeEnum.Static;
+    private float _extraCullMargin, _lodBias = 1f;
+    private bool _ignoreOcclusion;
+
+    /// <summary>Off casts no shadow into the sun's cascade and global-illumination shadow maps (the ray-traced sun shadow still sees the mesh); ShadowsOnly draws nothing for
+    /// a camera and keeps the mesh for shadows, global illumination and reflections; DoubleSided casts as On does.</summary>
+    public ShadowCastingSetting CastShadow { get => _castShadow; set { _castShadow = value; ApplyRenderMasks(); } }
     public float Transparency { get; set; }
-    public float LodBias { get; set; } = 1f;
+
+    /// <summary>A multiplier on how long the mesh keeps its finer levels of detail (1: the default; 0 forces the coarsest). The engine stores it in stops, the base-2
+    /// logarithm; applied by the editor's Play (the shipped runtime selects no levels).</summary>
+    public float LodBias { get => _lodBias; set { _lodBias = value; ApplyRenderMasks(); } }
 
     /// <summary>How an instance takes part in global illumination (Godot's GeometryInstance3D.GIMode).</summary>
     public enum GIModeEnum { Disabled = 0, Static = 1, Dynamic = 2 }
@@ -210,8 +267,9 @@ public class GeometryInstance3D : VisualInstance3D
     /// <summary>The resolution of an instance's lightmap relative to the scene's (Godot's GeometryInstance3D.LightmapScale).</summary>
     public enum LightmapScaleEnum { Scale1X = 0, Scale2X = 1, Scale4X = 2, Scale8X = 3, Max = 4 }
 
-    /// <summary>Stored, not applied (approximated): Aver has no baked lightmaps and global illumination follows the whole level, so every instance counts as dynamic whatever this says.</summary>
-    public GIModeEnum GIMode { get; set; } = GIModeEnum.Static;
+    /// <summary>Static is Aver's ordinary mesh (part of the voxel GI bake); Dynamic and Disabled keep the mesh out of the bake as a mover is, and a Disabled one still takes
+    /// part in the lighting like any mesh (Aver has no baked lightmaps).</summary>
+    public GIModeEnum GIMode { get => _giMode; set { _giMode = value; ApplyRenderMasks(); } }
 
     /// <summary>Stored, not applied: there is no lightmap to size.</summary>
     public float GILightmapTexelScale { get; set; } = 1f;
@@ -219,11 +277,11 @@ public class GeometryInstance3D : VisualInstance3D
     /// <summary>Stored, not applied: there is no lightmap to size.</summary>
     public LightmapScaleEnum GILightmapScale { get; set; } = LightmapScaleEnum.Scale1X;
 
-    /// <summary>Stored, not applied: the engine culls with its own bounds, so a wider margin changes nothing.</summary>
-    public float ExtraCullMargin { get; set; }
+    /// <summary>Metres the box the frustum and occlusion tests use grows by, so a vertex shader that moves geometry is not culled early.</summary>
+    public float ExtraCullMargin { get => _extraCullMargin; set { _extraCullMargin = value; ApplyRenderMasks(); } }
 
-    /// <summary>Stored, not applied: occlusion culling is automatic, so an instance cannot opt out.</summary>
-    public bool IgnoreOcclusionCulling { get; set; }
+    /// <summary>Opts the instance out of the occlusion test (the editor's Play; the shipped runtime has no occlusion culling).</summary>
+    public bool IgnoreOcclusionCulling { get => _ignoreOcclusion; set { _ignoreOcclusion = value; ApplyRenderMasks(); } }
 
     /// <summary>Stored, not applied: the engine uses the mesh's own bounds.</summary>
     public Aabb CustomAabb { get; set; }
@@ -410,6 +468,8 @@ internal readonly struct LightFields
     /// <summary>light_cull_mask and shadow_caster_mask as the engine stores them (inverted, 20 bits: 0 is every layer).</summary>
     public int CullInv { get; init; }
     public int ShadowCasterInv { get; init; }
+    /// <summary>The engine id of the projector image's content path (CLight.cookie); 0 for none.</summary>
+    public long Cookie { get; init; }
 }
 
 /// <summary>Any light (Godot's Light3D). Its properties reach the entity's light component whenever they change.
@@ -435,6 +495,27 @@ public class Light3D : VisualInstance3D
 
     public Color LightColor { get => _color; set { _color = value; ApplyLight(); } }
     public float LightEnergy { get => _energy; set { _energy = value; ApplyLight(); } }
+
+    private float? _intensity;
+    private float _temperature = 6500f;
+    private Texture2D? _projector;
+
+    /// <summary>The intensity with physical light units on (rendering/lights_and_shadows/use_physical_light_units): lumens for an omni or spot light (default 1000),
+    /// lux for the sun (default 100000). It is one stored value in Godot, so <see cref="LightIntensityLux"/> is the same number. With physical units off it is unused.</summary>
+    public float LightIntensityLumens { get => _intensity ?? (LightKind == 2 ? 100000f : 1000f); set { _intensity = value; ApplyLight(); } }
+    public float LightIntensityLux { get => LightIntensityLumens; set => LightIntensityLumens = value; }
+
+    /// <summary>The colour temperature in kelvin (6500: nearly white). Godot applies it only with physical light units on, and so does Aver.Fabric: a tint multiplied into the
+    /// light colour in linear light.</summary>
+    public float LightTemperature { get => _temperature; set { _temperature = value; ApplyLight(); } }
+
+    /// <summary>The image projected through a spot or omni light (the engine's cookie). Directional lights ignore it.</summary>
+    public Texture2D? LightProjector { get => _projector; set { _projector = value; ApplyLight(); } }
+
+    // Every light in the tree, so a change of exposure (physical light units fold it into the light) reaches them all.
+    private static readonly List<Light3D> s_lights = new();
+    internal static void ReapplyAll() { foreach (Light3D l in s_lights.ToArray()) l.ApplyLight(); }
+    internal static void ResetLights() => s_lights.Clear();
     /// <summary>Kept, not applied: local lights add no indirect light, and the sun's indirect light is Aver's global illumination.</summary>
     public float LightIndirectEnergy { get; set; } = 1f;
     public float LightVolumetricFogEnergy { get; set; } = 1f;
@@ -475,19 +556,52 @@ public class Light3D : VisualInstance3D
     internal override void OnEnteringTree()
     {
         base.OnEnteringTree();
+        if (!s_lights.Contains(this)) s_lights.Add(this);
         ApplyLight();
     }
 
-    /// <summary>What this light's properties mean in engine terms. Pure: no engine needed.</summary>
+    internal override void OnExitingTree()
+    {
+        s_lights.Remove(this);
+        base.OnExitingTree();
+    }
+
+    // "res://a/b.png" is the converted project's Textures/a/b.png (as for decals and shader textures); the converter writes the projector as that path already.
+    internal static string ProjectorContentPath(Texture2D? t)
+    {
+        if (t == null || t.ResourcePath.Length == 0) return "";
+        return t.ResourcePath.StartsWith("res://", StringComparison.Ordinal) ? "Textures/" + t.ResourcePath["res://".Length..] : t.ResourcePath;
+    }
+
+    private static long ContentId(Texture2D? t)
+    {
+        string rel = ProjectorContentPath(t);
+        if (rel.Length == 0) return 0;
+        try { return Aver.Scene.Assets.ObjectIdOf(rel); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return 0; }
+    }
+
+    /// <summary>What this light's properties mean in engine terms. Pure: no engine needed. With physical light units on the intensity is Godot's
+    /// (light_energy x lumens or lux x its per-type factor x the camera's exposure normalization) and the colour carries the temperature; with them off the
+    /// energy is Godot's plain one.</summary>
     internal LightFields ComputeFields()
     {
         Color lin = _color.SrgbToLinear();
         bool sun = LightKind == 2;
+        float intensity = _energy * (sun ? LuxPerEnergy : CandelaPerEnergy);
+        if (PhysicalLights.Enabled)
+        {
+            (float tr, float tg, float tb) = RenderMapping.TemperatureTint(_temperature);
+            lin = new Color(lin.R * tr, lin.G * tg, lin.B * tb, lin.A);
+            var kind = LightKind == 2 ? RenderMapping.LightClass.Directional : LightKind == 1 ? RenderMapping.LightClass.Spot : RenderMapping.LightClass.Omni;
+            intensity = RenderMapping.PhysicalAverIntensity(kind, _energy, LightIntensityLumens, PhysicalLights.Normalization);
+        }
         var f = new LightFields
         {
             Kind = LightKind,
             Colour = new Aver.Scene.Vec3(lin.R, lin.G, lin.B),
-            Intensity = _energy * (sun ? LuxPerEnergy : CandelaPerEnergy),
+            Intensity = intensity,
+            Cookie = sun ? 0 : ContentId(_projector),
             Shadows = _shadow,
             Negative = _negative,
             SpecularScale = Mathf.Max(_specular, 0f) * 2f,
@@ -530,7 +644,10 @@ public class Light3D : VisualInstance3D
         Self.SetFloat("CLight.fadeShadowCm", f.FadeShadowCm);
         Self.SetInt("CLight.cullInv", f.CullInv);
         Self.SetInt("CLight.shadowCasterInv", f.ShadowCasterInv);
+        if (f.Cookie != 0 || _projectorPushed) { Self.SetInt64("CLight.cookie", f.Cookie); _projectorPushed = f.Cookie != 0; }
     }
+
+    private bool _projectorPushed;
 }
 
 /// <summary>A sun (Godot's DirectionalLight3D). THE LEVEL'S <c>SUN</c> RECORD IS THE SUN: the converter writes it from the first directional light
@@ -665,6 +782,8 @@ public class Camera3D : Node3D
     public float Far { get => _far; set { _far = value; ApplyCamera(); } }
     private float _size = 1f, _hOffset, _vOffset;
     private ProjectionType _projection = ProjectionType.Perspective;
+    private Environment? _environment;
+    private CameraAttributes? _attributes;
     private KeepAspectEnum _keepAspect = KeepAspectEnum.Height;
     private uint _cullMask = 0xFFFFFu;
     private Vector2 _frustumOffset = Vector2.Zero;
@@ -732,11 +851,13 @@ public class Camera3D : Node3D
             sv.SetActiveCamera(this);
             return;
         }
+        Camera3D? previous = CurrentCamera;
         if (CurrentCamera is { } old && old != this) old._current = false;
         CurrentCamera = this;
         _current = true;
         _wasCurrent = false;
         FabricView.Follow(this);
+        RenderEnvironment.CameraChanged(previous, this);
     }
 
     /// <summary>Stops being the current camera. With <paramref name="enableNext"/> the first other camera in the tree takes over (Godot's clear_current).</summary>
@@ -748,10 +869,27 @@ public class Camera3D : Node3D
         if (CurrentCamera != this) return;
         CurrentCamera = null;
         FabricView.Follow(null);
+        RenderEnvironment.CameraChanged(this, null);
         if (enableNext) s_inTree.FirstOrDefault(c => c != this && c.IsInsideTree())?.MakeCurrent();
     }
 
     public bool IsCurrent() => _current;
+
+    /// <summary>The environment drawn while this camera is current, instead of the world's. Not drawn for any other camera.</summary>
+    public Environment? Environment
+    {
+        get => _environment;
+        set { _environment = value; if (_current) RenderEnvironment.CameraChanged(this, this); }
+    }
+
+    /// <summary>The camera attributes in force while this camera is current, instead of the world's (exposure, depth of field, and the physical light units' exposure).</summary>
+    public CameraAttributes? Attributes
+    {
+        get => _attributes;
+        set { _attributes = value; if (_current) RenderEnvironment.CameraChanged(this, this); }
+    }
+
+    internal bool HasRenderOverrides => _environment != null || _attributes != null;
 
     // ---- projection (pure maths: the viewport size and the camera's transform) ----
 
@@ -942,6 +1080,7 @@ public class Camera3D : Node3D
                 _current = false;
                 CurrentCamera = null;
                 FabricView.Follow(null);
+                RenderEnvironment.CameraChanged(this, null);
                 s_inTree.FirstOrDefault(c => c.IsInsideTree())?.MakeCurrent();
             }
         }

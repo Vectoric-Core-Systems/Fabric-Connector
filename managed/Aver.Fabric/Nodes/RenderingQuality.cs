@@ -78,6 +78,44 @@ public static partial class RenderingServer
         Approximated.Once("RenderingServer.EnvironmentSetVolumetricFogVolumeSize", "kept; Aver's volumetric fog grid is sized by the renderer");
     }
 
+    /// <summary>Godot's RenderingServer.DecalFilter (DECAL_FILTER_*).</summary>
+    public enum DecalFilter { Nearest = 0, NearestMipmaps = 1, NearestMipmapsAnisotropic = 2, Linear = 3, LinearMipmaps = 4, LinearMipmapsAnisotropic = 5 }
+
+    /// <summary>Godot's RenderingServer.LightProjectorFilter (LIGHT_PROJECTOR_FILTER_*).</summary>
+    public enum LightProjectorFilter { Nearest = 0, NearestMipmaps = 1, NearestMipmapsAnisotropic = 2, Linear = 3, LinearMipmaps = 4, LinearMipmapsAnisotropic = 5 }
+
+    private static DecalFilter s_decalFilter = DecalFilter.LinearMipmaps;
+    private static LightProjectorFilter s_projectorFilter = LightProjectorFilter.LinearMipmaps;
+    private static int s_directionalAtlas = 4096;
+    private static bool s_directionalAtlas16 = true;
+
+    /// <summary>Approximated, kept as set: decals and light projectors are sampled with the engine's material sampler.</summary>
+    public static void DecalsSetFilter(DecalFilter filter)
+    {
+        s_decalFilter = filter;
+        Approximated.Once("RenderingServer.DecalsSetFilter", "kept; decal images are sampled with the engine's own filter");
+    }
+
+    /// <summary>Approximated, kept as set: a light's cookie image is sampled with the engine's own filter.</summary>
+    public static void LightProjectorsSetFilter(LightProjectorFilter filter)
+    {
+        s_projectorFilter = filter;
+        Approximated.Once("RenderingServer.LightProjectorsSetFilter", "kept; a light's cookie image is sampled with the engine's own filter");
+    }
+
+    /// <summary>Approximated, kept as set: the sun's cascade size (RENDER.SHADOWRES) is read when the renderer starts, so a size set while the game runs changes
+    /// nothing that is drawn. The converter maps the project's directional_shadow/size to RENDER.SHADOWRES.</summary>
+    public static void DirectionalShadowAtlasSetSize(int size, bool is16Bits)
+    {
+        s_directionalAtlas = size;
+        s_directionalAtlas16 = is16Bits;
+        Approximated.Once("RenderingServer.DirectionalShadowAtlasSetSize", "kept; the sun's shadow resolution is read from the project (RENDER.SHADOWRES) when the renderer starts");
+    }
+
+    internal static DecalFilter DecalsFilter => s_decalFilter;
+    internal static LightProjectorFilter LightProjectorsFilter => s_projectorFilter;
+    internal static (int Size, bool SixteenBits) DirectionalShadowAtlas => (s_directionalAtlas, s_directionalAtlas16);
+
     /// <summary>The colour behind everything when nothing else is drawn there (Godot's default clear colour, 0.3 grey unless the project sets it).</summary>
     public static Color GetDefaultClearColor() => s_defaultClearColor;
 

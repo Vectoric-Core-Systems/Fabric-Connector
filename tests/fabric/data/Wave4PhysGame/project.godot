@@ -1,0 +1,14 @@
+; Engine configuration file.
+; A fixture for physical light units (FabricWave4Test): lumens, lux, temperature and a physical camera's exposure.
+
+config_version=5
+
+[application]
+
+config/name="Wave4 Phys Game"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+
+[rendering]
+
+lights_and_shadows/use_physical_light_units=true

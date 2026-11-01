@@ -1472,6 +1472,7 @@ bool isEnvironmentType(const std::string& t) {
 
 Var Converter::environmentObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w) {
     std::vector<std::pair<std::string, Var>> entries;
+    if (type == "Environment") skyBackgroundEnergy_ = numOf(findProp(props, "background_energy_multiplier"), 1.0);   // F23: handed to the Sky converted below
     for (const gd::GodotProperty& p : props) {
         if (ignorableResourceProp(p.name)) continue;
         if (type == "FogMaterial") {
@@ -1591,6 +1592,10 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
             if (t == "PhysicsMaterial") return physicsMaterialObject(sr->props, doc, w, sr->line);
             if (isOccluderType(t)) return occluderObject(t, sr->props, doc, w, sr->line);
             if (isShapeType(t)) return shapeObject(t, sr->props, doc, w);
+            if (t == "ProceduralSkyMaterial" && options_.proceduralSky) {   // F23, opt in
+                const std::string a = proceduralSkyAsset(doc.file + "#" + sr->id, sr->props, doc, w);
+                if (!a.empty()) return makeResource(a);
+            }
             if (isEnvironmentType(t)) return environmentObject(t, sr->props, doc, w);
             return genericResourceDict(t, sr->props, doc, w, "no Aver counterpart for this resource class; its properties are kept as a dictionary");
         }
@@ -1654,6 +1659,10 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 if (rt == "PhysicsMaterial") return physicsMaterialObject(r->props, *r, w, 0);
                 if (isOccluderType(rt)) return occluderObject(rt, r->props, *r, w, 0);
                 if (isShapeType(rt)) return shapeObject(rt, r->props, *r, w);
+                if (rt == "ProceduralSkyMaterial" && options_.proceduralSky) {   // F23, opt in
+                    const std::string a = proceduralSkyAsset(res, r->props, *r, w);
+                    if (!a.empty()) return makeResource(a);
+                }
                 if (isEnvironmentType(rt)) return environmentObject(rt, r->props, *r, w);
                 if (rt == "ArrayMesh") {
                     const std::string a = arrayMeshAsset(r->props, *r, w);

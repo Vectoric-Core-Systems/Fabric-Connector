@@ -175,6 +175,16 @@ struct EnvInfo {
     double glowThreshold = -1.0;     // glow_hdr_threshold when stated (< 0 = not stated)
     bool dof = false;
     double dofFocusCm = 1000, dofFStop = 4, dofFocalMm = 35;
+    // ---- wave 4 (docs/plans/WAVE4_RENDER.md) ----
+    int glowBlend = 2;               // glow_blend_mode (Godot's default is soft light)
+    double glowStrength = 1.0;       // glow_strength
+    double glowCap = -1.0;           // glow_hdr_luminance_cap when stated (< 0 = not stated)
+    bool hasAmbient = false;         // ambient_light_source is Color: the SKY record carries an ambient override (it works under the physical sky only)
+    double ambientColor[3] = {0, 0, 0}, ambientEnergy = 1.0, ambientSky = 1.0;   // LINEAR colour; share of the sky's own ambient
+    double volFogLengthCm = -1.0, volFogAniso = 0.0, volFogTemporal = -1.0;       // volumetric_fog_* when stated
+    bool hasVolFogAniso = false;
+    bool physicalUnits = false;      // rendering/lights_and_shadows/use_physical_light_units
+    double exposureNorm = 1.0;       // the camera attributes' exposure normalization under physical units (1 otherwise)
     bool volumetricFog = false;      // G4 R8: volumetric_fog_enabled; the project turns Voxi's light-shaft fog on (RENDER.VOLFOG 1), where FogVolumes draw
     std::string source;              // "res://main.tscn:WorldEnvironment"
 };
@@ -202,6 +212,15 @@ struct Options {
     bool scenesOnly = false;   // scenes, assets, project, GDExtensions; no script conversion
     bool scriptsOnly = false;  // only the script step, into an already converted project
     bool overwrite = false;    // replace an existing converted project
+    bool proceduralSky = false; // F23, opt in: a ProceduralSkyMaterial becomes a sky shader (the look of Godot's own) instead of Aver's two-colour dome
+};
+
+// The first sun's shadow settings, from the start level's first DirectionalLight3D (the project's RENDER.SHADOW* keys are written from them).
+struct SunShadowInfo {
+    bool found = false;
+    bool authored = false;        // the light states any of the shadow keys (Godot stores only non-defaults)
+    int mode = 2;                 // directional_shadow_mode (Godot's default is four splits)
+    double split1 = 0.1, split2 = 0.2, split3 = 0.5, maxDistanceM = 100.0, cameraNearM = 0.05;
 };
 
 class Converter {
@@ -245,6 +264,7 @@ public:
     std::string settingString(const char* path, const std::string& def) const;
     bool settingBool(const char* path, bool def) const;
     std::string startLevelAsset_;
+    SunShadowInfo sunShadow_;
     EnvInfo projectEnv_;        // from the first scene that had a WorldEnvironment, the start scene first
 
     // ---- FabricConvert.cpp -----------------------------------------------------------------------------------------
@@ -283,6 +303,9 @@ public:
     // ---- FabricShader.cpp (G6 SH2) ----
     // A ShaderMaterial (its shader prepared once for the engine and written as Shaders/<name>.ocgraph) written as Materials/<name>.ocmat: GRAPHREF, the FX record
     // the render modes ask for, EMBREGS at the material's shader_parameter/* values and a TEX per texture parameter. The asset path or "".
+    // F23 (opt in, --procedural-sky): a ProceduralSkyMaterial as a sky shader program that follows Godot's own sky. Returns the Shaders/ asset, or "" (the dome stays).
+    std::string proceduralSkyAsset(const std::string& key, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w);
+    double skyBackgroundEnergy_ = 1.0;   // the Environment's background_energy_multiplier while its Sky is converted
     std::string shaderMaterialAsset(const std::string& key, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const std::string& nameHint,
                                     const Where& w);
     bool writeShadersManifest();   // Fabric/shaders.json: every shader's uniform layout, samplers and materials (Aver.Fabric's ShaderMaterial reads it)

@@ -108,15 +108,13 @@ public class SubViewport : Viewport
 {
     public enum UpdateMode { Disabled = 0, Once = 1, WhenVisible = 2, WhenParentVisible = 3, Always = 4 }
     public enum ClearMode { Always = 0, Never = 1, Once = 2 }
-    public enum MsaaMode { Disabled = 0, Msaa2X = 1, Msaa4X = 2, Msaa8X = 3 }
-    public enum Scaling3DModeType { Bilinear = 0, Fsr = 1, Fsr2 = 2, Max = 3 }
 
     private Vector2I _size = new(512, 512);
     private UpdateMode _update = UpdateMode.WhenVisible;
     private ClearMode _clear = ClearMode.Always;
     private bool _transparent, _ownWorld, _disable3D;
-    private MsaaMode _msaa = MsaaMode.Disabled;
-    private Scaling3DModeType _scalingMode = Scaling3DModeType.Bilinear;
+    private Msaa _msaa = Msaa.Disabled;
+    private Scaling3DModeEnum _scalingMode = Scaling3DModeEnum.Bilinear;
     private float _scale = 1f;
     private Color _clearColor = new(0.3f, 0.3f, 0.3f, 1f);
     private Camera3D? _camera;
@@ -158,17 +156,17 @@ public class SubViewport : Viewport
     }
 
     /// <summary>Carried only: the view is drawn at one sample.</summary>
-    public MsaaMode Msaa3D
+    public override Msaa Msaa3D
     {
         get => _msaa;
         set { _msaa = value; PushScale(); }
     }
 
     /// <summary>Carried only: any non-bilinear mode is drawn as a plain scale.</summary>
-    public Scaling3DModeType Scaling3DMode { get => _scalingMode; set => _scalingMode = value; }
+    public override Scaling3DModeEnum Scaling3DMode { get => _scalingMode; set => _scalingMode = value; }
 
     /// <summary>Multiplies the size the view is drawn at (0.25 to 8).</summary>
-    public float Scaling3DScale
+    public override float Scaling3DScale
     {
         get => _scale;
         set { _scale = value; PushScale(); }
@@ -275,7 +273,7 @@ public class SubViewport : Viewport
 
     private void PushScale()
     {
-        if (_id != 0) Backend?.SetScale(_id, _scale, _msaa == MsaaMode.Disabled ? 0 : 1 << (int)_msaa);
+        if (_id != 0) Backend?.SetScale(_id, _scale, _msaa == Msaa.Disabled ? 0 : 1 << (int)_msaa);
     }
 
     // WhenParentVisible: a hidden ancestor (a CanvasItem or a Node3D) stops the view.

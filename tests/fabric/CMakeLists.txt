@@ -194,6 +194,17 @@ if(TARGET Aver.Formats.Material)
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
+# FabricWave4Test -- wave 4 of the Godot parity plan (rendering settings, lights, shadows, environment): the pure mappings of GodotRender.hpp and the converter on
+# tests/fabric/data/Wave4Game, Wave4PhysGame and Wave4SkyGame (the procedural sky off and on). Runs the tool as a process, like FabricEnvTest.
+add_executable(FabricWave4Test src/FabricWave4Test.cpp)
+target_link_libraries(FabricWave4Test PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricWave4Test)
+target_compile_definitions(FabricWave4Test PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricWave4Test PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricGeometryTest -- G4 R7 (ArrayMesh, MultiMesh, trail meshes, CSG, Sprite3D, Label3D, GridMap) through the converter on tests/fabric/data/GeomGame.
 # Runs the tool as a process, like FabricConvertTest.
 add_executable(FabricGeometryTest src/FabricGeometryTest.cpp)

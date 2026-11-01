@@ -24,6 +24,24 @@ public class World3D : Resource
 
     /// <summary>The navigation map of this world (the one regions, links and agents join by default).</summary>
     public Rid NavigationMap => NavigationServer3D.GetDefaultMapRid();
+
+    private Environment? _environment, _fallback;
+    private CameraAttributes? _attributes;
+
+    /// <summary>The environment of this world (a WorldEnvironment node sets it). A current camera's own environment wins over it.</summary>
+    public Environment? Environment { get => _environment; set { _environment = value; RenderEnvironment.WorldChanged(); } }
+
+    // A WorldEnvironment node sets both without a push of its own (it pushes when it knows it is not loading).
+    internal void SetEnvironmentQuiet(Environment? env, CameraAttributes? attributes) { _environment = env; _attributes = attributes; }
+
+    /// <summary>The environment used when neither the camera nor the world has one.</summary>
+    public Environment? FallbackEnvironment { get => _fallback; set { _fallback = value; RenderEnvironment.WorldChanged(); } }
+
+    /// <summary>The camera attributes of this world (a WorldEnvironment node sets them). A current camera's own win over them.</summary>
+    public CameraAttributes? CameraAttributes { get => _attributes; set { _attributes = value; RenderEnvironment.WorldChanged(); } }
+
+    /// <summary>The camera attributes used when neither the camera nor the world has any (Godot's fallback_camera_attributes).</summary>
+    public CameraAttributes? FallbackCameraAttributes { get; set; }
 }
 
 /// <summary>A ray query (Godot's PhysicsRayQueryParameters3D). Defaults are Godot's: bodies yes, areas no, back faces yes, from inside no.</summary>

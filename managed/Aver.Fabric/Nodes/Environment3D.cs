@@ -109,11 +109,36 @@ public class Environment : Resource
     public bool SsilEnabled { get; set; }
     public bool SdfgiEnabled { get; set; }
 
+    /// <summary>Godot's Environment.GlowBlendMode: how the glow joins the frame. Godot's default is soft light.</summary>
+    public enum GlowBlendModeEnum { Additive = 0, Screen = 1, Softlight = 2, Replace = 3, Mix = 4 }
+
+    /// <summary>Godot's Environment.ReflectionSource (REFLECTION_SOURCE_*).</summary>
+    public enum ReflectionSourceEnum { Bg = 0, Disabled = 1, Sky = 2 }
+
+    private GlowBlendModeEnum _glowBlend = GlowBlendModeEnum.Softlight;
+    private float _glowStrength = 1f;
+    private float? _glowCap;
+    private readonly float[] _glowLevels = { 0f, 0f, 1f, 0f, 1f, 0f, 0f };   // Godot's defaults: levels 3 and 5 on
+
     public bool GlowEnabled { get => _glow; set => Assign(ref _glow, value); }
     public float GlowIntensity { get => _glowIntensity; set => Assign(ref _glowIntensity, value); }
-    public float GlowStrength { get; set; } = 1f;
+    public float GlowStrength { get => _glowStrength; set => Assign(ref _glowStrength, value); }
+    /// <summary>Stored, not applied: Aver's bloom has no separate bloom term.</summary>
     public float GlowBloom { get; set; }
     public float GlowHdrThreshold { get => _glowThreshold; set => Assign(ref _glowThreshold, value); }
+    /// <summary>Stored, not applied: Aver's bloom pyramid is summed by the blender, with no per-level multiplier.</summary>
+    public float GlowHdrScale { get; set; } = 2f;
+    /// <summary>The glow's luminance cap (Godot's default 12). Pushed only once a value has been given, so a level that never stated one keeps Aver's uncapped glow.</summary>
+    public float GlowHdrLuminanceCap { get => _glowCap ?? 12f; set { _glowCap = value; EmitChanged(); } }
+    internal bool GlowCapStated => _glowCap.HasValue;
+    public GlowBlendModeEnum GlowBlendMode { get => _glowBlend; set => Assign(ref _glowBlend, value); }
+    /// <summary>Stored, not applied (see <see cref="GlowHdrScale"/>).</summary>
+    public bool GlowNormalized { get; set; }
+    /// <summary>Stored, not applied: the glow's seven levels are not weighted separately.</summary>
+    public float GetGlowLevel(int idx) => idx is >= 0 and < 7 ? _glowLevels[idx] : 0f;
+    public void SetGlowLevel(int idx, float level) { if (idx is >= 0 and < 7) _glowLevels[idx] = level; }
+    /// <summary>Stored, not applied: Aver's reflections come from ray tracing, the voxel trace and the sky.</summary>
+    public ReflectionSourceEnum ReflectedLightSource { get; set; }
 
     public bool FogEnabled { get => _fog; set => Assign(ref _fog, value); }
     public FogModeEnum FogMode { get => _fogMode; set => Assign(ref _fogMode, value); }
@@ -127,9 +152,25 @@ public class Environment : Resource
     public float FogDepthBegin { get => _fogDepthBegin; set => Assign(ref _fogDepthBegin, value); }
     public float FogDepthEnd { get => _fogDepthEnd; set => Assign(ref _fogDepthEnd, value); }
     public float FogDepthCurve { get; set; } = 1f;
+    /// <summary>Stored, not applied: the sun's in-scatter share is not a separate setting in Aver's fog.</summary>
+    public float FogSunScatter { get; set; }
     public bool VolumetricFogEnabled { get => _volFog; set => Assign(ref _volFog, value); }
     public float VolumetricFogDensity { get => _volFogDensity; set => Assign(ref _volFogDensity, value); }
     public Color VolumetricFogAlbedo { get => _volFogAlbedo; set => Assign(ref _volFogAlbedo, value); }
+    /// <summary>Stored: the project key RENDER.VOLFOGLENGTH carries it (metres here; Godot's default is 64).</summary>
+    public float VolumetricFogLength { get; set; } = 64f;
+    /// <summary>Stored: RENDER.VOLFOGANISO carries it.</summary>
+    public float VolumetricFogAnisotropy { get; set; } = 0.2f;
+    /// <summary>Stored: RENDER.VOLFOGTEMPORAL carries it (off is a weight of 0).</summary>
+    public bool VolumetricFogTemporalReprojectionEnabled { get; set; } = true;
+    public float VolumetricFogTemporalReprojectionAmount { get; set; } = 0.9f;
+    /// <summary>Stored, not applied: the volume's local-light in-scatter, emission and ambient terms are not modelled.</summary>
+    public Color VolumetricFogEmission { get; set; } = new(0, 0, 0, 1);
+    public float VolumetricFogEmissionEnergy { get; set; } = 1f;
+    public float VolumetricFogGiInject { get; set; } = 1f;
+    public float VolumetricFogAmbientInject { get; set; }
+    public float VolumetricFogDetailSpread { get; set; } = 2f;
+    public float VolumetricFogSkyAffect { get; set; } = 1f;
 
     public bool AdjustmentEnabled { get => _adjust; set => Assign(ref _adjust, value); }
     public float AdjustmentBrightness { get => _adjBrightness; set => Assign(ref _adjBrightness, value); }
@@ -144,6 +185,9 @@ public class CameraAttributes : Resource
 
     public float ExposureSensitivity { get; set; } = 100f;
     public float ExposureMultiplier { get => _multiplier; set { _multiplier = value; EmitChanged(); } }
+
+    /// <summary>The factor lights are scaled by when physical light units are on (Godot's exposure normalization); 1 for the base class.</summary>
+    public virtual float GetExposureNormalization() => 1f;
     public bool AutoExposureEnabled { get => _auto; set { _auto = value; EmitChanged(); } }
     public float AutoExposureScale { get; set; } = 0.4f;
     public float AutoExposureSpeed { get; set; } = 0.5f;
@@ -162,6 +206,9 @@ public class CameraAttributesPractical : CameraAttributes
     public float DofBlurAmount { get => _amount; set { _amount = value; EmitChanged(); } }
     public float AutoExposureMinSensitivity { get; set; } = 0.0f;
     public float AutoExposureMaxSensitivity { get; set; } = 800.0f;
+
+    /// <summary>The sensitivity over 3072007 (the physical camera's value at ISO 100).</summary>
+    public override float GetExposureNormalization() => RenderMapping.PracticalExposureNormalization(ExposureSensitivity);
 }
 
 public class CameraAttributesPhysical : CameraAttributes
@@ -176,6 +223,9 @@ public class CameraAttributesPhysical : CameraAttributes
     public float ExposureShutterSpeed { get; set; } = 100f;
     public float AutoExposureMinExposureValue { get; set; } = -8f;
     public float AutoExposureMaxExposureValue { get; set; } = 10f;
+
+    /// <summary>1 / (1.2 x aperture^2 x shutter speed x (100 / ISO)): Godot's exposure normalization for a physical camera.</summary>
+    public override float GetExposureNormalization() => RenderMapping.PhysicalExposureNormalization(_aperture, ExposureShutterSpeed, ExposureSensitivity);
 }
 
 /// <summary>The mapping from Godot's environment to the engine's post volume keys, fog and sky light. Pure, so it is testable; the converter
@@ -203,6 +253,13 @@ public static class EnvironmentMapping
             ("bloom", env.GlowEnabled ? env.GlowIntensity : 0f),
         };
         if (env.GlowEnabled && env.GlowHdrThreshold != 1f) v.Add(("bloomthreshold", env.GlowHdrThreshold));
+        if (env.GlowEnabled)
+        {
+            // The glow's blend (Godot's default is soft light), strength and cap ride the extended composite; Godot's default strength 1 is Aver's, and a cap is stated or absent.
+            v.Add(("glowblend", RenderMapping.GlowBlend((int)env.GlowBlendMode)));
+            if (env.GlowStrength != 1f) v.Add(("glowstrength", env.GlowStrength));
+            if (env.GlowCapStated) v.Add(("glowcap", env.GlowHdrLuminanceCap));
+        }
         v.Add(("adjbrightness", env.AdjustmentEnabled ? env.AdjustmentBrightness : 1f));
         v.Add(("adjcontrast", env.AdjustmentEnabled ? env.AdjustmentContrast : 1f));
         v.Add(("adjsaturation", env.AdjustmentEnabled ? env.AdjustmentSaturation : 1f));
@@ -238,8 +295,28 @@ public static class EnvironmentMapping
         return env.VolumetricFogEnabled ? FogDensityPerCm(env.VolumetricFogDensity) : 0f;
     }
 
-    /// <summary>The sky light multiplier: 0 with ambient light disabled, else the ambient energy.</summary>
-    public static float SkyLight(Environment env) => env.AmbientLightSource == Environment.AmbientSource.Disabled ? 0f : env.AmbientLightEnergy;
+    /// <summary>True when the level's sky is Aver's physical sky (a Sky background with no authored colours): the only model the ambient override works under. A flat colour,
+    /// a procedural or panorama sky are Aver's two-colour dome.</summary>
+    public static bool UsesPhysicalSky(Environment env) =>
+        env.BackgroundMode == Environment.BGMode.Sky && env.Sky?.SkyMaterial is null or PhysicalSkyMaterial or ShaderMaterial;
+
+    /// <summary>The sky light multiplier: 0 with ambient light disabled, else the ambient energy. With a colour ambient under the physical sky the energy rides the
+    /// ambient override and the sky light stays 1.</summary>
+    public static float SkyLight(Environment env)
+    {
+        if (env.AmbientLightSource == Environment.AmbientSource.Disabled) return 0f;
+        if (env.AmbientLightSource == Environment.AmbientSource.Color && UsesPhysicalSky(env)) return 1f;
+        return env.AmbientLightEnergy;
+    }
+
+    /// <summary>The ambient override a colour ambient source states (linear colour, energy, the share of the sky's own ambient: Godot's sky contribution), or null.
+    /// Works under the physical sky only; the level's SKY record carries the same three numbers.</summary>
+    public static (float R, float G, float B, float Energy, float SkyContribution)? AmbientOverride(Environment env)
+    {
+        if (env.AmbientLightSource != Environment.AmbientSource.Color) return null;
+        Color lin = env.AmbientLightColor.SrgbToLinear();
+        return (lin.R, lin.G, lin.B, Math.Max(env.AmbientLightEnergy, 0f), Math.Clamp(env.AmbientLightSkyContribution, 0f, 1f));
+    }
 }
 
 /// <summary>Godot's WorldEnvironment. It holds the Environment and CameraAttributes; at load the level already carries their values, so nothing
@@ -275,30 +352,31 @@ public class WorldEnvironment : Node
     {
         base.OnEnteringTree();
         _live = true;   // what follows is a change, not the load
+        RenderEnvironment.Live = true;
+        (GetViewport()?.FindWorld3D() ?? SceneTree.Instance.Root.World3D).SetEnvironmentQuiet(_environment, _camera);
         if (_environment != null) PushSkyShader();   // G6 SH3: a converted sky shader is the sky from the moment the environment is in the tree
     }
 
     internal int PushCount { get; private set; }
 
-    /// <summary>Forwards the current values to the engine: the post layer, the fog and the sky light. Does nothing before the node is in the
-    /// tree, outside the engine, or with no Environment.</summary>
+    /// <summary>Forwards the current values to the engine: the environment in force (this node's, unless the current camera has its own) and its camera attributes.
+    /// Does nothing before the node is in the tree, outside the engine, or with no Environment.</summary>
     internal void Push()
     {
-        if (!_live || _environment == null) return;
+        if (!_live) return;
+        if (_environment == null) { SyncWorld(); return; }
         PushCount++;
         PushSkyShader();
-        if (!NodeHost.Current.IsEngine) return;
-        foreach ((string key, float value) in EnvironmentMapping.PostValues(_environment, _camera))
-            Aver.Framework.PostFx.SetValue(Layer, key, value);
-        Aver.Framework.PostFx.SetLayerWeight(Layer, 1f, 0f);
-        float density = EnvironmentMapping.FogDensity(_environment);
-        Aver.Framework.Sky.SetFogDensity(density);
-        // The environment's fog colour is a nominal sRGB value; the fog override takes linear light.
-        Color c = _environment.FogEnabled ? _environment.FogLightColor : _environment.VolumetricFogAlbedo;
-        Aver.Framework.Sky.SetFogColor(MathF.Pow(c.R, 2.2f), MathF.Pow(c.G, 2.2f), MathF.Pow(c.B, 2.2f));
-        if (_environment.FogEnabled && _environment.FogHeightDensity != 0f)
-            Aver.Framework.Sky.SetFogShape(Math.Abs(_environment.FogHeightDensity) / 100f, _environment.FogHeight * 100f, 0f);
-        Aver.Framework.Sky.SetSkyLight(EnvironmentMapping.SkyLight(_environment));
+        SyncWorld();
+        RenderEnvironment.Refresh();
+    }
+
+    // The world this node sits in carries its environment and attributes, which a camera's own override (F31).
+    private void SyncWorld()
+    {
+        World3D world = GetViewport()?.FindWorld3D() ?? SceneTree.Instance.Root.World3D;
+        world.SetEnvironmentQuiet(_environment, _camera);
+        if (_environment == null) RenderEnvironment.Refresh();
     }
 
     private ShaderMaterial? _skyShader;

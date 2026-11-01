@@ -4,6 +4,7 @@
 #include "aver/core/Version.hpp"
 #include "aver/formats/AxisMap.hpp"
 #include "aver/formats/godot/GodotEnvironment.hpp"
+#include "aver/formats/godot/GodotRender.hpp"
 #include "aver/formats/Json.hpp"
 #include "aver/formats/OcInput.hpp"
 #include "aver/formats/OcProject.hpp"
@@ -557,6 +558,10 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
         if (projectEnv_.volumetricFog) {
             d.volFog = 1;   // G4 R8: the light-shaft fog, where FogVolumes draw. The uniform medium stays 0: the level's fog already carries the density
             d.volFogDensity = 0.0f;
+            // F24: the light-shaft fog's reach, anisotropy and history weight, when the environment states them.
+            if (projectEnv_.volFogLengthCm >= 0.0) d.volFogLength = static_cast<f32>(projectEnv_.volFogLengthCm);
+            if (projectEnv_.hasVolFogAniso) { d.hasVolFogAniso = true; d.volFogAniso = static_cast<f32>(projectEnv_.volFogAniso); }
+            if (projectEnv_.volFogTemporal >= 0.0) d.volFogTemporal = static_cast<f32>(projectEnv_.volFogTemporal);
             report_.add("setting", kProject, "", "Environment", "volumetric_fog_enabled", Rating::Approximated,
                         "RENDER.VOLFOG 1 and RENDER.VOLFOGDENSITY 0: sun shafts through the level's fog, and FogVolume nodes add their own density", 0);
         }
@@ -575,10 +580,85 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
         else
             report_.add("setting", kProject, "", "", key, Rating::Converted, "RENDER.NEURAA 0", 0);
     }
-    if (project_.setting("rendering/anti_aliasing/quality/use_taa")) {
-        d.taa = settingBool("rendering/anti_aliasing/quality/use_taa", false) ? 1 : 0;
-        report_.add("setting", kProject, "", "", "rendering/anti_aliasing/quality/use_taa", Rating::Approximated,
-                    std::string("RENDER.TAA ") + std::to_string(d.taa) + ": the engine's temporal anti-aliasing (AverSR) is not Godot's TAA", 0);
+    // F1: the consistent anti-aliasing set. Aver's TAA needs MSAA off, so a project that asks for TAA gets RENDER.MSAA 1 whatever msaa_3d says (godotrender::chooseAa).
+    {
+        namespace gr = fmt::godotrender;
+        const Var* msaaV = project_.setting("rendering/anti_aliasing/quality/msaa_3d");
+        const Var* taaV = project_.setting("rendering/anti_aliasing/quality/use_taa");
+        const gr::AaChoice aa = gr::chooseAa(msaaV ? static_cast<int>(numOf(msaaV, 0)) : -1, taaV ? (settingBool("rendering/anti_aliasing/quality/use_taa", false) ? 1 : 0) : -1);
+        if (aa.msaa >= 0) d.msaa = aa.msaa;
+        if (aa.taa >= 0) d.taa = aa.taa;
+        if (msaaV)
+            report_.add("setting", kProject, "", "", "rendering/anti_aliasing/quality/msaa_3d", aa.msaaDropped ? Rating::Approximated : Rating::Converted,
+                        aa.msaaDropped ? "RENDER.MSAA 1: use_taa is on, and Aver's TAA needs one sample, so the multisampling is dropped"
+                                       : "RENDER.MSAA " + std::to_string(aa.msaa) + " samples; the raster pass only (a denoised ray-traced frame has no coverage samples to resolve)", 0);
+        if (taaV)
+            report_.add("setting", kProject, "", "", "rendering/anti_aliasing/quality/use_taa", Rating::Approximated,
+                        std::string("RENDER.TAA ") + std::to_string(d.taa) + (d.taa ? " with RENDER.MSAA 1 (TAA needs one sample)" : "") + ": the engine's temporal anti-aliasing (AverSR) is not Godot's TAA", 0);
+        // E7: the dither is a post key, written into every level's post volume (FabricScene.cpp).
+        if (project_.setting("rendering/anti_aliasing/quality/use_debanding"))
+            report_.add("setting", kProject, "", "", "rendering/anti_aliasing/quality/use_debanding", Rating::Converted,
+                        "the POSTVOLUME key deband in each level's post volume: half an 8-bit step of noise before the quantise", 0);
+        // F1: 3D scaling. FSR modes below scale 1 pick the nearest AverSR preset; a bilinear scale is applied at run time by Aver.Fabric's root Viewport.
+        const Var* sm = project_.setting("rendering/scaling_3d/mode");
+        const Var* ss = project_.setting("rendering/scaling_3d/scale");
+        if (sm || ss) {
+            const int mode = static_cast<int>(numOf(sm, 0));
+            const double scale = gr::scale3d(numOf(ss, 1.0));
+            if (mode >= 1 && scale < 0.99) {
+                d.averSr = gr::averSrPreset(scale);
+                report_.add("setting", kProject, "", "", sm ? "rendering/scaling_3d/mode" : "rendering/scaling_3d/scale", Rating::Approximated,
+                            "RENDER.AVERSR " + std::to_string(d.averSr) + " (1 quality, 2 balanced, 3 performance), the nearest of AverSR's presets to FSR at scale " + std::to_string(scale) + "; AverSR is not FSR", 0);
+            } else if (scale != 1.0) {
+                report_.add("setting", kProject, "", "", ss ? "rendering/scaling_3d/scale" : "rendering/scaling_3d/mode", Rating::Approximated,
+                            "no project key for a fractional render scale: Aver.Fabric's window viewport starts from this setting and pushes RenderSettings.SetScale when the game starts", 0);
+            } else {
+                report_.add("setting", kProject, "", "", sm ? "rendering/scaling_3d/mode" : "rendering/scaling_3d/scale", Rating::Converted, "scale 1: nothing to upscale", 0);
+            }
+        }
+        if (project_.setting("rendering/scaling_3d/fsr_sharpness"))
+            report_.add("setting", kProject, "", "", "rendering/scaling_3d/fsr_sharpness", Rating::Approximated,
+                        "kept; the viewport pushes 2^-x as the upscaler's sharpness at run time, which the engine stores (the upscaler is chosen when the project starts)", 0);
+        // F32: the automatic LOD choice and occlusion culling.
+        if (const Var* v = project_.setting("rendering/mesh_lod/lod_change/threshold_pixels")) {
+            d.lodThresholdPx = static_cast<f32>(gr::lodThresholdPixels(numOf(v, 1.0)));
+            if (d.lodThresholdPx <= 0.0f) d.lodSelect = 0;
+            report_.add("setting", kProject, "", "", "rendering/mesh_lod/lod_change/threshold_pixels", Rating::Converted,
+                        "RENDER.LODTHRESHOLD " + std::to_string(d.lodThresholdPx) + " pixels (the same screen-space error)" + (d.lodThresholdPx <= 0.0f ? " and RENDER.LODSELECT 0, as 0 turns Godot's automatic choice off" : "") +
+                        "; the editor's Play selects levels with it, the shipped runtime selects none", 0);
+        }
+        if (project_.setting("rendering/occlusion_culling/use_occlusion_culling")) {
+            d.occlusionCull = settingBool("rendering/occlusion_culling/use_occlusion_culling", false) ? 1 : 0;
+            report_.add("setting", kProject, "", "", "rendering/occlusion_culling/use_occlusion_culling", Rating::Converted,
+                        "RENDER.OCCLUSIONCULL " + std::to_string(d.occlusionCull) + "; the editor's Play culls with it, the shipped runtime has no occlusion culling", 0);
+        }
+        // P3, P4, F21: the sun's cascades from the start level's sun, the atlas size and filter quality, and the light units.
+        if (sunShadow_.found && sunShadow_.authored) {
+            const gr::SunShadowFit fit = gr::fitSunShadow(sunShadow_.mode, sunShadow_.split1, sunShadow_.split2, sunShadow_.split3, sunShadow_.maxDistanceM, sunShadow_.cameraNearM);
+            d.shadowCascades = fit.cascades;
+            if (fit.distanceCm > 0.0) d.shadowDist = static_cast<f32>(fit.distanceCm);
+            if (fit.lambda >= 0.0) d.shadowSplit = static_cast<f32>(fit.lambda);
+            report_.add("setting", kProject, "", "DirectionalLight3D", "directional_shadow_*", Rating::Approximated,
+                        "RENDER.SHADOWCASCADES " + std::to_string(fit.cascades) + (fit.distanceCm > 0.0 ? ", RENDER.SHADOWDIST " + std::to_string(static_cast<int>(fit.distanceCm)) + " cm" : "") +
+                        (fit.lambda >= 0.0 ? ", RENDER.SHADOWSPLIT " + std::to_string(fit.lambda) + " (least-squares fit of Godot's split fractions)" : "") +
+                        "; the raster cascades only: ray-traced shadows (the default from Medium) do not use them", 0);
+        }
+        if (const Var* v = project_.setting("rendering/lights_and_shadows/directional_shadow/size")) {
+            const int cascades = d.shadowCascades > 0 ? d.shadowCascades : 4;
+            d.shadowRes = gr::shadowResolution(static_cast<int>(numOf(v, 4096)), cascades);
+            report_.add("setting", kProject, "", "", "rendering/lights_and_shadows/directional_shadow/size", Rating::Approximated,
+                        "RENDER.SHADOWRES " + std::to_string(d.shadowRes) + ": one cascade's edge is half Godot's atlas (a single cascade, all of it), at most 4096; read when the renderer starts", 0);
+        }
+        if (const Var* v = project_.setting("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality")) {
+            d.shadowFilter = static_cast<f32>(gr::shadowFilterWidth(static_cast<int>(numOf(v, 3))));
+            report_.add("setting", kProject, "", "", "rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", Rating::Approximated,
+                        "RENDER.SHADOWFILTER " + std::to_string(d.shadowFilter) + " texels (Godot's medium, its default, is Aver's fixed 3x3 filter); a judgement, the sample counts differ", 0);
+        }
+        if (project_.setting("rendering/lights_and_shadows/use_physical_light_units"))
+            report_.add("setting", kProject, "", "", "rendering/lights_and_shadows/use_physical_light_units", Rating::Approximated,
+                        settingBool("rendering/lights_and_shadows/use_physical_light_units", false)
+                            ? "lights carry Godot's physical units: lumens or lux, the light type's factor and the camera attributes' exposure normalization, folded into the light's energy and tinted by its temperature; the sky, emission and fog are not in physical units"
+                            : "off: lights keep Godot's plain energy (x pi)", 0);
     }
     // P1: the project's texture sampling defaults. Godot's anisotropic level is 0 (off) to 4 (16x); the engine's samplers read RENDER.TEXTUREANISO (1 to 16) when the renderer
     // starts. A project that states neither keeps the engine's own (8x, no bias).
@@ -640,6 +720,9 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
                                     "physics/3d/physics_engine", "physics/jolt_physics_3d/limits/max_bodies", "physics/jolt_physics_3d/limits/max_body_pairs",
                                     "physics/jolt_physics_3d/limits/max_contact_constraints", "physics/jolt_physics_3d/limits/temporary_memory_buffer_size",
                                     "rendering/anti_aliasing/quality/screen_space_aa", "rendering/textures/quality/screen_space_aa", "rendering/anti_aliasing/quality/use_taa",
+                                    "rendering/anti_aliasing/quality/msaa_3d", "rendering/anti_aliasing/quality/use_debanding", "rendering/scaling_3d/", "rendering/mesh_lod/lod_change/threshold_pixels",
+                                    "rendering/occlusion_culling/use_occlusion_culling", "rendering/lights_and_shadows/directional_shadow/size",
+                                    "rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", "rendering/lights_and_shadows/use_physical_light_units",
                                     "rendering/environment/defaults/default_clear_color", "rendering/textures/default_filters/anisotropic_filtering_level",
                                     "rendering/textures/default_filters/texture_mipmap_bias", "rendering/textures/default_filters/use_nearest_mipmap_filter"};
     for (const gd::GodotConfigSection& sec : project_.config.sections) {

@@ -93,7 +93,7 @@ static class SubViewportTests
         var v = new SubViewport();
         T.Check("Godot's defaults: 512 by 512, update when visible, clear always, opaque, scale 1, no MSAA, own world off",
             v.Size == new Vector2I(512, 512) && v.RenderTargetUpdateMode == SubViewport.UpdateMode.WhenVisible && v.RenderTargetClearMode == SubViewport.ClearMode.Always &&
-            !v.TransparentBg && v.Scaling3DScale == 1f && v.Msaa3D == SubViewport.MsaaMode.Disabled && !v.OwnWorld3D && !v.Disable3D);
+            !v.TransparentBg && v.Scaling3DScale == 1f && v.Msaa3D == Viewport.Msaa.Disabled && !v.OwnWorld3D && !v.Disable3D);
         T.Check("the enum numbers are Godot's (and the engine's)",
             (int)SubViewport.UpdateMode.Disabled == 0 && (int)SubViewport.UpdateMode.Once == 1 && (int)SubViewport.UpdateMode.WhenVisible == 2 &&
             (int)SubViewport.UpdateMode.WhenParentVisible == 3 && (int)SubViewport.UpdateMode.Always == 4 &&
@@ -143,7 +143,7 @@ static class SubViewportTests
                 Set(() => sv.RenderTargetUpdateMode = SubViewport.UpdateMode.Once, f, "update 1 Once") &&
                 Set(() => sv.RenderTargetClearMode = SubViewport.ClearMode.Once, f, "clear 1 Once") &&
                 Set(() => sv.TransparentBg = false, f, "transparent 1 False") &&
-                Set(() => sv.Msaa3D = SubViewport.MsaaMode.Msaa4X, f, "scale 1 0.5 msaa4"));
+                Set(() => sv.Msaa3D = Viewport.Msaa.Msaa4X, f, "scale 1 0.5 msaa4"));
             T.Check("a sub-pixel size never reaches the engine as zero", Set(() => sv.Size = new Vector2I(0, 0), f, "size 1 1x1"));
 
             sv.RequestRender();

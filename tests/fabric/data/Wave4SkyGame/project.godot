@@ -1,0 +1,10 @@
+; Engine configuration file.
+; A fixture for the opt-in procedural sky (FabricWave4Test): a ProceduralSkyMaterial converted with and without --procedural-sky.
+
+config_version=5
+
+[application]
+
+config/name="Wave4 Sky Game"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")

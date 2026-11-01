@@ -411,12 +411,13 @@ int Converter::run() {
 
 namespace {
 constexpr const char* kFabricUsage =
-    "usage: AverAssetC fabric <godot-project-dir> <out-dir> [--dry-run] [--scenes-only] [--scripts-only] [--overwrite]\n"
+    "usage: AverAssetC fabric <godot-project-dir> <out-dir> [--dry-run] [--scenes-only] [--scripts-only] [--overwrite] [--procedural-sky]\n"
     "  converts a Godot 4.1+ project into <out-dir>/<Name>/ (an Aver project) and writes <out-dir>/FabricReport.md and .jsonl\n"
     "  --dry-run      convert into a scratch folder, keep only the report\n"
     "  --scenes-only  scenes, assets, project settings and GDExtension files; do not convert scripts\n"
     "  --scripts-only convert only the scripts, into a project converted before\n"
     "  --overwrite    replace a project already converted into <out-dir>\n"
+    "  --procedural-sky  OFF by default: a ProceduralSkyMaterial becomes a sky shader that follows Godot's own sky (costs at every sky lookup)\n"
     "exit: 0 converted (the report lists what was approximated or unsupported), 1 the conversion failed, 2 bad usage";
 }
 
@@ -429,6 +430,7 @@ int run(int argc, char** argv, const Host& host) {
         else if (a == "--scenes-only") opt.scenesOnly = true;
         else if (a == "--scripts-only") opt.scriptsOnly = true;
         else if (a == "--overwrite") opt.overwrite = true;
+        else if (a == "--procedural-sky") opt.proceduralSky = true;
         else if (a.rfind("--", 0) == 0) {
             AVER_ERROR("fabric: unknown option '{}'\n{}", a, kFabricUsage);
             emitResult(false, "", "", 0, 1, "unknown option '" + a + "'");

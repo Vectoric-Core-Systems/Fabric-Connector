@@ -7,6 +7,7 @@
 #include "aver/formats/AxisMap.hpp"
 #include "aver/formats/godot/GodotEnvironment.hpp"
 #include "aver/formats/godot/GodotLight.hpp"
+#include "aver/formats/godot/GodotRender.hpp"
 #include "aver/formats/PanoramaSky.hpp"
 #include "aver/formats/OcPrefab.hpp"
 #include "aver/platform/FileSystem.hpp"
@@ -689,6 +690,8 @@ struct LevelScan {
     double sunColor[3] = {1, 1, 1};
     double sunEnergy = 1;
     double sunAngular = 0.5;
+    double sunIntensityLux = 100000.0, sunTemperature = 6500.0;   // light_intensity_lux and light_temperature (used under physical light units)
+    SunShadowInfo sunShadow;                                       // the first sun's cascade settings (RENDER.SHADOW*)
     bool haveCamera = false, cameraCurrent = false;
     Xform cameraWorld;
     int firstCameraPlacement = -1;   // placement index of the first Camera3D, which becomes current when none says so (Godot's rule)
@@ -1125,9 +1128,11 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
         const auto note = [&](const Prop& pr, Rating r, const char* why) {
             report_.add("property", fn.reportFile, fn.reportPath, fn.type, pr.key, r, why, pr.line);
         };
+        const bool physical = settingBool("rendering/lights_and_shadows/use_physical_light_units", false);
+        const bool theSun = sun && !(scan.haveSun && !scan.sunNode.empty() && scan.sunNode != fn.reportPath);
         for (const Prop& pr : fn.props) {
             const std::string& k = pr.key;
-            if (k == "light_energy") note(pr, Rating::Converted, "energy times pi engine radiance units (104719.755 lux for the sun, candela at 1 m for an omni or spot): a white surface under energy E returns E, as in Godot");
+            if (k == "light_energy") note(pr, Rating::Converted, physical ? "physical units: it multiplies the intensity (lumens or lux)" : "energy times pi engine radiance units (104719.755 lux for the sun, candela at 1 m for an omni or spot): a white surface under energy E returns E, as in Godot");
             else if (k == "light_color") note(pr, Rating::Converted, "sRGB to linear");
             else if (k == "shadow_enabled") note(pr, Rating::Converted, sun ? "the sun is shadowed by Aver's own cascades or ray-traced shadows" : "a shadow map from the raster local-light path (a cube for an omni); the ray-traced light path traces a shadow ray instead");
             else if (k == "omni_range" || k == "spot_range") note(pr, Rating::Converted, "metres to centimetres; nothing reaches past it");
@@ -1144,11 +1149,18 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                 note(pr, Rating::Converted, "the raster local-light path fades the light and its shadow with distance from the camera; the ray-traced path does not");
             else if (k == "omni_shadow_mode") note(pr, Rating::Approximated, "an omni light always uses a cube shadow map");
             else if (k == "light_angular_distance") note(pr, sun ? Rating::Converted : Rating::Approximated, sun ? "written to the SUN record" : "not used by an omni or spot light");
-            else if (k == "directional_shadow_mode" || k == "directional_shadow_max_distance" || k == "directional_shadow_split_1" || k == "directional_shadow_split_2" ||
-                     k == "directional_shadow_split_3" || k == "directional_shadow_blend_splits" || k == "directional_shadow_fade_start" || k == "directional_shadow_pancake_size")
-                note(pr, Rating::Approximated, "the sun's shadow cascades are fitted by Aver, not by these values");
+            else if (k == "directional_shadow_mode") note(pr, theSun ? Rating::Converted : Rating::Approximated, theSun ? "RENDER.SHADOWCASCADES: one, two or four cascades of the sun's raster shadow (it matters when ray-traced shadows are off: the Low tier, Vulkan without ray queries)" : "only the first DirectionalLight3D is the sun");
+            else if (k == "directional_shadow_max_distance") note(pr, theSun ? Rating::Converted : Rating::Approximated, theSun ? "RENDER.SHADOWDIST: the farthest shadowed distance, metres to centimetres (raster cascades only)" : "only the first DirectionalLight3D is the sun");
+            else if (k == "directional_shadow_split_1" || k == "directional_shadow_split_2" || k == "directional_shadow_split_3")
+                note(pr, Rating::Approximated, "Godot places each split at a fraction of the shadow range; Aver has one split blend (RENDER.SHADOWSPLIT, 0 even to 1 logarithmic), set to the least-squares fit of the stated fractions");
+            else if (k == "directional_shadow_blend_splits" || k == "directional_shadow_fade_start")
+                note(pr, Rating::Approximated, "cascade blending and the shadow fade-out are not implemented by the engine; kept");
+            else if (k == "directional_shadow_pancake_size") note(pr, Rating::Approximated, "the sun's shadow cascades are fitted by Aver, not by this value");
             else if (k == "light_cull_mask") note(pr, Rating::Approximated, sun ? "the sun lights every layer: the engine's sun has no per-instance mask" : "which instances the light affects, in the raster local-light path; the ray-traced light path ignores it");
-            else if (k == "light_projector") note(pr, Rating::Unsupported, "projector textures are not converted; Aver lights take a cookie texture (CLight.cookie) instead");
+            else if (k == "light_projector") note(pr, sun ? Rating::Converted : Rating::Approximated, sun ? "a directional light has no projector in Godot either" : "the picture is copied to Textures/ and set as the light's cookie (CLight.cookie); the engine projects it through the light's cone, sampled by the raster local-light path (unverified on a GPU) and with the ray-traced light path's own cookie lookup");
+            else if (k == "light_temperature") note(pr, Rating::Converted, physical ? "a linear tint (the Filament fit Godot uses) multiplied into the light colour" : "Godot applies the temperature only with rendering/lights_and_shadows/use_physical_light_units on, which is off in this project, so it changes nothing, as in Godot");
+            else if (k == "light_intensity_lumens" || k == "light_intensity_lux")
+                note(pr, physical ? Rating::Converted : Rating::Converted, physical ? "physical units: light_energy x intensity x (1 for the sun, 1/(4 pi) omni, 1/pi spot) x the camera's exposure normalization, at 100000/3 lux or candela per engine unit" : "Godot uses the intensity only with physical light units on, which is off in this project, so it changes nothing, as in Godot");
             else if (k == "light_bake_mode") note(pr, Rating::Approximated, "every light is dynamic");
             else if (k == "light_volumetric_fog_energy") note(pr, Rating::Unsupported, "volumetric fog takes the sun and the fog settings, not a per-light multiplier");
             else if (k == "shadow_caster_mask") note(pr, Rating::Approximated, sun ? "the sun's shadows come from every layer" : "which instances cast this light's shadow, in the raster local-light path; the ray-traced path ignores it");
@@ -1185,6 +1197,8 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                                                                                   : "the camera node that is current drives the view");
                 else if (k == "fov" || k == "near" || k == "far") note(pr, Rating::Converted, k == "fov" ? "degrees; vertical, or horizontal with keep_aspect width" : "metres to centimetres");
                 else if (k == "doppler_tracking") note(pr, Rating::Unsupported, "audio doppler is not driven by a camera");
+                else if (k == "environment") note(pr, Rating::Converted, "pushed while this camera is current (post layer, fog, sky light, ambient), as Godot prefers a camera's environment over the world's; withdrawn when another camera takes over");
+                else if (k == "attributes") note(pr, Rating::Converted, "the exposure, depth of field and, with physical light units, the exposure normalization in force while this camera is current");
             } else if (k == "layers") {
                 note(pr, Rating::Converted, fn.type == "MeshInstance3D" || fn.type == "GeometryInstance3D"
                      ? "the instance's render layers (20 bits): tested against a camera's cull_mask and, in the raster local-light path, a light's light_cull_mask and shadow_caster_mask"
@@ -1211,16 +1225,19 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
             const auto note = [&](Rating r, const char* why) { report_.add("property", fn.reportFile, fn.reportPath, fn.type, k, r, why, pr.line); };
             if (k == "cast_shadow") {
                 if (value == 1) note(Rating::Converted, "shadows on is what every instance does");
-                else if (value == 0) note(Rating::Unsupported, "off: the engine has no per-instance shadow switch, so the instance still casts a shadow");
-                else if (value == 2) note(Rating::Approximated, "double sided: the instance casts the shadow every instance casts; the engine has no per-instance switch for the double-sided variant");
-                else note(Rating::Unsupported, "shadows only: the engine cannot draw an instance for its shadow alone, so the instance is drawn too");
+                else if (value == 0) note(Rating::Approximated, "off: CMeshRenderer shadow mode 1 keeps the instance out of the sun's cascade shadow and the GI shadow map; the ray-traced sun shadow (the default from Medium) still sees it");
+                else if (value == 2) note(Rating::Approximated, "double sided: the instance casts the shadow every instance casts; the engine has no switch for the double-sided variant");
+                else note(Rating::Approximated, "shadows only: CMeshRenderer shadow mode 2, invisible to the camera and kept for shadows, global illumination and ray tracing; unlike Godot's it also shows in reflections (hidden-from-owner semantics)");
             } else if (k == "gi_mode") {
-                if (value == 0) note(Rating::Unsupported, "disabled: Aver's global illumination takes every mesh instance into account, this one included");
-                else note(Rating::Converted, value == 1 ? "static: Aver's global illumination is real time, so the instance is lit and bounces light as any other" : "dynamic: Aver's global illumination is real time and follows moving instances");
+                if (value == 1) note(Rating::Converted, "static: part of the voxel GI bake, which is every instance's default in Aver");
+                else if (value == 2) note(Rating::Converted, "dynamic: kept out of the voxel GI bake as a mover is");
+                else note(Rating::Approximated, "disabled: kept out of the voxel GI bake like a dynamic instance; it is still lit by the real-time global illumination and still bounces light to its surroundings from the ray-traced paths");
             } else if (k == "extra_cull_margin") {
-                note(Rating::Unsupported, "no per-instance margin for culling: the instance is culled by its mesh bounds");
+                note(Rating::Converted, "metres to centimetres: grows the box the frustum and occlusion tests use (CMeshRenderer.cullMarginCm)");
             } else if (k == "ignore_occlusion_culling") {
-                note(Rating::Unsupported, "no per-instance opt-out of occlusion culling: the instance is culled when something hides its bounds");
+                note(Rating::Converted, "CMeshRenderer render flag bit 4; the editor's Play skips the occlusion test for it, and the shipped runtime has no occlusion culling at all");
+            } else if (k == "lod_bias") {
+                note(Rating::Converted, "Godot's multiplier as stops, log2 (CMeshRenderer.lodBias); the editor's Play picks the mesh's levels with it, the shipped runtime selects none");
             }
         }
     }
@@ -1385,11 +1402,23 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                 for (int k = 0; k < 3; ++k) scan.sunColor[k] = srgbToLinearF(c->nums[k]);
             scan.sunEnergy = numOf(e, 1.0);
             scan.sunAngular = numOf(ang, 0.5);
+            scan.sunShadow.found = true;
+            for (const Prop& pr : fn.props) {
+                const std::string& k = pr.key;
+                if (k == "light_intensity_lux") scan.sunIntensityLux = numOf(&pr.value, 100000.0);
+                else if (k == "light_temperature") scan.sunTemperature = numOf(&pr.value, 6500.0);
+                else if (k == "directional_shadow_mode") { scan.sunShadow.mode = static_cast<int>(numOf(&pr.value, 2)); scan.sunShadow.authored = true; }
+                else if (k == "directional_shadow_split_1") { scan.sunShadow.split1 = numOf(&pr.value, 0.1); scan.sunShadow.authored = true; }
+                else if (k == "directional_shadow_split_2") { scan.sunShadow.split2 = numOf(&pr.value, 0.2); scan.sunShadow.authored = true; }
+                else if (k == "directional_shadow_split_3") { scan.sunShadow.split3 = numOf(&pr.value, 0.5); scan.sunShadow.authored = true; }
+                else if (k == "directional_shadow_max_distance") { scan.sunShadow.maxDistanceM = numOf(&pr.value, 100.0); scan.sunShadow.authored = true; }
+            }
         }
         if (fn.type == "Camera3D" && !inSubViewport) {   // a camera below a SubViewport is that view's, not the level's
             bool current = false;
             for (const Prop& pr : fn.props) if (pr.key == "current") current = boolOf(&pr.value, false);
             if (scan.firstCameraPlacement < 0) {
+                for (const Prop& pr : fn.props) if (pr.key == "near") scan.sunShadow.cameraNearM = std::max(numOf(&pr.value, 0.05), 0.001);
                 scan.firstCameraPlacement = static_cast<int>(level.placements.size());
                 scan.firstCameraNode = fn.reportPath;
             }
@@ -1506,7 +1535,11 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
             if (const auto sky = resolveRes(c, *skyRef, *e->doc)) {
                 if (const Var* matRef = rprop(*sky, "sky_material")) {
                     if (const auto mat = resolveRes(c, *matRef, *sky->doc)) {
-                        if (mat->type == "ProceduralSkyMaterial") {
+                        if (mat->type == "ProceduralSkyMaterial" && c.options_.proceduralSky) {
+                            // F23, opt in: the sky is a shader program made at run time from the Environment node's own Sky (see FabricShader.cpp); the level's record
+                            // stays the physical sky, which still feeds anything the shader does not replace.
+                            note("sky_material", Rating::Approximated, "ProceduralSkyMaterial becomes a sky shader program (--procedural-sky, opt in); the level's own sky record stays the physical sky");
+                        } else if (mat->type == "ProceduralSkyMaterial") {
                             static const double top[3] = {0.385, 0.454, 0.55}, hor[3] = {0.646, 0.656, 0.67}, gnd[3] = {0.2, 0.169, 0.133};
                             colorOf(rprop(*mat, "sky_top_color"), env.zenith, top);
                             colorOf(rprop(*mat, "sky_horizon_color"), env.horizon, hor);
@@ -1572,8 +1605,29 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
     const int ambient = static_cast<int>(numOf(rprop(*e, "ambient_light_source"), 0));
     const double energy = numOf(rprop(*e, "ambient_light_energy"), 1.0);
     env.skyLight = (ambient == 1 ? 0.0 : energy) * skyLightMul;
-    if (ambient == 2) note("ambient_light_color", Rating::Approximated, "a flat ambient colour is not representable; the sky light is scaled by its energy instead");
-    else if (ambient != 0 || energy != 1.0) note("ambient_light_energy", Rating::Approximated, "becomes the sky light multiplier");
+    env.physicalUnits = c.settingBool("rendering/lights_and_shadows/use_physical_light_units", false);
+    if (ambient == 2) {
+        // P8: the SKY record's ambient override replaces the physical sky's irradiance with a constant colour; the authored two-colour dome has no such irradiance to replace.
+        static const double black[3] = {0, 0, 0};
+        double col[3];
+        colorOf(rprop(*e, "ambient_light_color"), col, black);
+        env.hasAmbient = true;
+        for (int i = 0; i < 3; ++i) env.ambientColor[i] = srgbToLinearF(col[i]);
+        env.ambientEnergy = std::max(energy, 0.0);
+        env.ambientSky = std::clamp(numOf(rprop(*e, "ambient_light_sky_contribution"), 1.0), 0.0, 1.0);
+        if (env.skyPhysical) {
+            env.skyLight = skyLightMul;   // the energy rides the override, so the sky light does not scale it twice
+            note("ambient_light_color", Rating::Converted, "the SKY record's ambient override (linear colour x ambient_light_energy, mixed with the sky's own ambient by ambient_light_sky_contribution: 1 is the sky alone, Godot's default)");
+        } else {
+            note("ambient_light_color", Rating::Approximated, "a flat ambient colour needs Aver's physical sky; under the authored two-colour dome the colour is not written and the sky light is scaled by ambient_light_energy instead");
+        }
+        if (const Var* sc = rprop(*e, "ambient_light_sky_contribution"); sc && !env.skyPhysical)
+            note("ambient_light_sky_contribution", Rating::Approximated, "the share of the sky's own ambient needs the physical sky (the ambient override); the authored dome has none");
+        else if (sc)
+            note("ambient_light_sky_contribution", Rating::Converted, "ambientsky in the SKY record: 0 gives the colour alone, 1 the sky alone");
+    } else if (ambient != 0 || energy != 1.0) note("ambient_light_energy", Rating::Approximated, "becomes the sky light multiplier");
+    if (const Var* rl = rprop(*e, "reflected_light_source"); rl && static_cast<int>(numOf(rl, 0)) != 0)
+        note("reflected_light_source", Rating::Approximated, "kept; Aver's reflections come from ray tracing, the voxel cone trace and the sky, with no per-environment source switch");
 
     // ---- fog: exponential density, height fog, depth fog (4.3 fog_mode 1) and volumetric fog ----
     const bool fogOn = boolOf(rprop(*e, "fog_enabled"), false);
@@ -1610,7 +1664,24 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
         }
         if (volFog) {
             env.volumetricFog = true;
-            note("volumetric_fog_enabled", Rating::Approximated, "volumetric fog becomes the level's distance fog at volumetric_fog_density (per metre / 100) and switches Voxi's light-shaft fog on (RENDER.VOLFOG 1: the sun scattered through that fog, shadowed by the scene) where FogVolume nodes draw; Godot's froxel resolution, volumetric_fog_gi_inject, detail_spread, ambient_inject, sky_affect and temporal reprojection settings are not modelled");
+            note("volumetric_fog_enabled", Rating::Approximated, "volumetric fog becomes the level's distance fog at volumetric_fog_density (per metre / 100) and switches Voxi's light-shaft fog on (RENDER.VOLFOG 1: the sun scattered through that fog, shadowed by the scene) where FogVolume nodes draw; Godot's froxel resolution, volumetric_fog_gi_inject, detail_spread, ambient_inject, sky_affect, emission and local-light in-scatter are not modelled");
+            // F24: the light-shaft fog's reach, anisotropy and history weight, when the environment states them (Godot's defaults, 64 m, 0.2 and 0.9, differ from the engine's, so an unstated one keeps the engine's).
+            if (const Var* v = rprop(*e, "volumetric_fog_length")) {
+                env.volFogLengthCm = std::clamp(numOf(v, 64.0) * 100.0, 100.0, 500000.0);
+                note("volumetric_fog_length", Rating::Converted, "RENDER.VOLFOGLENGTH, metres to centimetres (100 to 500000): how far the light-shaft volume reaches");
+            }
+            if (const Var* v = rprop(*e, "volumetric_fog_anisotropy")) {
+                env.hasVolFogAniso = true;
+                env.volFogAniso = std::clamp(numOf(v, 0.2), -0.95, 0.95);
+                note("volumetric_fog_anisotropy", Rating::Converted, "RENDER.VOLFOGANISO, the Henyey-Greenstein g clamped to -0.95 to 0.95");
+            }
+            const Var* tOn = rprop(*e, "volumetric_fog_temporal_reprojection_enabled");
+            const Var* tAmount = rprop(*e, "volumetric_fog_temporal_reprojection_amount");
+            if (tOn || tAmount) {
+                env.volFogTemporal = boolOf(tOn, true) ? std::clamp(numOf(tAmount, 0.9), 0.0, 0.98) : 0.0;
+                if (tOn) note("volumetric_fog_temporal_reprojection_enabled", Rating::Converted, "RENDER.VOLFOGTEMPORAL 0 when off");
+                if (tAmount) note("volumetric_fog_temporal_reprojection_amount", Rating::Converted, "RENDER.VOLFOGTEMPORAL, the history weight clamped to 0.98");
+            }
         }
     }
 
@@ -1635,8 +1706,14 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
     env.glow = boolOf(rprop(*e, "glow_enabled"), false);
     env.glowIntensity = numOf(rprop(*e, "glow_intensity"), 0.8);
     if (env.glow) {
-        note("glow_enabled", Rating::Approximated, "glow becomes the bloom intensity (glow_intensity) and, when stated, the bloom threshold (glow_hdr_threshold); levels, strength, blend mode and bloom are not modelled");
+        note("glow_enabled", Rating::Approximated, "glow becomes the bloom intensity (glow_intensity), the blend mode (glow_blend_mode; Godot's default is soft light), glow_strength and, when stated, the bloom threshold (glow_hdr_threshold) and the luminance cap (glow_hdr_luminance_cap); the level weights, glow_bloom, glow_hdr_scale and glow_normalized are kept and not modelled");
         if (rprop(*e, "glow_hdr_threshold")) env.glowThreshold = numOf(rprop(*e, "glow_hdr_threshold"), 1.0);
+        env.glowBlend = fmt::godotrender::glowBlend(static_cast<int>(numOf(rprop(*e, "glow_blend_mode"), 2)));
+        env.glowStrength = numOf(rprop(*e, "glow_strength"), 1.0);
+        if (const Var* cap = rprop(*e, "glow_hdr_luminance_cap")) env.glowCap = std::max(numOf(cap, 12.0), 0.0);
+        if (rprop(*e, "glow_blend_mode")) note("glow_blend_mode", Rating::Converted, "the POSTVOLUME key glowblend: 0 additive, 1 screen, 2 soft light, 3 replace, 4 mix");
+        if (rprop(*e, "glow_strength")) note("glow_strength", Rating::Converted, "the POSTVOLUME key glowstrength, a scale on the glow before it is blended");
+        if (rprop(*e, "glow_hdr_luminance_cap")) note("glow_hdr_luminance_cap", Rating::Converted, "the POSTVOLUME key glowcap, a limit on the glow's luminance");
     }
 
     // ---- camera attributes: exposure multiplier, auto exposure, depth of field ----
@@ -1649,6 +1726,7 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
         if (practical) {
             env.cameraExposure = numOf(rprop(*ca, "exposure_multiplier"), 1.0);
             env.autoExposure = boolOf(rprop(*ca, "auto_exposure_enabled"), false);
+            if (env.physicalUnits) env.exposureNorm = fmt::godotrender::practicalExposureNormalization(numOf(rprop(*ca, "exposure_sensitivity"), 100.0));
             const bool farOn = boolOf(rprop(*ca, "dof_blur_far_enabled"), false), nearOn = boolOf(rprop(*ca, "dof_blur_near_enabled"), false);
             const ge::Dof d = ge::dofFromPractical(nearOn, farOn, numOf(rprop(*ca, "dof_blur_near_distance"), 2.0), numOf(rprop(*ca, "dof_blur_far_distance"), 10.0),
                                                    numOf(rprop(*ca, "dof_blur_amount"), 0.1));
@@ -1664,8 +1742,19 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
                                                   numOf(rprop(*ca, "exposure_aperture"), 16.0));
             env.dof = d.on; env.dofFocusCm = d.focusCm; env.dofFStop = d.fStop; env.dofFocalMm = d.focalMm;
             c.report_.add("property", file, node, ca->type, "frustum_focus_distance", Rating::Converted, "focus distance, focal length and aperture drive Aver's physical depth of field", 0);
-            c.report_.add("property", file, node, ca->type, "exposure_aperture", Rating::Approximated,
-                          "the physical exposure (aperture, shutter, ISO) is not converted to an exposure multiplier; the project keeps eye adaptation off and exposure at tonemap_exposure", 0);
+            env.cameraExposure = numOf(rprop(*ca, "exposure_multiplier"), 1.0);
+            if (env.physicalUnits)
+                env.exposureNorm = fmt::godotrender::physicalExposureNormalization(numOf(rprop(*ca, "exposure_aperture"), 16.0), numOf(rprop(*ca, "exposure_shutter_speed"), 100.0),
+                                                                                    numOf(rprop(*ca, "exposure_sensitivity"), 100.0));
+            for (const char* k : {"exposure_aperture", "exposure_shutter_speed", "exposure_sensitivity"}) {
+                if (!rprop(*ca, k)) continue;
+                if (env.physicalUnits)
+                    c.report_.add("property", file, node, ca->type, k, Rating::Approximated,
+                                  "physical light units are on: Godot's exposure normalization 1 / (1.2 x aperture^2 x shutter_speed x (100 / ISO)) is folded into the energy of the lights (the SUN record, local lights at run time); the sky, emission and fog stay at their non-physical values, and the project keeps eye adaptation off", 0);
+                else
+                    c.report_.add("property", file, node, ca->type, k, Rating::Converted,
+                                  "Godot ignores aperture, shutter speed and sensitivity for exposure unless physical light units are on (rendering/lights_and_shadows/use_physical_light_units); they are off here", 0);
+            }
         }
     }
 
@@ -1678,8 +1767,35 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
                                                     "tonemap_mode", "tonemap_exposure", "tonemap_white", "glow_enabled", "glow_intensity",
                                                     "glow_hdr_threshold", "adjustment_enabled", "adjustment_brightness", "adjustment_contrast",
                                                     "adjustment_saturation", "adjustment_color_correction", "resource_local_to_scene",
-                                                    "resource_name", "script", "resource_path"};
+                                                    "resource_name", "script", "resource_path",
+                                                    // wave 4: converted above (or rated there)
+                                                    "ambient_light_sky_contribution", "reflected_light_source", "glow_blend_mode", "glow_strength", "glow_hdr_luminance_cap",
+                                                    "volumetric_fog_length", "volumetric_fog_anisotropy", "volumetric_fog_temporal_reprojection_enabled",
+                                                    "volumetric_fog_temporal_reprojection_amount"};
         if (known.count(p.name)) continue;
+        {
+            // P8, P9, P10: settings the engine does not model (no per-level glow weights, no fog sun scatter / sky affect / aerial perspective, no volume emission or local-light in-scatter): kept.
+            struct Kept { const char* name; const char* why; };
+            static const Kept kept[] = {
+                {"glow_bloom", "Aver's bloom has no separate bloom term over the whole frame; kept"},
+                {"glow_hdr_scale", "the glow's HDR scale is not implemented by the engine; kept"},
+                {"glow_normalized", "normalising the glow is not implemented by the engine; kept"},
+                {"fog_sun_scatter", "the share of the sun scattered into the fog is not a separate setting in Aver's fog; kept"},
+                {"volumetric_fog_gi_inject", "the volume takes no global illumination injection; kept"},
+                {"volumetric_fog_ambient_inject", "the volume takes no ambient injection; kept"},
+                {"volumetric_fog_detail_spread", "the froxel volume's depth distribution is the renderer's; kept"},
+                {"volumetric_fog_sky_affect", "fog on sky pixels is not modelled; kept"},
+                {"volumetric_fog_emission", "the volume's own emission (and local-light in-scatter) is not modelled; kept"},
+                {"volumetric_fog_emission_energy", "the volume's own emission (and local-light in-scatter) is not modelled; kept"}};
+            bool handledHere = false;
+            for (const Kept& kp : kept)
+                if (p.name == kp.name) { c.report_.add("property", file, node, "Environment", p.name, Rating::Approximated, kp.why, p.line); handledHere = true; break; }
+            if (!handledHere && p.name.rfind("glow_levels/", 0) == 0) {
+                c.report_.add("property", file, node, "Environment", p.name, Rating::Approximated, "the glow's per-level weights are not implemented: the bloom pyramid is summed by the blender; kept", p.line);
+                handledHere = true;
+            }
+            if (handledHere) continue;
+        }
         // G4 R8: Godot's screen-space and SDF effects have no pass of their own in Aver; its GI is the same job done another way, so they are rated for what
         // covers them (RENDER.GI and ray tracing are the project's choice, not forced here).
         const char* gi = nullptr;
@@ -1706,6 +1822,12 @@ std::vector<PostKey> postKeysOf(const EnvInfo& env) {
     k.push_back({"autoexposure", env.autoExposure ? 1.0 : 0.0});
     k.push_back({"bloom", env.glow ? env.glowIntensity : 0.0});
     if (env.glow && env.glowThreshold >= 0.0) k.push_back({"bloomthreshold", env.glowThreshold});
+    if (env.glow) {
+        // The glow's blend (Godot's default is soft light), strength and cap; strength 1 and an unstated cap are the engine's own, so they are not written.
+        k.push_back({"glowblend", static_cast<double>(env.glowBlend)});
+        if (env.glowStrength != 1.0) k.push_back({"glowstrength", env.glowStrength});
+        if (env.glowCap >= 0.0) k.push_back({"glowcap", env.glowCap});
+    }
     k.push_back({"adjbrightness", env.adjust ? env.adjBrightness : 1.0});
     k.push_back({"adjcontrast", env.adjust ? env.adjContrast : 1.0});
     k.push_back({"adjsaturation", env.adjust ? env.adjSaturation : 1.0});
@@ -1780,6 +1902,8 @@ bool Converter::emitLevel(const std::string& sceneRes, FNode& root, fmt::OcWorld
     }
 
     // ---- level records from what the scan found ----
+    bool debanded = false;   // the WorldEnvironment's post volume carries the dither
+    double physNorm = 1.0;   // the exposure normalization of the camera attributes, with physical light units on
     if (scan.environmentNode) {
         const EnvInfo env = readEnvironment(*this, *scan.environmentNode);
         if (env.found) {
@@ -1792,6 +1916,12 @@ bool Converter::emitLevel(const std::string& sceneRes, FNode& root, fmt::OcWorld
                     level.skyGroundAlbedo[i] = env.ground[i];
                 }
                 level.skyLight = env.skyLight;
+                if (env.hasAmbient && env.skyPhysical) {
+                    // P8: a constant ambient colour in place of the sky's (the override does nothing under the authored dome, so it is written for the physical sky only).
+                    for (int i = 0; i < 3; ++i) level.skyAmbientColor[i] = env.ambientColor[i];
+                    level.skyAmbientEnergy = env.ambientEnergy;
+                    level.skyAmbientSky = env.ambientSky;
+                }
                 if (env.hasDomeExponent) level.skyDomeExponent = env.domeExponent;
                 if (env.hasSkyMieScale && env.skyPhysical) {
                     // Aver's calibrated clear-sky Mie values (rhi::AtmosphereProfile) scaled by the haze.
@@ -1817,17 +1947,36 @@ bool Converter::emitLevel(const std::string& sceneRes, FNode& root, fmt::OcWorld
                 pv.name = "WorldEnvironment";
                 pv.infinite = true;
                 for (const PostKey& k : postKeysOf(env)) pv.set(k.key, &k.v, 1);
+                if (settingBool("rendering/anti_aliasing/quality/use_debanding", false)) { const double one = 1.0; pv.set("deband", &one, 1); debanded = true; }
                 level.postVolumes.push_back(std::move(pv));
             }
+            physNorm = env.exposureNorm;
             if (!projectEnv_.found || isStart) projectEnv_ = env;
         }
     }
+    // E7: the project's use_debanding on a level with no WorldEnvironment is a post volume of its own that states only the dither.
+    if (!debanded && settingBool("rendering/anti_aliasing/quality/use_debanding", false) && (level.hasSky || scan.haveSun || scan.haveCamera)) {
+        fmt::OcPostVolume pv;
+        pv.name = "Debanding";
+        pv.infinite = true;
+        const double one = 1.0;
+        pv.set("deband", &one, 1);
+        level.postVolumes.push_back(std::move(pv));
+    }
+    if (isStart && scan.sunShadow.found) sunShadow_ = scan.sunShadow;
     if (scan.haveSun) {
         const Vec3 d = fmt::axis::direction(static_cast<f32>(scan.sunToward.x), static_cast<f32>(scan.sunToward.y), static_cast<f32>(scan.sunToward.z));
         level.hasSun = true;
         level.sunDir[0] = d.x; level.sunDir[1] = d.y; level.sunDir[2] = d.z;
         for (int i = 0; i < 3; ++i) level.sunColor[i] = scan.sunColor[i];
         level.sunLux = scan.sunEnergy * kLuxPerEnergy;
+        if (settingBool("rendering/lights_and_shadows/use_physical_light_units", false)) {
+            // F21: with physical units the sun is light_energy x light_intensity_lux x the camera's exposure normalization, tinted by light_temperature.
+            namespace gr = fmt::godotrender;
+            level.sunLux = gr::physicalAverIntensity(gr::LightKind::Directional, scan.sunEnergy, scan.sunIntensityLux, physNorm);
+            const std::array<double, 3> tint = gr::temperatureTint(scan.sunTemperature);
+            for (int i = 0; i < 3; ++i) level.sunColor[i] *= tint[static_cast<size_t>(i)];
+        }
         level.sunAngularDeg = scan.sunAngular;
     }
     // Godot makes the first camera current when none is marked (G4 R4): the node class would otherwise leave the player's own view in place.
