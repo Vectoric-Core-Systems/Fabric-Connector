@@ -35,6 +35,10 @@ internal static class NodeHost
         set => s_current = value;
     }
 
+    /// <summary>The node whose entity this node's entity hangs under in the engine: its parent, except that a top-level node hangs under none (the engine composes
+    /// an entity's world matrix with its parents', and a top-level node ignores its parent's transform).</summary>
+    internal static Node? EngineParent(Node n) => n is Node3D { TopLevel: true } ? null : n.GetParent();
+
     internal static IEnumerable<Node> PreOrder(Node n)
     {
         yield return n;
@@ -87,7 +91,7 @@ internal sealed class EngineNodeHost : INodeHost
 
     public void Enter(Node subtreeRoot)
     {
-        Entity parentEntity = subtreeRoot.GetParent()?.Self ?? default;
+        Entity parentEntity = NodeHost.EngineParent(subtreeRoot)?.Self ?? default;
         bool anyFresh = NodeHost.PreOrder(subtreeRoot).Any(n => !n.Self.IsValid);
         if (anyFresh) Aver.Framework.Hosting.ExtensionHost.BeginSpawnBatch();
         try
@@ -122,9 +126,15 @@ internal sealed class EngineNodeHost : INodeHost
 
     public void Destroy(Node node)
     {
+        // A top-level node's entity is a root, so destroying its parent's entity does not end it: collect those first.
+        List<Node> detached = NodeHost.PreOrder(node).Skip(1).Where(IsTopLevel).ToList();
         if (node.Self.IsValid && node.Self.IsAlive) node.Self.Destroy();   // the framework ends every actor below, children first
         else NodeHost.ManagedExit(node);
+        foreach (Node n in detached)
+            if (n.Self.IsValid && n.Self.IsAlive) n.Self.Destroy();
     }
+
+    private static bool IsTopLevel(Node n) => n is Node3D { TopLevel: true };
 
     private static void SpawnOne(Node n)
     {
@@ -136,7 +146,7 @@ internal sealed class EngineNodeHost : INodeHost
             Log.Error($"[Fabric] {n.GetType().Name} '{n.Name}' has no class in the registry; it was not added to the world");
             return;
         }
-        Entity parent = n.GetParent()?.Self ?? default;
+        Entity parent = NodeHost.EngineParent(n)?.Self ?? default;   // none for a top-level node: its entity is a root, its transform its global one
         float[] pos = { 0, 0, 0 }, quat = { 0, 0, 0, 1 }, scale = { 1, 1, 1 };
         if (n is Node3D n3) n3.GetLocalForEngine(pos, quat, scale);
 

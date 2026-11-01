@@ -23,8 +23,17 @@ internal static class FabricView
     internal static void Follow(Camera3D? camera)
     {
         Followed = camera;
+        Sync();
+    }
+
+    /// <summary>Publishes the followed camera's entity when the engine's view entity is not it. A camera can become current before its entity is bound,
+    /// so the game mode calls this every frame while playing; it costs one native read when nothing changed.</summary>
+    internal static void Sync()
+    {
         if (!NodeHost.Current.IsEngine) return;
-        Aver.Framework.Hosting.ExtensionHost.SetViewEntity(camera != null && camera.Self.IsValid ? camera.Self : Entity.None);
+        Entity want = Followed != null && Followed.Self.IsValid ? Followed.Self : Entity.None;
+        if (ViewNative.aver_fw_view_entity() != want.Handle)
+            Aver.Framework.Hosting.ExtensionHost.SetViewEntity(want);
     }
 
     /// <summary>First person with no eye height and no boom: the engine places the camera exactly at the view entity and looks where it looks.</summary>
@@ -60,6 +69,7 @@ internal static class ViewNative
 
     [DllImport(Lib)] internal static extern void aver_fw_set_view(int mode, float eyeHeight, float boomLength);
     [DllImport(Lib)] internal static extern void aver_fw_view(out int mode, out float eyeHeight, out float boomLength);
+    [DllImport(Lib)] internal static extern int aver_fw_view_entity();
 }
 
 /// <summary>The controller of a converted project's player. The engine's own PlayerController is abstract, so a game mode needs one that is not. It
@@ -91,7 +101,10 @@ public sealed class FabricGameMode : AverGameMode
     public override void OnBeginPlay(BeginReason reason)
     {
         if (reason != BeginReason.Reload) FabricView.UseCameraPose();
+        FabricView.Sync();
     }
+
+    public override void OnTick(float dt) => FabricView.Sync();
 
     public override void OnPostLogin(Entity controller)
     {

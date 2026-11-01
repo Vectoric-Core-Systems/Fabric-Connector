@@ -15,6 +15,7 @@ static class GameModeTests
         T.Run("FabricGameMode: registers under the name the converter writes, with a controller and no default pawn", Registration);
         T.Run("FabricGameMode: the extension declares the mode, its controller and the view pawn", Declared);
         T.Run("FabricGameMode: the view follows the first camera, a make_current switch and the next camera", FollowsCamera);
+        T.Run("Camera pose: a top-level follow camera is a root entity at its global pose, looking along -Z (the engine's +X)", TopLevelFollowCamera);
         T.Run("FabricGameMode: a camera that asks to be current, one that leaves and comes back, and the session end", CurrentFlags);
     });
 
@@ -102,5 +103,56 @@ static class GameModeTests
         var inside = new Camera3D { Name = "Inside" };
         sub.AddChild(inside);
         T.Check("a camera inside a SubViewport never takes the window's view", FabricView.Followed == null && SceneTree.Instance.Root.GetCamera3D() == null);
+    }
+
+    // Aver's +X axis rotated by an entity rotation quaternion (the engine's forward): the numbers the engine reads for the view.
+    private static Vector3 EngineForwardOf(float[] q) // x, y, z, w
+    {
+        (float x, float y, float z, float w) = (q[0], q[1], q[2], q[3]);
+        (float vx, float vy, float vz) = (1f, 0f, 0f);
+        (float tx, float ty, float tz) = (2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx));
+        (float rx, float ry, float rz) = (vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx));
+        return new Vector3(rx, ry, rz);
+    }
+
+    private static void TopLevelFollowCamera()
+    {
+        T.Reset();
+        // Godot's kinematic_character: Cubio > Target > Camera3D, the camera script sets top_level in _ready and calls look_at_from_position each physics frame.
+        Node3D cubio = new() { Name = "Cubio", Position = new Vector3(-1.5f, 2f, 4f) };
+        Node3D target = new() { Name = "Target", Position = new Vector3(0, 0.8f, 0) };
+        Camera3D cam = new() { Name = "Camera3D", Position = new Vector3(2f, 0.5f, 0.913381f) };
+        cubio.AddChild(target);
+        target.AddChild(cam);
+        SceneTree.Instance.Root.AddChild(cubio);
+        Vector3 start = cam.GlobalPosition;
+        T.CheckVec("the camera starts at Target + its local offset", new Vector3(0.5f, 3.3f, 4.913381f), start, 1e-4f);
+
+        cam.TopLevel = true;
+        T.CheckVec("top_level keeps the global position", start, cam.GlobalPosition);
+        T.Check("the engine hangs a top-level camera's entity under nothing (the engine composes world matrices through parents)", NodeHost.EngineParent(cam) == null);
+        T.Check("and an ordinary child under its parent", NodeHost.EngineParent(target) == cubio);
+
+        cubio.Position = new Vector3(-8f, 2f, 1f);   // the player walks off
+        Vector3 targetPos = target.GlobalPosition;
+        Vector3 camPos = new Vector3(-6f, 3.5f, 4f);
+        cam.LookAtFromPosition(camPos, targetPos, Vector3.Up);
+
+        var pos = new float[3]; var quat = new float[4]; var scale = new float[3];
+        cam.GetLocalForEngine(pos, quat, scale);
+        var expectPos = FabricSpace.ToAverPosition(camPos);
+        T.Check("the entity's local position IS the camera's global one, whatever the parent does", T.Near(pos[0], expectPos.X, 1e-2f) && T.Near(pos[1], expectPos.Y, 1e-2f) && T.Near(pos[2], expectPos.Z, 1e-2f));
+        Vector3 godotDir = (targetPos - camPos).Normalized();
+        var want = FabricSpace.ToAverDirection(godotDir);
+        Vector3 fwd = EngineForwardOf(quat);
+        T.Check("look_at: the entity's +X points at the target (Godot's -Z through the axis map)", T.Near(fwd, new Vector3(want.X, want.Y, want.Z), 1e-4f));
+        T.CheckVec("and the camera's -Z in Godot space is the same direction", godotDir, -cam.GlobalTransform.Basis.Z, 1e-4f);
+
+        // A camera that is not top-level is placed through its parent as before.
+        cam.TopLevel = false;
+        T.Check("top_level off: the entity goes back under its parent", NodeHost.EngineParent(cam) == target);
+        T.CheckVec("and the camera keeps its global position", camPos, cam.GlobalPosition, 1e-3f);
+        T.CheckVec("so its local position is relative to the Target", camPos - target.GlobalPosition, cam.Position, 1e-3f);
+        T.Reset();
     }
 }

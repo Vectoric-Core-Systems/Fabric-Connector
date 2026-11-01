@@ -191,8 +191,21 @@ public partial class Node3D : Node
             // Inside the tree the node stays where it is: its local transform becomes the global one (or back, relative to the parent).
             Transform3D global = IsInsideTree() ? GlobalTransform : default;
             _topLevel = value;
-            if (IsInsideTree()) GlobalTransform = global;
+            if (IsInsideTree())
+            {
+                HangEntity();
+                GlobalTransform = global;
+            }
         }
+    }
+
+    /// <summary>The engine composes an entity's world matrix with its parents', so a top-level node's entity must not hang under its parent's: it is a root
+    /// while the node is top-level (its local transform is then its global one), and goes back under the parent entity when it is not. Does nothing without an entity.</summary>
+    private void HangEntity()
+    {
+        if (!Backed) return;
+        if (NodeHost.EngineParent(this)?.Self is { IsValid: true } parentEntity) Self.SetParent(parentEntity);
+        else Self.Detach();
     }
 
     /// <summary>Godot's set_as_top_level: the same as setting <see cref="TopLevel"/>.</summary>
