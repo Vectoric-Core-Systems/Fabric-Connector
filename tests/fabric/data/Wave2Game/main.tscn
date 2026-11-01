@@ -5,6 +5,11 @@
 [ext_resource type="Texture2D" path="res://textures/rough.png" id="3_rough"]
 [ext_resource type="Material" path="res://materials/red.tres" id="4_red"]
 [ext_resource type="Material" path="res://materials/blue.tres" id="5_blue"]
+[ext_resource type="CompressedTexture2D" path="res://textures/lossy.webp" id="6_lossy"]
+[ext_resource type="CompressedTexture2D" path="res://textures/lossless.webp" id="7_lossless"]
+[ext_resource type="CompressedTexture2D" path="res://textures/lossyalpha.webp" id="8_lossya"]
+[ext_resource type="CompressedTexture2D" path="res://textures/losslessalpha.webp" id="9_llessa"]
+[ext_resource type="CompressedTexture2D" path="res://textures/junk.webp" id="10_junk"]
 
 [sub_resource type="Gradient" id="Gradient_a"]
 offsets = PackedFloat32Array(0, 1)
@@ -71,6 +76,18 @@ albedo_texture = SubResource("Atlas_a")
 [sub_resource type="StandardMaterial3D" id="M_Canvas"]
 albedo_texture = SubResource("Canvas_a")
 
+[sub_resource type="StandardMaterial3D" id="M_Webp"]
+albedo_texture = ExtResource("6_lossy")
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_texture = ExtResource("7_lossless")
+
+[sub_resource type="StandardMaterial3D" id="M_WebpAlpha"]
+albedo_texture = ExtResource("8_lossya")
+transparency = 1
+normal_enabled = true
+normal_texture = ExtResource("9_llessa")
+
 [sub_resource type="BoxMesh" id="BoxMesh_one"]
 size = Vector3(1, 1, 1)
 
@@ -126,6 +143,20 @@ surface_material_override/0 = SubResource("M_Atlas")
 mesh = SubResource("ArrayMesh_two")
 material_override = ExtResource("4_red")
 surface_material_override/1 = ExtResource("5_blue")
+
+[node name="Webp" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_one")
+surface_material_override/0 = SubResource("M_Webp")
+
+[node name="WebpAlpha" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_one")
+surface_material_override/0 = SubResource("M_WebpAlpha")
+
+[node name="WebpRect" type="TextureRect" parent="."]
+texture = ExtResource("7_lossless")
+
+[node name="BadRect" type="TextureRect" parent="."]
+texture = ExtResource("10_junk")
 
 [node name="Curve" type="TextureRect" parent="."]
 texture = SubResource("CurveTex_a")

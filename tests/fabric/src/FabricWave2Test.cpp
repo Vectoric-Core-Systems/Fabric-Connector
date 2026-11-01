@@ -130,6 +130,51 @@ static void writePng(const std::string& path, int w, int h, const std::function<
     writeFileBytes(path, png.data(), png.size());
 }
 
+// ---- WebP vectors from a reference encoder (the same 8x8 colour ramp the engine's ImageDecodeTest uses: r = 32 + 24x, g = 40 + 24y, b = 200 - 10x; alpha 40 + 28y) ----------------
+
+static const std::uint8_t kLossy[] = {
+    0x52, 0x49, 0x46, 0x46, 0x64, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
+    0x58, 0x00, 0x00, 0x00, 0x50, 0x02, 0x00, 0x9d, 0x01, 0x2a, 0x08, 0x00, 0x08, 0x00, 0x00, 0x80,
+    0x08, 0x25, 0xb0, 0x02, 0x74, 0x72, 0x00, 0xab, 0xff, 0x03, 0xd1, 0x32, 0xc0, 0x04, 0x00, 0x00,
+    0xfe, 0xfe, 0xc1, 0xeb, 0xbd, 0x5d, 0xe6, 0x77, 0xbc, 0x48, 0x77, 0x6e, 0xef, 0xa6, 0xc6, 0x8f,
+    0xfe, 0xcc, 0x6f, 0x75, 0xfe, 0xf8, 0x73, 0x1b, 0xe8, 0xdf, 0xf7, 0x59, 0x0b, 0xff, 0xb7, 0x94,
+    0x4b, 0xfc, 0x19, 0xdf, 0xe7, 0xff, 0x2a, 0xff, 0xf0, 0x47, 0x91, 0xd3, 0xff, 0xfc, 0x2b, 0x8f,
+    0xff, 0x03, 0xd9, 0xbf, 0xff, 0xd0, 0x47, 0xf2, 0x83, 0x3e, 0x60, 0x00,
+};
+static const std::uint8_t kLossless[] = {
+    0x52, 0x49, 0x46, 0x46, 0x3a, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x4c,
+    0x2e, 0x00, 0x00, 0x00, 0x2f, 0x07, 0xc0, 0x01, 0x00, 0xb9, 0x32, 0x44, 0xf4, 0x3f, 0x76, 0x11,
+    0xd1, 0xff, 0x00, 0x61, 0xb6, 0xd1, 0x30, 0x86, 0x70, 0xfe, 0x8c, 0x7b, 0x1d, 0x81, 0x58, 0x30,
+    0xc5, 0xc3, 0xe8, 0x4c, 0x2c, 0x98, 0xcc, 0x9f, 0x2c, 0xa2, 0xee, 0x98, 0x80, 0x1d, 0xdd, 0x02,
+    0xfd, 0x07,
+};
+static const std::uint8_t kLossyAlpha[] = {
+    0x52, 0x49, 0x46, 0x46, 0x94, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58,
+    0x0a, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x07, 0x00, 0x00, 0x41, 0x4c,
+    0x50, 0x48, 0x16, 0x00, 0x00, 0x00, 0x01, 0xb9, 0x8c, 0xe8, 0x7f, 0x80, 0x20, 0xdb, 0xa6, 0x20,
+    0x03, 0xb8, 0xbf, 0xe6, 0x05, 0x22, 0x26, 0x20, 0x16, 0x00, 0xc8, 0x0d, 0x56, 0x50, 0x38, 0x20,
+    0x58, 0x00, 0x00, 0x00, 0x10, 0x02, 0x00, 0x9d, 0x01, 0x2a, 0x08, 0x00, 0x08, 0x00, 0x00, 0x80,
+    0x08, 0x25, 0xb0, 0x02, 0x74, 0x47, 0xff, 0x81, 0xe8, 0x99, 0x60, 0x12, 0xa0, 0x00, 0xfe, 0xfe,
+    0xc1, 0xeb, 0xbd, 0x5d, 0xe6, 0x77, 0xbc, 0x48, 0x77, 0x6e, 0xef, 0xa6, 0xc6, 0x8f, 0xfe, 0xd4,
+    0x47, 0xfb, 0xd7, 0xfb, 0xe1, 0xcc, 0x6f, 0x40, 0xbf, 0xce, 0xac, 0xb7, 0xff, 0xed, 0xe5, 0x12,
+    0xfe, 0xef, 0xff, 0x9b, 0xff, 0xe5, 0x5f, 0xfe, 0x08, 0xf2, 0x3a, 0x7f, 0xff, 0x85, 0x71, 0xff,
+    0xe0, 0x7b, 0x37, 0xff, 0xf9, 0xe0, 0xff, 0xf2, 0x83, 0x3e, 0x60, 0x00,
+};
+static const std::uint8_t kLosslessAlpha[] = {
+    0x52, 0x49, 0x46, 0x46, 0x40, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x4c,
+    0x34, 0x00, 0x00, 0x00, 0x2f, 0x07, 0xc0, 0x01, 0x10, 0xb9, 0x32, 0x44, 0xf4, 0x3f, 0x76, 0x11,
+    0xd1, 0xff, 0x00, 0x61, 0xb6, 0xd1, 0x30, 0x86, 0x70, 0xfe, 0x8c, 0x7b, 0x1d, 0x81, 0x58, 0x30,
+    0xc5, 0xc3, 0xe8, 0x4c, 0x2c, 0x98, 0xcc, 0x9f, 0x2c, 0xa2, 0x6e, 0x81, 0x40, 0x8a, 0x03, 0x59,
+    0xe0, 0x09, 0xd8, 0x4d, 0x6b, 0x09, 0xf4, 0x1f,
+};
+// A RIFF/WEBP header around nothing: not a picture.
+static const std::uint8_t kJunk[] = {'R', 'I', 'F', 'F', 4, 0, 0, 0, 'W', 'E', 'B', 'P'};
+
+template <size_t N>
+static void writeBytes(const std::string& path, const std::uint8_t (&bytes)[N]) { writeFileBytes(path, bytes, N); }
+
+static bool within(int got, int want, int tol) { return std::abs(got - want) <= tol; }
+
 // ---- lookups -------------------------------------------------------------------------------------------------------------------
 
 static int findPlacement(const fmt::OcWorldData& w, const char* name) {
@@ -184,6 +229,11 @@ int main() {
         const bool red = x >= 2 && y >= 2;
         p[0] = red ? 255 : 0; p[1] = red ? 0 : 255; p[2] = 0;
     });
+    writeBytes(src + "/textures/lossy.webp", kLossy);
+    writeBytes(src + "/textures/lossless.webp", kLossless);
+    writeBytes(src + "/textures/lossyalpha.webp", kLossyAlpha);
+    writeBytes(src + "/textures/losslessalpha.webp", kLosslessAlpha);
+    writeBytes(src + "/textures/junk.webp", kJunk);
 
     const std::string out = (outRoot / "out").string();
     std::string log;
@@ -268,6 +318,35 @@ int main() {
         check(canvas != nullptr, "CanvasTexture: the material takes its diffuse picture");
     }
 
+    AVER_INFO("-- E1: WebP pictures --");
+    {
+        const auto endsWebp = [](const std::string& p) { return p.size() > 5 && p.compare(p.size() - 5, 5, ".webp") == 0; };
+        const pbr::MaterialDesc* plain = findMat([&](const pbr::MaterialDesc& m) {
+            return endsWebp(m.textures[static_cast<u32>(pbr::TextureSlot::BaseColor)].path) && !m.textures[static_cast<u32>(pbr::TextureSlot::Emissive)].empty();
+        });
+        check(plain != nullptr, "a material with a lossy WebP albedo and a lossless WebP emission map was cooked with both as .webp files");
+        if (plain) {
+            ImageData lossy, lossless;
+            check(decodePicture(texPath(*plain, pbr::TextureSlot::BaseColor), lossy) && lossy.width == 8 && lossy.height == 8, "the lossy WebP decodes through the engine's loader (8 x 8)");
+            if (lossy.valid())
+                check(within(channel(lossy, 0, 0, 0), 35, 3) && within(channel(lossy, 0, 0, 2), 186, 3) && within(channel(lossy, 3, 4, 1), 136, 3), "and has the reference encoder's pixels");
+            check(decodePicture(texPath(*plain, pbr::TextureSlot::Emissive), lossless) && lossless.width == 8, "the lossless WebP decodes");
+            if (lossless.valid())
+                check(channel(lossless, 0, 0, 0) == 32 && channel(lossless, 0, 0, 1) == 40 && channel(lossless, 0, 0, 2) == 200 && channel(lossless, 7, 7, 1) == 208, "and is exact");
+        }
+        const pbr::MaterialDesc* alpha = findMat([&](const pbr::MaterialDesc& m) {
+            return endsWebp(m.textures[static_cast<u32>(pbr::TextureSlot::BaseColor)].path) && !m.textures[static_cast<u32>(pbr::TextureSlot::Normal)].empty();
+        });
+        check(alpha != nullptr, "a material with a lossy-with-alpha albedo and a lossless-with-alpha normal map was cooked");
+        if (alpha) {
+            ImageData la, ll;
+            check(decodePicture(texPath(*alpha, pbr::TextureSlot::BaseColor), la) && la.width == 8, "the lossy WebP with alpha decodes");
+            if (la.valid()) check(within(channel(la, 0, 0, 3), 40, 3) && within(channel(la, 7, 7, 3), 236, 3), "and keeps its alpha");
+            check(decodePicture(texPath(*alpha, pbr::TextureSlot::Normal), ll) && ll.width == 8, "the lossless WebP with alpha decodes");
+            if (ll.valid()) check(channel(ll, 0, 0, 3) == 40 && channel(ll, 3, 4, 3) == 152, "and keeps its alpha exactly");
+        }
+    }
+
     // ---- the level: P2 and F26 for a node ----------------------------------------------------------------------------------------------
     AVER_INFO("-- the level --");
     fmt::OcWorldData w;
@@ -288,6 +367,16 @@ int main() {
 
         const int whole = findPlacement(w, "Whole");
         check(whole >= 0 && prop(w, whole, "material_override") != nullptr && surfaceRecord(w, whole) == nullptr, "a material_override replaces every surface: no per-surface record is placed");
+
+        const int webpRect = findPlacement(w, "WebpRect");
+        const std::string* wt = prop(w, webpRect, "texture");
+        check(wt != nullptr && wt->find(".webp") != std::string::npos, "a WebP held by a node is copied into the content: " + (wt ? *wt : std::string("(none)")));
+        if (wt) {
+            const size_t a = wt->find('"'), b = wt->rfind('"');
+            ImageData img;
+            check(a != std::string::npos && b > a && decodePicture(content + "/" + wt->substr(a + 1, b - a - 1), img) && img.width == 8, "and it decodes");
+        }
+        check(findPlacement(w, "BadRect") >= 0 && prop(w, findPlacement(w, "BadRect"), "texture") == nullptr, "a WebP the loader cannot read is not placed as a texture");
 
         const int curve = findPlacement(w, "Curve");
         const std::string* tex = prop(w, curve, "texture");
@@ -320,6 +409,8 @@ int main() {
                 if (line.find(a) != std::string::npos && line.find(b) != std::string::npos) return true;
             return false;
         };
+        check(jsonl.find("copied to Textures/textures/lossless.webp") != std::string::npos && jsonl.find("cannot read this .webp file") != std::string::npos,
+              "a WebP is reported as copied (converted), and a broken one as unreadable (unsupported)");
         check(rated("texture_filter", "converted") && rated("texture_repeat", "converted"), "texture_filter and texture_repeat are converted");
         check(rated("vertex_color_is_srgb", "converted") && rated("roughness_texture_channel", "converted"), "vertex_color_is_srgb and the roughness channel are converted");
         check(rated("emission_energy_multiplier", "approximated"), "the emission energy stays approximated (no unit calibration)");

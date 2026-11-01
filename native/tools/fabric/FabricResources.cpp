@@ -165,9 +165,16 @@ std::string extOf(const std::string& path) {
 }
 
 bool isModelExt(const std::string& e) { return e == ".glb" || e == ".gltf" || e == ".fbx" || e == ".obj"; }
-bool isImageExt(const std::string& e) { return e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".tga" || e == ".bmp"; }
+// Pictures the engine's image loader decodes by content (WebP, SVG and OpenEXR as well as stb_image's formats), so they are copied and cooked as they are.
+bool isImageExt(const std::string& e) { return e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".tga" || e == ".bmp" || e == ".webp" || e == ".svg" || e == ".exr"; }
 bool isOtherTextureExt(const std::string& e) {
-    return e == ".webp" || e == ".svg" || e == ".exr" || e == ".hdr" || e == ".dds" || e == ".ktx" || e == ".ktx2" || e == ".basis";
+    return e == ".hdr" || e == ".dds" || e == ".ktx" || e == ".ktx2" || e == ".basis";
+}
+// What converting a picture of this extension loses, or "" when nothing.
+const char* imageNote(const std::string& e) {
+    if (e == ".svg") return "an SVG is rasterised by the engine's loader at its own size (no text, filters or masks)";
+    if (e == ".exr") return "an OpenEXR picture is read as 8 bits a channel (values outside 0..1 are clamped)";
+    return "";
 }
 
 bool isMaterial3DType(const std::string& t) { return t == "StandardMaterial3D" || t == "ORMMaterial3D"; }
@@ -228,6 +235,20 @@ bool hdrToPng(const std::string& disk, std::vector<u8>& png, std::string& why) {
 #endif
 }
 
+// Whether the engine's image loader reads a WebP, SVG or OpenEXR picture (by its bytes, as the loader does); the formats stb_image reads were never checked here.
+bool pictureDecodes(const std::string& ext, const std::vector<u8>& bytes, std::string& why) {
+#if AVER_HAVE_MATERIAL_COMPILE
+    if (ext != ".webp" && ext != ".svg" && ext != ".exr") return true;
+    ImageData img;
+    if (decodeImage(bytes.data(), bytes.size(), img, &why) && img.valid()) return true;
+    if (why.empty()) why = "the picture could not be decoded";
+    return false;
+#else
+    (void)ext; (void)bytes; (void)why;
+    return true;
+#endif
+}
+
 constexpr const char* kHdrNote =
     "a Radiance HDR picture: the engine's image loader holds 8 bits per channel, so it was tone-mapped to 8 bits (values above 1.0 are clamped) and written as a PNG";
 
@@ -244,6 +265,8 @@ std::string Converter::copyTexture(const std::string& resPath, const Where& w) {
         std::vector<u8> bytes;
         if (disk.empty() || !readFileBytes(disk, bytes)) {
             report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "the texture file is missing", 0);
+        } else if (std::string why; !pictureDecodes(e, bytes, why)) {
+            report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "the engine's image loader cannot read this " + e + " file: " + why, 0);
         } else {
             std::string rel = resPath.rfind("res://", 0) == 0 ? resPath.substr(6) : resPath;
             asset = "Textures/" + rel;
@@ -252,6 +275,8 @@ std::string Converter::copyTexture(const std::string& resPath, const Where& w) {
             if (!writeFileBytes(dst, bytes.data(), bytes.size())) {
                 report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "could not write " + dst, 0);
                 asset.clear();
+            } else if (*imageNote(e)) {
+                report_.add("resource", resPath, "", "Texture2D", "", Rating::Approximated, "copied to " + asset + ": " + imageNote(e), 0);
             } else {
                 report_.add("resource", resPath, "", "Texture2D", "", Rating::Converted, "copied to " + asset, 0);
             }
@@ -574,6 +599,11 @@ bool loadImage(Converter& c, const std::string& resPath, const Where& w, fmt::Im
         c.report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "the texture file is missing", 0);
         return false;
     }
+    if (std::string why; !pictureDecodes(e, img.bytes, why)) {
+        c.report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "the engine's image loader cannot read this " + e + " file: " + why, 0);
+        return false;
+    }
+    if (*imageNote(e)) c.report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Approximated, imageNote(e), 0);
     c.materialTextureSources_.insert(resPath);
     img.ext = e == ".jpg" ? ".jpeg" : e;
     img.suggestedName = safeName(stemOf(resPath), "texture");
