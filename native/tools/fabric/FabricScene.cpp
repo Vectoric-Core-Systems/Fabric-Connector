@@ -1057,6 +1057,7 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
         const bool wholeOverride = findProp("material_override") != nullptr;
         const Var* meshProp = findProp("mesh");
         const size_t slots = meshProp && meshProp->type == VType::Resource ? meshSlotCount(meshProp->s) : 0;   // 0: not an .ocmesh the converter wrote
+        std::optional<Var> collapsed;   // added after the loop: growing the vector inside it would invalidate the iterator
         for (auto it = props.begin(); it != props.end();) {
             if (it->first.rfind("surface_material_override/", 0) != 0) { ++it; continue; }
             const int slot = std::atoi(it->first.c_str() + std::strlen("surface_material_override/"));
@@ -1073,7 +1074,7 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                 } else if (wholeOverride) {
                     report_.add("property", fn.reportFile, fn.reportPath, fn.type, "surface_material_override/0", Rating::Approximated, "material_override replaces every surface, so this override is not drawn (as in Godot)", 0);
                 } else {
-                    props.emplace_back("material_override", value);
+                    collapsed = value;
                     report_.add("property", fn.reportFile, fn.reportPath, fn.type, "surface_material_override/0", Rating::Converted, "the mesh has one surface: written as material_override", 0);
                 }
                 continue;
@@ -1083,6 +1084,7 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
                                       : "drawn in place of mesh material slot " + std::to_string(slot) + " (not for a level-of-detail, soft-body or GPU-cluster draw)", 0);
             ++it;
         }
+        if (collapsed) props.emplace_back("material_override", *collapsed);
     }
 
     // Godot's defaults, made explicit so Aver's own defaults never decide a body's behaviour.
