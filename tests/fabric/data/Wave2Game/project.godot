@@ -11,5 +11,5 @@ config/features=PackedStringArray("4.3", "Forward Plus")
 
 [rendering]
 
-textures/default_filters/anisotropic_filtering_level=4
+textures/default_filters/anisotropic_filtering_level=2
 textures/default_filters/texture_mipmap_bias=-0.5
