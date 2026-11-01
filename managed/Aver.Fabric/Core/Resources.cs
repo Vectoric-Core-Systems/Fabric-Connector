@@ -173,10 +173,19 @@ public static class ResourceLoader
         if (r == null) return null;
         r.ResourcePath = path;
         if (cacheMode != CacheMode.Ignore) s_cache[path] = r;
+        PreloadContent(r, path);
         return r;
     }
 
     public static T? Load<T>(string path, CacheMode cacheMode = CacheMode.Reuse) where T : class => Load(path, typeof(T), cacheMode) as T;
+
+    // A scene, mesh or material that was just loaded is about to be shown: the engine's workers start on its textures now, before the first draw.
+    private static void PreloadContent(Resource r, string path)
+    {
+        if (r is PackedScene scene) scene.PreloadContent();
+        else if (r is FileMesh) ContentPreload.Mesh(MeshInstance3D.AssetPath(path));
+        else if (r is StandardMaterial3D) ContentPreload.Material(path);
+    }
 
     /// <summary>GDScript's preload: loads once and keeps it; a path with no file behind it is an error.</summary>
     internal static T Preload<T>(string path) where T : class
@@ -263,6 +272,13 @@ public class PackedScene : Resource
     internal static PackedScene FromText(string levelText, string resPath = "") =>
         new() { ResourcePath = resPath, _data = OcWorldScene.Parse(levelText) };
 
+    // The meshes the scene places, so their materials' textures are decoding before the nodes exist; asked again at each Instantiate, which costs a lookup.
+    internal void PreloadContent()
+    {
+        if (_template != null) ContentPreload.Tree(_template);
+        else ContentPreload.Scene(_data);
+    }
+
     public bool CanInstantiate() => (_data != null && _data.Any(n => !n.Persistent)) || _template != null;
 
     /// <summary>Stores a copy of a node and its children as this scene.</summary>
@@ -278,6 +294,7 @@ public class PackedScene : Resource
     /// groups and signal connections applied as they enter the tree, before their _EnterTree.</summary>
     public virtual Node Instantiate(GenEditState editState = GenEditState.Disabled)
     {
+        PreloadContent();
         Node? root = null;
         if (_template != null) root = _template.Duplicate();
         else if (_data != null)

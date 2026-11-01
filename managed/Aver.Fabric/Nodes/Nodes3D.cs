@@ -188,6 +188,8 @@ public class GeometryInstance3D : VisualInstance3D
         if (!Self.IsValid || !NodeHost.Current.IsEngine || string.IsNullOrEmpty(assetPath)) return;
         AdoptPlacedVisuals();
         if (PlacedPending) return;   // the level's placements are attached when the node enters the tree, which applies the mesh again
+        ContentPreload.Mesh(assetPath);
+        ContentPreload.Material(MaterialOverride?.ResourcePath);
         foreach (Entity e in RenderEntities)
         {
             e.SetMesh(assetPath);

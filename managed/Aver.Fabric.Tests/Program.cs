@@ -135,6 +135,7 @@ static class Program
         failures += ShaderTests.RunAll();    // G6 SH2: Shader, ShaderMaterial, global shader parameters and what they push to the engine's material library
         failures += EnvShaderTests.RunAll(); // G6 SH3: sky, fog and particles shaders, GPUParticles3D, VisualShader and what they register with the engine
         failures += GeometryTests.RunAll();// G4 R7: ArrayMesh, SurfaceTool, ImmediateMesh, MultiMesh, GridMap, CSG, Sprite3D, Label3D and what they push to the engine
+        failures += PreloadTests.RunAll();   // content preload: scenes, meshes and materials tell the engine what is about to be shown
         failures += PlacedVisualTests.RunAll(); // the plain mesh placements a level holds below a node: matching, PackedScene, MultiMesh forwarding
         failures += SceneValueTests.RunAll(); // ClassDB, Object(...) values, resource and node-reference properties
         failures += TweenTests.RunAll();     // F2b: easing curves, tween sequencing, loops, pause and process modes
