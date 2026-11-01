@@ -24,8 +24,10 @@ public class Container : Control
 
     private bool _sortQueued;
 
+    // Godot's containers pass the pointer on, so a button under a container laid over it (a MarginContainer for its label) still gets the click.
     public Container()
     {
+        MouseFilter = MouseFilterEnum.Pass;
         Connect(Node.SignalName.ChildOrderChanged, Callable.From(OnChildrenChanged));
     }
 
@@ -396,6 +398,9 @@ public class CenterContainer : Container
 /// <summary>A container that draws the theme's "panel" style box and keeps its children inside its margins (Godot's PanelContainer).</summary>
 public class PanelContainer : Container
 {
+    // It draws a panel, so it stops the pointer, as Godot's does.
+    public PanelContainer() { MouseFilter = MouseFilterEnum.Stop; }
+
     internal StyleBox PanelStyle => GetThemeStylebox("panel");
 
     internal override Vector2 NativeMinimumSize()

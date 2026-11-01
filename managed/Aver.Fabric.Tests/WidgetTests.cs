@@ -660,6 +660,20 @@ static partial class WidgetTests
         Settle();
         Tap(710, 20);
         T.Check("_pressed and _toggled run for a script's button", scripted.Presses == 1);
+
+        // A label laid over the button in a full-rect MarginContainer (godot-fps's menu): the container passes the click to the button.
+        T.Check("containers pass the pointer on, a PanelContainer stops it (Godot's defaults)",
+                new MarginContainer().MouseFilter == Control.MouseFilterEnum.Pass && new HBoxContainer().MouseFilter == Control.MouseFilterEnum.Pass &&
+                new PanelContainer().MouseFilter == Control.MouseFilterEnum.Stop);
+        Button covered = MakeButton("", 800, 10, 120, 40);
+        var margin = new MarginContainer();
+        covered.AddChild(margin);
+        margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        margin.AddChild(new Label { Text = "Start" });
+        Settle();
+        List<string> coveredLog = Watch(covered);
+        Tap(820, 25);
+        T.Check("a click on a button's own MarginContainer presses the button", coveredLog.Contains("pressed"), string.Join(",", coveredLog));
     }
 
     private sealed class ScriptedButton : Button
