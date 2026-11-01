@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-787 public types and 8459 public members, read from `managed/Aver.Fabric/` (154 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+787 public types and 8461 public members, read from `managed/Aver.Fabric/` (155 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -2904,7 +2904,7 @@ Values: `SwingSpan = 0`, `TwistSpan = 1`, `Bias = 2`, `Softness = 3`, `Relaxatio
 - `public virtual Vector2 _GetMinimumSize()` - A script's override of the minimum size.
 - `public void UpdateMinimumSize()` - Tells the control its minimum size may have changed (a label's text, a stylebox's margins).
 - `public bool ClipContents { get; set; }` - Children are clipped to the control's rectangle when drawn and cannot receive the pointer outside it.
-- `public LayoutDirection LayoutDirectionMode { get; set; }`
+- `public LayoutDirectionEnum LayoutDirection { get; set; }`
 - `public TextDirection TextDirectionMode { get; set; }`
 - `public bool AutoTranslate { get; set; }`
 - `public CursorShape MouseDefaultCursorShape { get; set; }`
@@ -2930,9 +2930,9 @@ Values: `None = 0`, `Click = 1`, `All = 2`
 
 Values: `Begin = 0`, `End = 1`, `Both = 2`
 
-### Control.LayoutDirection
+### Control.LayoutDirectionEnum
 
-`public enum LayoutDirection`
+`public enum LayoutDirectionEnum`
 
 Values: `Inherited = 0`, `ApplicationLocale = 1`, `Ltr = 2`, `Rtl = 3`, `SystemLocale = 4`
 
@@ -5522,7 +5522,7 @@ Values: `Points = 0`, `Lines = 1`, `LineStrip = 2`, `Triangles = 3`, `TriangleSt
 - `public Material? GetSurfaceOverrideMaterial(int surface)`
 - `public void SetSurfaceOverrideMaterial(int surface, Material? material)`
 - `public Material? GetActiveMaterial(int surface)` - The material a surface is drawn with: the material override, else the surface's override, else the mesh's own material for it (Godot's get_active_material).
-- `public NodePath SkeletonPath { get; set; }` - The path to the Skeleton3D that poses this mesh (default "..", the node's parent).
+- `public NodePath Skeleton { get; set; }` - The path to the Skeleton3D that poses this mesh (default "..", the node's parent).
 - `public Skin? Skin { get; set; }`
 - `public SkinReference? GetSkinReference()`
 - `public int GetBlendShapeCount()`
@@ -7432,6 +7432,7 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public bool AllowLesser { get; set; }`
 - `public double Value { get; set; }`
 - `public void SetValueNoSignal(double value)` - Sets the value without telling anyone (Godot's set_value_no_signal).
+- `public double Ratio { get; set; }` - Godot's ratio property: GetAsRatio and SetAsRatio.
 - `public double GetAsRatio()` - The value as a share of the range, 0 to 1 (exponential when exp_edit is on and the minimum is not negative).
 - `public void SetAsRatio(double value)` - Sets the value from a ratio, 0 to 1.
 
@@ -8391,6 +8392,7 @@ Values: `PlusX = 0`, `MinusX = 1`, `PlusY = 2`, `MinusY = 3`, `PlusZ = 4`, `Minu
 
 - `public void SetBindCount(int count)`
 - `public int GetBindCount()`
+- `public int BindCount { get; set; }` - Godot's bind_count property.
 - `public void AddBind(int bone, Transform3D pose)`
 - `public void AddNamedBind(StringName name, Transform3D pose)`
 - `public void SetBindBone(int bindIndex, int bone)`

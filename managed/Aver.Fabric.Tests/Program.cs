@@ -33,6 +33,12 @@ static class Program
             Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
             return failures;
         }
+        if (args.Length == 1 && args[0] == "game-parity") // only the suite of what running a converted game turned up
+        {
+            failures = GameParityTests.RunAll();
+            Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
+            return failures;
+        }
         if (args.Length == 1 && args[0] == "fabric-api") // only the package API suite (docs/plans/GODOT_PARITY.md, F20 to F75 of wave 1)
         {
             failures = FabricApiTests.RunAll();
@@ -156,6 +162,7 @@ static class Program
         failures += ScriptSubtypeTests.RunAll(); // members of a derived script through a declared base, enum size, Tween constants, frame_post_draw
         failures += ConverterBugTests.RunAll(); // converter bugs C1 to C20 of the parity plan: names, singletons, enums, coercions, base-typed receivers, packed arrays, utility functions
         failures += ConverterGapTests.RunAll(); // gaps a real game's scripts hit: members by name, signals through a base type, StringName methods, RID from an object, Decal, AnimatedSprite3D, 2D placeholders
+        failures += GameParityTests.RunAll();   // what running a converted game turned up: mesh file surfaces, Skin binds, renamed properties, downgraded nodes
         failures += FabricApiTests.RunAll(); // wave 1 package API: the Godot members Aver.Fabric lacked (enums, singletons, files, threads, string / vector / variant methods)
         failures += GameModeTests.RunAll();  // FabricGameMode (GAME.MODE): registers, no default pawn, the view follows the current Camera3D
         failures += GdextTests.RunAll();     // F5: the GDExtension host from C# (wire form always; the native host and test plugin when built)

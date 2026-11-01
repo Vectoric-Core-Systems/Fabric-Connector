@@ -87,6 +87,9 @@ public class Range : Control
     /// <summary>The minimum, maximum, step or page changed (a SpinBox formats its number to the step's precision again).</summary>
     internal virtual void OnRangeChanged() { }
 
+    /// <summary>Godot's ratio property: <see cref="GetAsRatio"/> and <see cref="SetAsRatio"/>.</summary>
+    public double Ratio { get => GetAsRatio(); set => SetAsRatio(value); }
+
     /// <summary>The value as a share of the range, 0 to 1 (exponential when exp_edit is on and the minimum is not negative).</summary>
     public double GetAsRatio()
     {

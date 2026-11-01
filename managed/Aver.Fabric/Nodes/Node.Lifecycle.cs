@@ -336,8 +336,14 @@ public partial class Node
         string? ownerPath = null;
         bool unique = false;
         // Read first, whatever the file order: the mesh property below must know the level drew it already.
+        // The Godot class a downgraded node stands in for ("_class" differing from the class it runs as): its properties belong to a class
+        // Fabric has no node for, so they are kept in metadata without a warning each.
+        string? standInFor = null;
         foreach ((string key, string text) in values)
+        {
             if (key == "_placed" && int.TryParse(text, out int placed)) PlacedVisuals = placed;
+            else if (key == "_class" && PlainText(text) is { Length: > 0 } godotClass && godotClass != GetClass()) standInFor = godotClass;
+        }
         foreach ((string key, string text) in values)
         {
             switch (key)
@@ -384,8 +390,11 @@ public partial class Node
                     v = own;
                 }
                 if (!MemberAccess.TrySet(this, key, v) && !TryDynamicSet(key, v))
-                    Log.Warn($"[Fabric] {GetClass()} '{_name}' has no property '{key}'; the value is kept in metadata");
+                {
+                    if (standInFor == null) Log.Warn($"[Fabric] {GetClass()} '{_name}' has no property '{key}'; the value is kept in metadata");
+                    else NoteStandIn(standInFor);
                     // kept so a script can still read it with GetMeta
+                }
                 else continue;
                 SetMeta(key, v);
             }
@@ -397,6 +406,17 @@ public partial class Node
         if (ownerPath != null && GetNodeOrNull(ownerPath) is Node owner) Owner = owner;
         if (unique) UniqueNameInOwner = true;
     }
+
+    private static readonly HashSet<string> s_standInsLogged = new(StringComparer.Ordinal);
+
+    /// <summary>One line per stand-in class for the session, the first time a node of it has properties the runtime class lacks.</summary>
+    private void NoteStandIn(string godotClass)
+    {
+        if (s_standInsLogged.Add(godotClass))
+            Log.Warn($"[Fabric] {godotClass} nodes load as {GetClass()} (first: '{_name}'): the class is not supported, so their properties are kept in metadata");
+    }
+
+    internal static void ResetStandInLog() => s_standInsLogged.Clear();
 
     // The scene's [connection] lines for this node's signals (Props key _connections): an array of dictionaries with signal, to (a
     // path from this node), method, flags, binds, unbinds. Made when the node becomes ready, when every node of its batch has

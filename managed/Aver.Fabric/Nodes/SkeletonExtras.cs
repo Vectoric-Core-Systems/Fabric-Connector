@@ -19,6 +19,48 @@ public class Skin : Resource
 
     public int GetBindCount() => _binds.Count;
 
+    /// <summary>Godot's bind_count property.</summary>
+    public int BindCount { get => _binds.Count; set => SetBindCount(Math.Max(0, value)); }
+
+    // The binds as a scene stores them: bind/N/name, bone, pose.
+    internal override bool TryDynamicSet(string name, Variant value)
+    {
+        if (!TryBindKey(name, out int i, out string field)) return base.TryDynamicSet(name, value);
+        if (i >= _binds.Count) SetBindCount(i + 1);
+        switch (field)
+        {
+            case "name": SetBindName(i, value.AsStringName()); return true;
+            case "bone": SetBindBone(i, value.AsInt32()); return true;
+            case "pose": SetBindPose(i, value.AsTransform3D()); return true;
+        }
+        return false;
+    }
+
+    internal override bool TryDynamicGet(string name, out Variant value)
+    {
+        value = default;
+        if (!TryBindKey(name, out int i, out string field)) return base.TryDynamicGet(name, out value);
+        if (i >= _binds.Count) return false;
+        switch (field)
+        {
+            case "name": value = GetBindName(i); return true;
+            case "bone": value = GetBindBone(i); return true;
+            case "pose": value = GetBindPose(i); return true;
+        }
+        return false;
+    }
+
+    private static bool TryBindKey(string name, out int index, out string field)
+    {
+        index = 0;
+        field = "";
+        if (!name.StartsWith("bind/", StringComparison.Ordinal)) return false;
+        string[] p = name.Split('/');
+        if (p.Length != 3 || !int.TryParse(p[1], out index) || index < 0 || index > 100000) return false;
+        field = p[2];
+        return true;
+    }
+
     public void AddBind(int bone, Transform3D pose) => _binds.Add((bone, StringName.Empty, pose));
 
     public void AddNamedBind(StringName name, Transform3D pose) => _binds.Add((-1, name, pose));
@@ -105,11 +147,11 @@ public partial class MeshInstance3D
     private readonly Dictionary<string, int> _shapeIndex = new(StringComparer.Ordinal);
 
     /// <summary>The path to the Skeleton3D that poses this mesh (default "..", the node's parent).</summary>
-    public NodePath SkeletonPath { get; set; } = new NodePath("..");
+    public NodePath Skeleton { get; set; } = new NodePath("..");
 
     public Skin? Skin { get; set; }
 
-    public SkinReference? GetSkinReference() => (GetNodeOrNull(SkeletonPath) as Skeleton3D)?.RegisterSkin(Skin ?? new Skin());
+    public SkinReference? GetSkinReference() => (GetNodeOrNull(Skeleton) as Skeleton3D)?.RegisterSkin(Skin ?? new Skin());
 
     // The blend shapes the node knows by name: the ones the converter listed from the mesh (aver_blend_shapes), then any a script or animation set.
     private int ShapeIndex(string name)

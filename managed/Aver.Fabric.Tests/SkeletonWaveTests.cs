@@ -144,7 +144,7 @@ static class SkeletonWaveTests
         mi.SetBlendShapeValueByName("frown", 0.2f);
         T.Check("a name set by a script or animation joins the list", mi.GetBlendShapeCount() == 4 && mi.FindBlendShapeByName("frown") == 3);
         T.Check("a bad index reads 0", mi.GetBlendShapeValue(9) == 0f && mi.GetBlendShapeName(-1) == "");
-        T.Check("the skeleton path defaults to the parent", mi.SkeletonPath.ToString() == "..");
+        T.Check("the skeleton path defaults to the parent", mi.Skeleton.ToString() == "..");
         var sk = new Skeleton3D();
         sk.AddBone("b");
         sk.AddChild(mi);

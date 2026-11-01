@@ -30,7 +30,7 @@ public partial class Control : CanvasItem
 
     public enum CursorShape { Arrow = 0, Ibeam = 1, PointingHand = 2, Cross = 3, Wait = 4, Busy = 5, Drag = 6, CanDrop = 7, Forbidden = 8, Vsize = 9, Hsize = 10, Bdiagsize = 11, Fdiagsize = 12, Move = 13, Vsplit = 14, Hsplit = 15, Help = 16 }
 
-    public enum LayoutDirection { Inherited = 0, ApplicationLocale = 1, Ltr = 2, Rtl = 3, SystemLocale = 4 }
+    public enum LayoutDirectionEnum { Inherited = 0, ApplicationLocale = 1, Ltr = 2, Rtl = 3, SystemLocale = 4 }
 
     public enum TextDirection { Inherited = 3, Auto = 0, Ltr = 1, Rtl = 2 }
 
@@ -499,7 +499,7 @@ public partial class Control : CanvasItem
 
     // ---- other stored settings ----
 
-    public LayoutDirection LayoutDirectionMode { get; set; } = LayoutDirection.Inherited;
+    public LayoutDirectionEnum LayoutDirection { get; set; } = LayoutDirectionEnum.Inherited;
     public TextDirection TextDirectionMode { get; set; } = TextDirection.Inherited;
     public bool AutoTranslate { get; set; } = true;
     public CursorShape MouseDefaultCursorShape { get; set; } = CursorShape.Arrow;
@@ -507,12 +507,10 @@ public partial class Control : CanvasItem
 
     public CursorShape GetCursorShape(Vector2 position = default) => MouseDefaultCursorShape;
 
-    public bool IsLayoutRtl() => LayoutDirectionMode == LayoutDirection.Rtl;
+    public bool IsLayoutRtl() => LayoutDirection == LayoutDirectionEnum.Rtl;
 
-    /// <summary>The scene stores the layout direction as <c>layout_direction</c>; the member is named apart from the enum type.</summary>
     internal override bool TryDynamicSet(string name, Variant value)
     {
-        if (name == "layout_direction") { LayoutDirectionMode = (LayoutDirection)value.AsInt32(); return true; }
         if (name == "text_direction") { TextDirectionMode = (TextDirection)value.AsInt32(); return true; }
         // stored for the text classes (G5 U2: the text engine decides the structure of a line)
         if (name is "structured_text_bidi_override" or "structured_text_bidi_override_options") { SetMeta(name, value); return true; }

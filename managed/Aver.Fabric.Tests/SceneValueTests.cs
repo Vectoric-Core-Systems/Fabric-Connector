@@ -109,7 +109,7 @@ static class SceneValueTests
         var mi = new MeshInstance3D { Name = "Mesh" };
         mi.PendingValues = new List<(string, string)> { ("mesh", "Resource(\"res://Meshes/door.ocmesh\")") };
         main.AddChild(mi);
-        T.Check("Resource(path) becomes the property's own type", mi.Mesh is { } m && m.GetType() == typeof(Mesh) && m.ResourcePath == "res://Meshes/door.ocmesh");
+        T.Check("Resource(path) becomes the property's own type", mi.Mesh is { } m && m.GetType() == typeof(FileMesh) && m.ResourcePath == "res://Meshes/door.ocmesh");
         T.Check("the asset path drops res://", MeshInstance3D.AssetPath("res://Meshes/door.ocmesh") == "Meshes/door.ocmesh" && MeshInstance3D.AssetPath("Meshes/door.ocmesh") == "Meshes/door.ocmesh");
 
         var mi2 = new MeshInstance3D { Name = "Mesh2" };

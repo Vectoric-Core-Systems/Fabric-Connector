@@ -396,7 +396,7 @@ static class ServiceTests
         Texture2D? tex = ResourceLoader.Load<Texture2D>("res://art/a.png");
         T.Check("a texture loads as Texture2D with its path", tex != null && tex.ResourcePath == "res://art/a.png");
         Mesh? mesh = ResourceLoader.Load<Mesh>("Meshes/box.ocmesh");
-        T.Check("a mesh as Mesh", mesh != null && mesh.GetType() == typeof(Mesh));
+        T.Check("a mesh as Mesh", mesh != null && mesh.GetType() == typeof(FileMesh) && mesh.ResourcePath == "Meshes/box.ocmesh");   // a Mesh whose surfaces are the file's material slots
         T.Check("the type the extension suggests is used when none is asked for", ResourceLoader.Load("Meshes/box.ocmesh", null, ResourceLoader.CacheMode.Ignore) is Mesh);
         T.Check("cache mode Ignore does not keep it, Replace does", ResourceLoader.Load<Mesh>("Meshes/box.ocmesh", ResourceLoader.CacheMode.Replace) is { } m2 && ReferenceEquals(m2, ResourceLoader.GetCachedRef("Meshes/box.ocmesh")));
 

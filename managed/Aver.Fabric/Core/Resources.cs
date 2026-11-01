@@ -126,7 +126,7 @@ public static class ResourceLoader
     internal static System.Type TypeForExtension(string ext) => ext.ToLowerInvariant() switch
     {
         ".tscn" or ".scn" or ".ocworld" => typeof(PackedScene),
-        ".ocmesh" => typeof(Mesh),
+        ".ocmesh" => typeof(FileMesh),   // a Mesh whose surfaces are the file's material slots
         ".ocmat" => typeof(StandardMaterial3D),
         ".ocgraph" => typeof(ShaderMaterial),   // G6 SH3: a converted sky / fog / particles shader (DOMAIN customenv)
         ".ocanim" => typeof(Animation),
@@ -161,6 +161,7 @@ public static class ResourceLoader
                 if (r is StandardMaterial3D && file != null && ext.Equals(".ocmat", StringComparison.OrdinalIgnoreCase) && type.IsAssignableFrom(typeof(ShaderMaterial)) &&
                     ShaderMaterial.TryLoad(file, path) is { } shaderMaterial)
                     r = shaderMaterial;
+                if (r is StandardMaterial3D plain && file != null && ext.Equals(".ocmat", StringComparison.OrdinalIgnoreCase)) plain.ReadOcmat(file);   // the values the engine draws, so a script reads what Godot would
                 if (r is ShaderMaterial && file != null && ext.Equals(".ocgraph", StringComparison.OrdinalIgnoreCase))
                     r = ShaderMaterial.TryLoadEnv(file, path);   // G6 SH3: null (not a customenv graph) falls through to no resource
                 if (r is Animation anim && file != null && !anim.LoadFrom(file))

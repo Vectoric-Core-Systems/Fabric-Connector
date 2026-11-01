@@ -232,6 +232,30 @@ public class BaseMaterial3D : Material
         return string.Join(' ', p);
     }
 
+    /// <summary>Takes the colour, metallic and roughness the engine draws an .ocmat with, so a material a script gets from a mesh reads as authored.</summary>
+    internal void ReadOcmat(string file)
+    {
+        string[] lines;
+        try { lines = File.ReadAllLines(file); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+        foreach (string line in lines)
+        {
+            string[] t = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (t.Length < 3 || t[0] != "PARAM") continue;
+            var v = new float[t.Length - 2];
+            bool numbers = true;
+            for (int i = 0; i < v.Length && numbers; i++)
+                numbers = float.TryParse(t[i + 2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v[i]);
+            if (!numbers) continue;
+            switch (t[1])
+            {
+                case "baseColorFactor" when v.Length >= 4: AlbedoColor = new Color(v[0], v[1], v[2], v[3]); break;
+                case "metallicFactor": Metallic = v[0]; break;
+                case "roughnessFactor": Roughness = v[0]; break;
+            }
+        }
+    }
+
     /// <summary>The F0 of the dielectric base the converter writes: 0.08 * metallic_specular (Godot's rule).</summary>
     public float Reflectance => MetallicSpecular * 0.08f;
 }
