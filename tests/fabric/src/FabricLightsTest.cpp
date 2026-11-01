@@ -156,8 +156,8 @@ int main() {
         check(rated("Lamp", "light_cull_mask", "approximated"), "light_cull_mask is approximated (the raster local-light path honours it; G4 R4)");
         check(rated("Torch", "light_negative", "approximated") && rated("Torch", "spot_angle_attenuation", "converted") && rated("Torch", "spot_attenuation", "converted"),
               "light_negative is approximated; the two spot curves are converted");
-        check(rated("Sun", "directional_shadow_max_distance", "approximated") && rated("Sun", "light_angular_distance", "converted"),
-              "the sun's cascade settings are approximated and its angular distance converted");
+        check(rated("Sun", "directional_shadow_max_distance", "converted") && rated("Sun", "light_angular_distance", "converted"),
+              "the sun's shadow distance (RENDER.SHADOWDIST, wave 4) and its angular distance are converted");
         check(has("\"node\"", "\"rating\":\"approximated\"", "only the first DirectionalLight3D"), "the second directional light is reported as inert");
         check(!has("\"property\":\"light_energy\"", "\"rating\":\"unsupported\"", ""), "and no light property that is handled is listed as unsupported");
     }

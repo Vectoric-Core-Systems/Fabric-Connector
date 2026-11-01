@@ -3,6 +3,8 @@
 G4 is the rendering half of the Fabric Connector (`FABRIC_CONNECTOR.md`, "Rendering"): the features a converted Godot 4 project expects,
 built into the engine, mapped by `AverAssetC fabric` and exposed by `Aver.Fabric` under Godot's property names. Aver's look stays Aver's.
 
+Later waves extend it: wave 2's materials and textures are in [WAVE2_MATERIALS.md](WAVE2_MATERIALS.md), wave 4's viewport settings, light units, cascades, per-instance flags, glow, ambient and the opt-in procedural sky in [WAVE4_RENDER.md](WAVE4_RENDER.md).
+
 Rules every package follows (the engine cannot be run, so nothing here has been seen on a GPU):
 
 - Defaults unchanged: a project or level that does not use a feature runs today's pipelines, today's shader variants and today's constants. New

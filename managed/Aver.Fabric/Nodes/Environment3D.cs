@@ -354,6 +354,7 @@ public class WorldEnvironment : Node
         _live = true;   // what follows is a change, not the load
         RenderEnvironment.Live = true;
         (GetViewport()?.FindWorld3D() ?? SceneTree.Instance.Root.World3D).SetEnvironmentQuiet(_environment, _camera);
+        PhysicalLights.Use(RenderEnvironment.Resolve().Attributes);   // physical light units: the lights take the exposure now, nothing is pushed to the sky
         if (_environment != null) PushSkyShader();   // G6 SH3: a converted sky shader is the sky from the moment the environment is in the tree
     }
 

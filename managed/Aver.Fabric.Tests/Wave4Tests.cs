@@ -16,6 +16,7 @@ static class Wave4Tests
     {
         T.Run("wave 4: RenderMapping, the Godot numbers as Aver's", Mapping);
         T.Run("wave 4: a window viewport's render properties reach the engine (F1)", ViewportProperties);
+        T.Run("wave 4: the window starts from the project's settings (F1)", ProjectDefaults);
         T.Run("wave 4: a SubViewport keeps its render values and leaves the window alone (F1)", SubViewportKeeps);
         T.Run("wave 4: the stored RenderingServer calls (F37)", StoredCalls);
         T.Run("wave 4: physical light units, temperature and the exposure normalization (F21)", LightUnits);
@@ -131,6 +132,38 @@ static class Wave4Tests
         RenderBackend.Current = new EngineRenderBackend();
     }
 
+    private static void ProjectDefaults()
+    {
+        Rec rec = Recording();
+        string dir = Path.Combine(Path.GetTempPath(), "aver-fabric-wave4-managed", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "Content"));
+        Directory.CreateDirectory(Path.Combine(dir, "Fabric"));
+        File.WriteAllText(Path.Combine(dir, "Fabric", "project.json"),
+            "{\"settings\":{\"rendering/anti_aliasing/quality/msaa_3d\":\"2\",\"rendering/anti_aliasing/quality/use_taa\":\"false\",\"rendering/scaling_3d/scale\":\"0.5\"," +
+            "\"rendering/scaling_3d/mode\":\"1\",\"rendering/scaling_3d/fsr_sharpness\":\"1.0\",\"rendering/mesh_lod/lod_change/threshold_pixels\":\"2.0\"," +
+            "\"rendering/anti_aliasing/quality/use_debanding\":\"true\",\"rendering/lights_and_shadows/positional_shadow/atlas_size\":\"2048\"}}");
+        try
+        {
+            ResourceLoader.ContentRootOverride = Path.Combine(dir, "Content");
+            ProjectSettings.ResetForTests();
+            Window root = SceneTree.Instance.Root;
+            T.Check("the window's values are the project's: MSAA 4x, FSR at 0.5, sharpness 1, LOD 2, debanding, atlas 2048",
+                root.Msaa3D == Viewport.Msaa.Msaa4X && !root.UseTaa && root.Scaling3DMode == Viewport.Scaling3DModeEnum.Fsr && T.Near(root.Scaling3DScale, 0.5f) && root.FsrSharpness == 1f &&
+                root.MeshLodThreshold == 2f && root.UseDebanding && root.PositionalShadowAtlasSize == 2048);
+            T.Check("a SubViewport does not inherit them", new SubViewport().Scaling3DScale == 1f && new SubViewport().Msaa3D == Viewport.Msaa.Disabled);
+            T.Check("reading them pushes nothing", rec.Calls.Count == 0);
+            root.ApplyProjectRender();
+            T.Check("when the game starts the project's 3D scale and sharpness reach the engine (the other settings are .ocproject keys)", rec.Calls.SequenceEqual(new[] { "Scale 0.5", "Sharpness 0.5" }));
+        }
+        finally
+        {
+            ResourceLoader.ContentRootOverride = null;
+            ProjectSettings.ResetForTests();
+            RenderBackend.Current = new EngineRenderBackend();
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
+
     private static void SubViewportKeeps()
     {
         Rec rec = Recording();
@@ -218,6 +251,7 @@ static class Wave4Tests
         T.Check("a WorldEnvironment in the tree sets its world's environment and attributes", ReferenceEquals(world.Environment, worldEnv) && ReferenceEquals(world.CameraAttributes, worldAttrs));
         (Env? e, CameraAttributes? a) = RenderEnvironment.Resolve();
         T.Check("with no camera of its own the world's are in force", ReferenceEquals(e, worldEnv) && ReferenceEquals(a, worldAttrs));
+        T.Check("and the lights have their exposure from the moment the node is in the tree", R(PhysicalLights.Normalization, worldAttrs.GetExposureNormalization()));
 
         var camEnv = new Env { BackgroundMode = Env.BGMode.Color };
         var camAttrs = new CameraAttributesPhysical { ExposureAperture = 8f };

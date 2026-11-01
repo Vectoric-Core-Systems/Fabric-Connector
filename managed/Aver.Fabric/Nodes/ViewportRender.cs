@@ -165,6 +165,15 @@ public partial class Viewport
         set { Put("fsr", value); if (ForwardsToEngine) RenderBackend.Current.Set(RenderKey.Sharpness, RenderMapping.FsrSharpness(value)); }
     }
 
+    /// <summary>Gives the engine the project's render settings that no .ocproject key carries: a 3D scale other than 1 (rendering/scaling_3d/scale) and the upscaler's
+    /// sharpness. Called once, when the tree starts; only the window does anything.</summary>
+    internal void ApplyProjectRender()
+    {
+        if (!ForwardsToEngine) return;
+        if (ProjectSettings.HasSetting("rendering/scaling_3d/scale") && Scaling3DScale != 1f) PushScale();
+        if (ProjectSettings.HasSetting("rendering/scaling_3d/fsr_sharpness")) RenderBackend.Current.Set(RenderKey.Sharpness, RenderMapping.FsrSharpness(FsrSharpness));
+    }
+
     private void PushScale()
     {
         if (!ForwardsToEngine) return;

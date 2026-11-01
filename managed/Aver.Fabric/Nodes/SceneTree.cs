@@ -868,6 +868,7 @@ public class SceneTreeDriver : Node
         base.OnEnteringTree();
         ProcessPriority = Tail ? int.MaxValue : int.MinValue;
         ProcessPhysicsPriority = Tail ? int.MaxValue : int.MinValue;
+        if (!Tail) SceneTree.Instance.Root.ApplyProjectRender();   // wave 4: the project's 3D scale, which has no .ocproject key
     }
 
     public override void _Process(double delta)

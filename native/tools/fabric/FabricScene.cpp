@@ -1625,7 +1625,10 @@ static EnvInfo readEnvironment(Converter& c, const FNode& wenv) {
             note("ambient_light_sky_contribution", Rating::Approximated, "the share of the sky's own ambient needs the physical sky (the ambient override); the authored dome has none");
         else if (sc)
             note("ambient_light_sky_contribution", Rating::Converted, "ambientsky in the SKY record: 0 gives the colour alone, 1 the sky alone");
-    } else if (ambient != 0 || energy != 1.0) note("ambient_light_energy", Rating::Approximated, "becomes the sky light multiplier");
+    } else {
+        if (ambient != 0 || energy != 1.0) note("ambient_light_energy", Rating::Approximated, "becomes the sky light multiplier");
+        if (rprop(*e, "ambient_light_sky_contribution")) note("ambient_light_sky_contribution", Rating::Converted, "Godot uses the sky contribution only with a Color ambient source, so with this source it changes nothing, as in Godot");
+    }
     if (const Var* rl = rprop(*e, "reflected_light_source"); rl && static_cast<int>(numOf(rl, 0)) != 0)
         note("reflected_light_source", Rating::Approximated, "kept; Aver's reflections come from ray tracing, the voxel cone trace and the sky, with no per-environment source switch");
 

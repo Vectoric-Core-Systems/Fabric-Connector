@@ -414,8 +414,12 @@ int main() {
 
     // ---- C20: per-instance rendering flags -----------------------------------------------------------------------------------------------
     AVER_INFO("-- C20 dropped rendering properties --");
-    for (const char* prop : {"cast_shadow", "gi_mode", "extra_cull_margin", "ignore_occlusion_culling"})
-        check(reported(jsonl, {"\"node\":\"Floor\"", (std::string("\"property\":\"") + prop + "\"").c_str(), "\"rating\":\"unsupported\""}), std::string(prop) + " has a report row, rated unsupported");
+    // Wave 4 (P5): the engine has the per-instance flags now, so none is unsupported: shadows off and GI disabled are approximated (the ray-traced sun shadow still sees the mesh; it is
+    // still lit), the margin and the occlusion opt-out are converted.
+    for (const char* prop : {"cast_shadow", "gi_mode"})
+        check(reported(jsonl, {"\"node\":\"Floor\"", (std::string("\"property\":\"") + prop + "\"").c_str(), "\"rating\":\"approximated\""}), std::string(prop) + " has a report row, rated approximated");
+    for (const char* prop : {"extra_cull_margin", "ignore_occlusion_culling"})
+        check(reported(jsonl, {"\"node\":\"Floor\"", (std::string("\"property\":\"") + prop + "\"").c_str(), "\"rating\":\"converted\""}), std::string(prop) + " has a report row, rated converted");
 
     // ---- F33, F36: occluders, anti-aliasing and the clear colour (the package API; the project and scene half of what Aver.Fabric gained) ----------------------
     AVER_INFO("-- F33 occluders, F36 anti-aliasing and clear colour --");

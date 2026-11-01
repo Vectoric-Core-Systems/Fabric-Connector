@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-814 public types and 8686 public members, read from `managed/Aver.Fabric/` (159 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+825 public types and 8834 public members, read from `managed/Aver.Fabric/` (162 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -2219,6 +2219,8 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 - `public void MakeCurrent()`
 - `public void ClearCurrent(bool enableNext = true)` - Stops being the current camera.
 - `public bool IsCurrent()`
+- `public Environment? Environment { get; set; }` - The environment drawn while this camera is current, instead of the world's.
+- `public CameraAttributes? Attributes { get; set; }` - The camera attributes in force while this camera is current, instead of the world's (exposure, depth of field, and the physical light units' exposure).
 - `public Vector3 ProjectRayOrigin(Vector2 screenPoint)` - Where the ray through a screen point starts, in world space (the camera's position, or on the view plane when orthogonal).
 - `public Vector3 ProjectRayNormal(Vector2 screenPoint)` - The direction of the ray through a screen point, in world space, normalised.
 - `public Vector3 ProjectPosition(Vector2 screenPoint, float zDepth)` - The world point at zDepth metres in front of the camera that appears at a screen point.
@@ -2252,6 +2254,7 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 
 - `public float ExposureSensitivity { get; set; }`
 - `public float ExposureMultiplier { get; set; }`
+- `public virtual float GetExposureNormalization()` - The factor lights are scaled by when physical light units are on (Godot's exposure normalization); 1 for the base class.
 - `public bool AutoExposureEnabled { get; set; }`
 - `public float AutoExposureScale { get; set; }`
 - `public float AutoExposureSpeed { get; set; }`
@@ -2268,6 +2271,7 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 - `public float ExposureShutterSpeed { get; set; }`
 - `public float AutoExposureMinExposureValue { get; set; }`
 - `public float AutoExposureMaxExposureValue { get; set; }`
+- `public override float GetExposureNormalization()` - 1 / (1.2 x aperture^2 x shutter speed x (100 / ISO)): Godot's exposure normalization for a physical camera.
 
 ### CameraAttributesPractical
 
@@ -2282,6 +2286,7 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 - `public float DofBlurAmount { get; set; }`
 - `public float AutoExposureMinSensitivity { get; set; }`
 - `public float AutoExposureMaxSensitivity { get; set; }`
+- `public override float GetExposureNormalization()` - The sensitivity over 3072007 (the physical camera's value at ISO 100).
 
 ### CanvasItem
 
@@ -3662,8 +3667,15 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 - `public bool GlowEnabled { get; set; }`
 - `public float GlowIntensity { get; set; }`
 - `public float GlowStrength { get; set; }`
-- `public float GlowBloom { get; set; }`
+- `public float GlowBloom { get; set; }` - Stored, not applied: Aver's bloom has no separate bloom term.
 - `public float GlowHdrThreshold { get; set; }`
+- `public float GlowHdrScale { get; set; }` - Stored, not applied: Aver's bloom pyramid is summed by the blender, with no per-level multiplier.
+- `public float GlowHdrLuminanceCap { get; set; }` - The glow's luminance cap (Godot's default 12).
+- `public GlowBlendModeEnum GlowBlendMode { get; set; }`
+- `public bool GlowNormalized { get; set; }` - Stored, not applied (see GlowHdrScale).
+- `public float GetGlowLevel(int idx)` - Stored, not applied: the glow's seven levels are not weighted separately.
+- `public void SetGlowLevel(int idx, float level)`
+- `public ReflectionSourceEnum ReflectedLightSource { get; set; }` - Stored, not applied: Aver's reflections come from ray tracing, the voxel trace and the sky.
 - `public bool FogEnabled { get; set; }`
 - `public FogModeEnum FogMode { get; set; }`
 - `public Color FogLightColor { get; set; }`
@@ -3676,9 +3688,20 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 - `public float FogDepthBegin { get; set; }`
 - `public float FogDepthEnd { get; set; }`
 - `public float FogDepthCurve { get; set; }`
+- `public float FogSunScatter { get; set; }` - Stored, not applied: the sun's in-scatter share is not a separate setting in Aver's fog.
 - `public bool VolumetricFogEnabled { get; set; }`
 - `public float VolumetricFogDensity { get; set; }`
 - `public Color VolumetricFogAlbedo { get; set; }`
+- `public float VolumetricFogLength { get; set; }` - Stored: the project key RENDER.VOLFOGLENGTH carries it (metres here; Godot's default is 64).
+- `public float VolumetricFogAnisotropy { get; set; }` - Stored: RENDER.VOLFOGANISO carries it.
+- `public bool VolumetricFogTemporalReprojectionEnabled { get; set; }` - Stored: RENDER.VOLFOGTEMPORAL carries it (off is a weight of 0).
+- `public float VolumetricFogTemporalReprojectionAmount { get; set; }`
+- `public Color VolumetricFogEmission { get; set; }` - Stored, not applied: the volume's local-light in-scatter, emission and ambient terms are not modelled.
+- `public float VolumetricFogEmissionEnergy { get; set; }`
+- `public float VolumetricFogGiInject { get; set; }`
+- `public float VolumetricFogAmbientInject { get; set; }`
+- `public float VolumetricFogDetailSpread { get; set; }`
+- `public float VolumetricFogSkyAffect { get; set; }`
 - `public bool AdjustmentEnabled { get; set; }`
 - `public float AdjustmentBrightness { get; set; }`
 - `public float AdjustmentContrast { get; set; }`
@@ -3703,6 +3726,18 @@ Values: `Clear = 0`, `Color = 1`, `Sky = 2`, `Canvas = 3`, `Keep = 4`, `CameraFe
 
 Values: `Exponential = 0`, `Depth = 1`
 
+### Environment.GlowBlendModeEnum
+
+`public enum GlowBlendModeEnum` - Godot's Environment.GlowBlendMode: how the glow joins the frame.
+
+Values: `Additive = 0`, `Screen = 1`, `Softlight = 2`, `Replace = 3`, `Mix = 4`
+
+### Environment.ReflectionSourceEnum
+
+`public enum ReflectionSourceEnum` - Godot's Environment.ReflectionSource (REFLECTION_SOURCE_*).
+
+Values: `Bg = 0`, `Disabled = 1`, `Sky = 2`
+
 ### Environment.ToneMapper
 
 `public enum ToneMapper`
@@ -3718,7 +3753,9 @@ Values: `Linear = 0`, `Reinhard = 1`, `Filmic = 2`, `Aces = 3`, `Agx = 4`
 - `public static float Exposure(float tonemapExposure, float cameraMultiplier)` - Godot's tonemap_exposure times the camera attributes' exposure multiplier.
 - `public static List<(string Key, float Value)> PostValues(Environment env, CameraAttributes? camera)` - The POSTVOLUME key values this environment states, in the order the converter writes them.
 - `public static float FogDensity(Environment env)` - The fog density per centimetre the environment states (0 when fog is off); volumetric fog counts as distance fog.
+- `public static bool UsesPhysicalSky(Environment env)` - True when the level's sky is Aver's physical sky (a Sky background with no authored colours): the only model the ambient override works under.
 - `public static float SkyLight(Environment env)` - The sky light multiplier: 0 with ambient light disabled, else the ambient energy.
+- `public static (float R, float G, float B, float Energy, float SkyContribution)? AmbientOverride(Environment env)` - The ambient override a colour ambient source states (linear colour, energy, the share of the sky's own ambient: Godot's sky contribution), or null.
 
 ### Error
 
@@ -4323,14 +4360,14 @@ Values: `LinearLowerLimit = 0`, `LinearUpperLimit = 1`, `LinearLimitSoftness = 2
 - `public GeometryInstance3D? VisibilityParent { get; set; }` - Kept, not applied: a visibility dependency is not faded in.
 - `public Material? MaterialOverride { get; set; }` - Replaces the mesh's own material; its asset name reaches the entity's mesh renderer.
 - `public Material? MaterialOverlay { get; set; }`
-- `public ShadowCastingSetting CastShadow { get; set; }`
+- `public ShadowCastingSetting CastShadow { get; set; }` - Off casts no shadow into the sun's cascade and global-illumination shadow maps (the ray-traced sun shadow still sees the mesh); ShadowsOnly draws nothing for a camera and keeps the mesh for shadows, global illumination and reflections; DoubleSided casts as On does.
 - `public float Transparency { get; set; }`
-- `public float LodBias { get; set; }`
-- `public GIModeEnum GIMode { get; set; }` - Stored, not applied (approximated): Aver has no baked lightmaps and global illumination follows the whole level, so every instance counts as dynamic whatever this says.
+- `public float LodBias { get; set; }` - A multiplier on how long the mesh keeps its finer levels of detail (1: the default; 0 forces the coarsest).
+- `public GIModeEnum GIMode { get; set; }` - Static is Aver's ordinary mesh (part of the voxel GI bake); Dynamic and Disabled keep the mesh out of the bake as a mover is, and a Disabled one still takes part in the lighting like any mesh (Aver has no baked lightmaps).
 - `public float GILightmapTexelScale { get; set; }` - Stored, not applied: there is no lightmap to size.
 - `public LightmapScaleEnum GILightmapScale { get; set; }` - Stored, not applied: there is no lightmap to size.
-- `public float ExtraCullMargin { get; set; }` - Stored, not applied: the engine culls with its own bounds, so a wider margin changes nothing.
-- `public bool IgnoreOcclusionCulling { get; set; }` - Stored, not applied: occlusion culling is automatic, so an instance cannot opt out.
+- `public float ExtraCullMargin { get; set; }` - Metres the box the frustum and occlusion tests use grows by, so a vertex shader that moves geometry is not culled early.
+- `public bool IgnoreOcclusionCulling { get; set; }` - Opts the instance out of the occlusion test (the editor's Play; the shipped runtime has no occlusion culling).
 - `public Aabb CustomAabb { get; set; }` - Stored, not applied: the engine uses the mesh's own bounds.
 
 ### GeometryInstance3D.GIModeEnum
@@ -5339,6 +5376,10 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 - `public const float CandelaPerEnergy = 104719.755f` - Aver candela of an omni or spot light for a Godot energy of 1: pi engine units of irradiance at 1 m.
 - `public Color LightColor { get; set; }`
 - `public float LightEnergy { get; set; }`
+- `public float LightIntensityLumens { get; set; }` - The intensity with physical light units on (rendering/lights_and_shadows/use_physical_light_units): lumens for an omni or spot light (default 1000), lux for the sun (default 100000).
+- `public float LightIntensityLux { get; set; }`
+- `public float LightTemperature { get; set; }` - The colour temperature in kelvin (6500: nearly white).
+- `public Texture2D? LightProjector { get; set; }` - The image projected through a spot or omni light (the engine's cookie).
 - `public float LightIndirectEnergy { get; set; }` - Kept, not applied: local lights add no indirect light, and the sun's indirect light is Aver's global illumination.
 - `public float LightVolumetricFogEnergy { get; set; }`
 - `public BakeMode LightBakeMode { get; set; }` - Stored, not applied (approximated): nothing is baked, every light is dynamic whatever this says.
@@ -7883,6 +7924,9 @@ Values: `Once = 0`, `Always = 1`
 - `public static void EnvironmentGlowSetUseBicubicUpscale(bool enable)` - Approximated, kept as set: the glow upscale filter is Aver's own.
 - `public static void EnvironmentSetVolumetricFogFilterActive(bool active)` - Approximated, kept as set: Aver's volumetric fog is filtered as the renderer decides.
 - `public static void EnvironmentSetVolumetricFogVolumeSize(int size, int depth)` - Approximated, kept as set: Aver's volumetric fog grid is sized by the renderer.
+- `public static void DecalsSetFilter(DecalFilter filter)` - Approximated, kept as set: decals and light projectors are sampled with the engine's material sampler.
+- `public static void LightProjectorsSetFilter(LightProjectorFilter filter)` - Approximated, kept as set: a light's cookie image is sampled with the engine's own filter.
+- `public static void DirectionalShadowAtlasSetSize(int size, bool is16Bits)` - Approximated, kept as set: the sun's cascade size (RENDER.SHADOWRES) is read when the renderer starts, so a size set while the game runs changes nothing that is drawn.
 - `public static Color GetDefaultClearColor()` - The colour behind everything when nothing else is drawn there (Godot's default clear colour, 0.3 grey unless the project sets it).
 - `public static void SetDefaultClearColor(Color color)` - Approximated, kept as set: a level's background is its sky, which the converter writes from the Environment (or the project's default clear colour) at conversion; a colour set here later does not repaint it.
 - `public static string GetCurrentRenderingMethod()` - The rendering method in Godot's spelling.
@@ -7898,6 +7942,12 @@ Values: `Once = 0`, `Always = 1`
 - `public static Variant GlobalShaderParameterGet(StringName name)`
 - `public static GlobalShaderParameterType GlobalShaderParameterGetType(StringName name)`
 - `public static StringName[] GlobalShaderParameterGetList()`
+
+### RenderingServer.DecalFilter
+
+`public enum DecalFilter` - Godot's RenderingServer.DecalFilter (DECAL_FILTER_*).
+
+Values: `Nearest = 0`, `NearestMipmaps = 1`, `NearestMipmapsAnisotropic = 2`, `Linear = 3`, `LinearMipmaps = 4`, `LinearMipmapsAnisotropic = 5`
 
 ### RenderingServer.EnvironmentSsaoQuality
 
@@ -7929,6 +7979,12 @@ Values: `Ellipsoid = 0`, `Cone = 1`, `Cylinder = 2`, `Box = 3`, `World = 4`
 
 Values: `Bool = 0`, `Bvec2 = 1`, `Bvec3 = 2`, `Bvec4 = 3`, `Int = 4`, `Ivec2 = 5`, `Ivec3 = 6`, `Ivec4 = 7`, `Rect2I = 8`, `Uint = 9`, `Uvec2 = 10`, `Uvec3 = 11`, `Uvec4 = 12`, `Float = 13`, `Vec2 = 14`, `Vec3 = 15`, `Vec4 = 16`, `Color = 17`, `Rect2 = 18`, `Mat2 = 19`, `Mat3 = 20`, `Mat4 = 21`, `Transform2D = 22`, `Transform = 23`, `Sampler2D = 24`, `Sampler2DArray = 25`, `Sampler3D = 26`, `SamplerCube = 27`, `SamplerExternal = 28`, `Max = 29`
 
+### RenderingServer.LightProjectorFilter
+
+`public enum LightProjectorFilter` - Godot's RenderingServer.LightProjectorFilter (LIGHT_PROJECTOR_FILTER_*).
+
+Values: `Nearest = 0`, `NearestMipmaps = 1`, `NearestMipmapsAnisotropic = 2`, `Linear = 3`, `LinearMipmaps = 4`, `LinearMipmapsAnisotropic = 5`
+
 ### RenderingServer.ShadowQuality
 
 `public enum ShadowQuality` - Godot's RenderingServer.ShadowQuality (SHADOW_QUALITY_*).
@@ -7941,6 +7997,36 @@ Values: `Hard = 0`, `SoftVeryLow = 1`, `SoftLow = 2`, `SoftMedium = 3`, `SoftHig
 
 - `public static readonly StringName FramePreDraw`
 - `public static readonly StringName FramePostDraw`
+
+### RenderMapping
+
+`public static class RenderMapping` - Godot's rendering numbers to Aver's.
+
+- `public static int MsaaSamples(int godotMsaa)` - Viewport.MSAA (0 off, 1 2x, 2 4x, 3 8x) as a sample count.
+- `public static (int Msaa, int Taa) ChooseAa(int msaa3d, bool useTaa)` - The consistent set of anti-aliasing switches: Aver's TAA needs MSAA off, so a viewport that asks for TAA gets one sample whatever msaa_3d says.
+- `public static float Scale3D(float godotScale)` - scaling_3d_scale clamped to Godot's 0.25 to 2.
+- `public static float FsrSharpness(float godot)` - fsr_sharpness: 0 is the sharpest and the sharpness halves with every 1.0; Aver's sharpness is 0 to 1 with 1 the sharpest.
+- `public static int AverSrPreset(float scale)` - The AverSR preset (1 quality, 2 balanced, 3 performance; 0 none) nearest an FSR-style scale below 1.
+- `public static float LodThresholdPixels(float godot)` - mesh_lod_threshold is the screen-space error in pixels, as RENDER.LODTHRESHOLD (0 to 64).
+- `public static float LodBiasStops(float multiplier)` - GeometryInstance3D.lod_bias is a multiplier (1: the default settings); CMeshRenderer.lodBias is in stops, the base-2 logarithm, -8 for 0 and below.
+- `public static int ShadowResolution(int atlasSize, int cascades)` - One cascade's edge (RENDER.SHADOWRES) from Godot's directional shadow atlas size: half the atlas with two or more splits, all of it for one, clamped to 512 to 4096 and snapped down to a power of two.
+- `public static float ShadowFilterWidth(int quality)` - soft_shadow_filter_quality (0 hard ...
+- `public static int CascadeCount(int godotMode)` - directional_shadow_mode (0 orthogonal, 1 two splits, 2 four splits) as a cascade count.
+- `public static float FitSplitLambda(int cascades, ReadOnlySpan<float> godotFractions, float nearCm, float farCm)` - The least-squares split lambda for Aver's slice formula against Godot's split fractions (independent fractions of the shadow range): -1 when there is nothing to fit.
+- `public static (int Cascades, float Lambda, float DistanceCm) FitSunShadow(int godotMode, float split1, float split2, float split3, float maxDistanceM, float cameraNearM)` - A sun's shadow settings as RENDER.SHADOW* values: cascades, split lambda (-1: the engine's), distance in cm (0: automatic).
+- `public static int GlowBlend(int godotMode)` - glow_blend_mode (0 additive, 1 screen, 2 soft light, 3 replace, 4 mix): the POSTVOLUME key glowblend has the same numbers.
+- `public const float EngineUnitLux = 100000f / 3f` - One engine radiance unit in lux (the 100000 lux sun is 3.0 of them).
+- `public static float PhysicalShadingEnergy(LightClass kind, float lightEnergy, float intensity, float exposureNormalization)` - The shading energy Godot uses with physical units: light_energy times the intensity (lux, or lumens) times 1 (directional), 1/(4 pi) (omni) or 1/pi (spot) times the camera's exposure normalization.
+- `public static float PhysicalAverIntensity(LightClass kind, float lightEnergy, float intensity, float exposureNormalization)` - The same as an Aver CLight intensity (lux for the sun, candela at 1 m for a local light).
+- `public static float PhysicalExposureNormalization(float aperture, float shutterSpeed, float sensitivity)` - CameraAttributesPhysical: 1 / (1.2 aperture^2 shutter_speed (100 / ISO)), the shutter speed in 1/s.
+- `public static float PracticalExposureNormalization(float sensitivity)` - CameraAttributesPractical: the sensitivity over 3072007 (the physical default at ISO 100).
+- `public static (float R, float G, float B) TemperatureTint(float kelvin)` - Light3D.light_temperature as a LINEAR tint (the brightest channel 1): Godot multiplies it with the light colour in linear light when physical units are on.
+
+### RenderMapping.LightClass
+
+`public enum LightClass`
+
+Values: `Directional`, `Omni`, `Spot`
 
 ### Resource
 
@@ -9302,9 +9388,9 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public ClearMode RenderTargetClearMode { get; set; }`
 - `public bool TransparentBg { get; set; }`
 - `public bool OwnWorld3D { get; set; }` - Carried only: the engine has one world, so the view always shows it.
-- `public MsaaMode Msaa3D { get; set; }` - Carried only: the view is drawn at one sample.
-- `public Scaling3DModeType Scaling3DMode { get; set; }` - Carried only: any non-bilinear mode is drawn as a plain scale.
-- `public float Scaling3DScale { get; set; }` - Multiplies the size the view is drawn at (0.25 to 8).
+- `public override Msaa Msaa3D { get; set; }` - Carried only: the view is drawn at one sample.
+- `public override Scaling3DModeEnum Scaling3DMode { get; set; }` - Carried only: any non-bilinear mode is drawn as a plain scale.
+- `public override float Scaling3DScale { get; set; }` - Multiplies the size the view is drawn at (0.25 to 8).
 - `public bool Disable3D { get; set; }` - A view with 3D disabled draws nothing: the engine is given no camera for it.
 - `public Color ClearColor { get; set; }` - The colour the target is cleared to when the background is not transparent (Godot takes it from the environment; the engine's views clear to a flat colour, Godot's default clear colour unless set).
 - `public override ViewportTexture? GetTexture()` - The picture this viewport draws.
@@ -9316,18 +9402,6 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 `public enum ClearMode`
 
 Values: `Always = 0`, `Never = 1`, `Once = 2`
-
-### SubViewport.MsaaMode
-
-`public enum MsaaMode`
-
-Values: `Disabled = 0`, `Msaa2X = 1`, `Msaa4X = 2`, `Msaa8X = 3`
-
-### SubViewport.Scaling3DModeType
-
-`public enum Scaling3DModeType`
-
-Values: `Bilinear = 0`, `Fsr = 1`, `Fsr2 = 2`, `Max = 3`
 
 ### SubViewport.UpdateMode
 
@@ -11009,7 +11083,6 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public event Action SizeChanged` - Raised when the viewport's size changes (Godot's size_changed): a window the player resizes, or a script setting Size.
 - `public virtual Vector2I Size { get; set; }` - The size in pixels.
 - `public virtual ViewportTexture? GetTexture()` - The picture this viewport draws as a texture.
-- `public ScreenSpaceAAEnum ScreenSpaceAA { get; set; }` - Stored, not applied (approximated): the project's anti-aliasing is converted into RENDER.NEURAA and RENDER.TAA when the project is converted; this value, set at run time, does not switch them.
 - `public virtual Rect2 GetVisibleRect()` - The area Controls are laid out in: the viewport's size (the window's stretched content size for the root window).
 - `public Control? GuiGetFocusOwner()` - The control that has keyboard focus, or null.
 - `public void GuiReleaseFocus()` - Takes keyboard focus away from whichever control has it.
@@ -11024,6 +11097,57 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public virtual Vector2 GetMousePosition()` - The pointer in viewport pixels: the engine's reading every frame (the position the UI sees, before any content stretch), else where script-fed events last put it.
 - `public void SetInputAsHandled()` - Stops the input event being processed by anything further (Godot's set_input_as_handled).
 - `public bool IsInputHandled()`
+- `public virtual Msaa Msaa3D { get; set; }` - Anti-aliasing by multisampling.
+- `public Msaa Msaa2D { get; set; }` - Stored, not applied: the engine draws no 2D with multisampling.
+- `public bool UseTaa { get; set; }` - Temporal anti-aliasing.
+- `public ScreenSpaceAAEnum ScreenSpaceAA { get; set; }` - The post-process anti-aliasing mode.
+- `public bool UseDebanding { get; set; }` - Dithers the final colour before it is quantised.
+- `public bool UseOcclusionCulling { get; set; }` - Occlusion culling of the window's scene.
+- `public float MeshLodThreshold { get; set; }` - The screen-space error in pixels above which a mesh drops to a coarser level (Godot's default 1; 0 turns the automatic choice off).
+- `public virtual Scaling3DModeEnum Scaling3DMode { get; set; }` - How the 3D scene is scaled to the screen.
+- `public virtual float Scaling3DScale { get; set; }` - The scale the 3D scene is drawn at before it is brought to the window's size (0.25 to 2).
+- `public float FsrSharpness { get; set; }` - The upscaler's sharpness as Godot spells it (0 sharpest, halving every 1.0).
+- `public float TextureMipmapBias { get; set; }` - Stored: the engine's texture sampling is set per material and by RENDER.TEXTUREMIPBIAS when the project starts.
+- `public AnisotropicFiltering AnisotropicFilteringLevel { get; set; }` - Stored (RENDER.TEXTUREANISO is read when the renderer starts).
+- `public int PositionalShadowAtlasSize { get; set; }` - Stored: the local lights' shadow maps are sized by the renderer.
+- `public bool PositionalShadowAtlas16Bits { get; set; }` - Stored.
+- `public void SetPositionalShadowAtlasQuadrantSubdiv(int quadrant, PositionalShadowAtlasQuadrantSubdiv subdiv)` - Stored: how many shadows a quadrant of the positional shadow atlas holds.
+- `public PositionalShadowAtlasQuadrantSubdiv GetPositionalShadowAtlasQuadrantSubdiv(int quadrant)`
+- `public DebugDrawEnum DebugDraw { get; set; }` - Stored: the engine has no per-viewport debug draw modes in the game.
+- `public bool UseHdr2D { get; set; }` - Stored: the engine renders 2D in the display format.
+- `public VrsModeEnum VrsMode { get; set; }` - Stored: variable-rate shading is not used.
+- `public VrsUpdateModeEnum VrsUpdateMode { get; set; }` - Stored.
+- `public Texture2D? VrsTexture { get; set; }` - Stored.
+
+### Viewport.AnisotropicFiltering
+
+`public enum AnisotropicFiltering` - Godot's Viewport.AnisotropicFiltering.
+
+Values: `Disabled = 0`, `Anisotropy2X = 1`, `Anisotropy4X = 2`, `Anisotropy8X = 3`, `Anisotropy16X = 4`, `Max = 5`
+
+### Viewport.DebugDrawEnum
+
+`public enum DebugDrawEnum` - Godot's Viewport.DebugDraw.
+
+Values: `Disabled = 0`, `Unshaded = 1`, `Lighting = 2`, `Overdraw = 3`, `Wireframe = 4`, `NormalBuffer = 5`, `VoxelGiAlbedo = 6`, `VoxelGiLighting = 7`, `VoxelGiEmission = 8`, `ShadowAtlas = 9`, `DirectionalShadowAtlas = 10`, `SceneLuminance = 11`, `Ssao = 12`, `Ssil = 13`, `PssmSplits = 14`, `DecalAtlas = 15`, `Sdfgi = 16`, `SdfgiProbes = 17`, `GiBuffer = 18`, `DisableLodEnum = 19`, `ClusterOmniLights = 20`, `ClusterSpotLights = 21`, `ClusterDecals = 22`, `ClusterReflectionProbes = 23`, `Occluders = 24`, `MotionVectors = 25`, `InternalBuffer = 26`
+
+### Viewport.Msaa
+
+`public enum Msaa` - Godot's Viewport.MSAA.
+
+Values: `Disabled = 0`, `Msaa2X = 1`, `Msaa4X = 2`, `Msaa8X = 3`, `Max = 4`
+
+### Viewport.PositionalShadowAtlasQuadrantSubdiv
+
+`public enum PositionalShadowAtlasQuadrantSubdiv` - Godot's Viewport.PositionalShadowAtlasQuadrantSubdiv.
+
+Values: `Disabled = 0`, `Subdiv1 = 1`, `Subdiv4 = 2`, `Subdiv16 = 3`, `Subdiv64 = 4`, `Subdiv256 = 5`, `Subdiv1024 = 6`, `Max = 7`
+
+### Viewport.Scaling3DModeEnum
+
+`public enum Scaling3DModeEnum` - Godot's Viewport.Scaling3DMode.
+
+Values: `Bilinear = 0`, `Fsr = 1`, `Fsr2 = 2`, `Max = 3`
 
 ### Viewport.ScreenSpaceAAEnum
 
@@ -11036,6 +11160,18 @@ Values: `Disabled = 0`, `Fxaa = 1`, `Smaa = 2`, `Max = 3`
 `public new class SignalName : Node.SignalName`
 
 - `public static readonly StringName SizeChanged`
+
+### Viewport.VrsModeEnum
+
+`public enum VrsModeEnum` - Godot's Viewport.VRSMode.
+
+Values: `Disabled = 0`, `Texture = 1`, `Xr = 2`, `Max = 3`
+
+### Viewport.VrsUpdateModeEnum
+
+`public enum VrsUpdateModeEnum` - Godot's Viewport.VRSUpdateMode.
+
+Values: `Disabled = 0`, `Once = 1`, `Always = 2`, `Max = 3`
 
 ### ViewportTexture
 
@@ -11203,6 +11339,10 @@ Values: `Windowed = 0`, `Minimized = 1`, `Maximized = 2`, `Fullscreen = 3`, `Exc
 - `public PhysicsDirectSpaceState3D DirectSpaceState { get; }` - The physics space for ray and shape queries.
 - `public Rid Space { get; }`
 - `public Rid NavigationMap { get; }` - The navigation map of this world (the one regions, links and agents join by default).
+- `public Environment? Environment { get; set; }` - The environment of this world (a WorldEnvironment node sets it).
+- `public Environment? FallbackEnvironment { get; set; }` - The environment used when neither the camera nor the world has one.
+- `public CameraAttributes? CameraAttributes { get; set; }` - The camera attributes of this world (a WorldEnvironment node sets them).
+- `public CameraAttributes? FallbackCameraAttributes { get; set; }` - The camera attributes used when neither the camera nor the world has any (Godot's fallback_camera_attributes).
 
 ### WorldBoundaryShape3D
 
