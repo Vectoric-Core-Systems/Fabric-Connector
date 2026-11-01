@@ -102,6 +102,9 @@ public sealed class FabricGameMode : AverGameMode
     {
         if (reason != BeginReason.Reload) FabricView.UseCameraPose();
         FabricView.Sync();
+        // The engine forgets its persistent actors when a session stops; the autoloads of the level being played are the same nodes.
+        foreach (Node n in SceneTree.Instance.Root.ChildrenSnapshot())
+            if (n.Persistent) n.Persistent = true;
     }
 
     public override void OnTick(float dt) => FabricView.Sync();

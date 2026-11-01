@@ -657,11 +657,11 @@ public partial class Node : GodotObject
 
     private bool _persistent;
 
-    /// <summary>True for an autoload: it survives a scene change (Game.ChangeLevel), with everything below it. Kept in the node until
-    /// it has an entity, then in the engine.</summary>
+    /// <summary>True for an autoload: it survives a scene change (Game.ChangeLevel), with everything below it. The node keeps the value
+    /// and mirrors it to the engine, which clears its own set when a play session stops (the game mode sets it again at the next Play).</summary>
     public new bool Persistent
     {
-        get => Self.IsValid && NodeHost.Current.IsEngine ? base.Persistent : _persistent;
+        get => _persistent;
         set
         {
             _persistent = value;
