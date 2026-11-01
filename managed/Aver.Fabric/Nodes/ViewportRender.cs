@@ -15,6 +15,7 @@ internal interface IRenderBackend
 {
     bool Set(RenderKey key, float value);
     bool Post(string key, float value);
+    RenderStats? Stats();
 }
 
 internal sealed class EngineRenderBackend : IRenderBackend
@@ -22,6 +23,13 @@ internal sealed class EngineRenderBackend : IRenderBackend
     public bool Set(RenderKey key, float value) => Guard(() => RenderSettings.Set(key, value));
 
     public bool Post(string key, float value) => Guard(() => PostFx.SetValue(RenderBackend.Layer, key, value) && PostFx.SetLayerWeight(RenderBackend.Layer, 1f, 0f));
+
+    public RenderStats? Stats()
+    {
+        if (!NodeHost.Current.IsEngine) return null;
+        try { return RenderSettings.GetStats(); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
+    }
 
     private static bool Guard(Func<bool> call)
     {
@@ -233,6 +241,9 @@ public partial class Viewport
         get => Get("hdr2d", "rendering/viewport/hdr_2d", false, AsBoolean);
         set => Put("hdr2d", value);
     }
+
+    /// <summary>Stored, inert: XR rendering is not supported (the XR nodes are carriers).</summary>
+    public bool UseXr { get; set; }
 
     /// <summary>Stored: variable-rate shading is not used.</summary>
     public VrsModeEnum VrsMode

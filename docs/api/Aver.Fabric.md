@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-825 public types and 8834 public members, read from `managed/Aver.Fabric/` (162 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+826 public types and 8847 public members, read from `managed/Aver.Fabric/` (162 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -7924,6 +7924,7 @@ Values: `Once = 0`, `Always = 1`
 - `public static void EnvironmentGlowSetUseBicubicUpscale(bool enable)` - Approximated, kept as set: the glow upscale filter is Aver's own.
 - `public static void EnvironmentSetVolumetricFogFilterActive(bool active)` - Approximated, kept as set: Aver's volumetric fog is filtered as the renderer decides.
 - `public static void EnvironmentSetVolumetricFogVolumeSize(int size, int depth)` - Approximated, kept as set: Aver's volumetric fog grid is sized by the renderer.
+- `public static ulong GetRenderingInfo(RenderingInfo info)` - What the last frame submitted (P18): objects, triangles and draw calls from the engine's statistics, which are counted only once something has asked (the first call returns 0, the next frame's numbers follow).
 - `public static void DecalsSetFilter(DecalFilter filter)` - Approximated, kept as set: decals and light projectors are sampled with the engine's material sampler.
 - `public static void LightProjectorsSetFilter(LightProjectorFilter filter)` - Approximated, kept as set: a light's cookie image is sampled with the engine's own filter.
 - `public static void DirectionalShadowAtlasSetSize(int size, bool is16Bits)` - Approximated, kept as set: the sun's cascade size (RENDER.SHADOWRES) is read when the renderer starts, so a size set while the game runs changes nothing that is drawn.
@@ -7984,6 +7985,12 @@ Values: `Bool = 0`, `Bvec2 = 1`, `Bvec3 = 2`, `Bvec4 = 3`, `Int = 4`, `Ivec2 = 5
 `public enum LightProjectorFilter` - Godot's RenderingServer.LightProjectorFilter (LIGHT_PROJECTOR_FILTER_*).
 
 Values: `Nearest = 0`, `NearestMipmaps = 1`, `NearestMipmapsAnisotropic = 2`, `Linear = 3`, `LinearMipmaps = 4`, `LinearMipmapsAnisotropic = 5`
+
+### RenderingServer.RenderingInfo
+
+`public enum RenderingInfo` - Godot's RenderingServer.RenderingInfo (RENDERING_INFO_*).
+
+Values: `TotalObjectsInFrame = 0`, `TotalPrimitivesInFrame = 1`, `TotalDrawCallsInFrame = 2`, `TextureMemUsed = 3`, `BufferMemUsed = 4`, `VideoMemUsed = 5`, `PipelineCompilationsCanvas = 6`, `PipelineCompilationsMesh = 7`, `PipelineCompilationsSurface = 8`, `PipelineCompilationsDraw = 9`, `PipelineCompilationsSpecialization = 10`
 
 ### RenderingServer.ShadowQuality
 
@@ -11115,6 +11122,7 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public PositionalShadowAtlasQuadrantSubdiv GetPositionalShadowAtlasQuadrantSubdiv(int quadrant)`
 - `public DebugDrawEnum DebugDraw { get; set; }` - Stored: the engine has no per-viewport debug draw modes in the game.
 - `public bool UseHdr2D { get; set; }` - Stored: the engine renders 2D in the display format.
+- `public bool UseXr { get; set; }` - Stored, inert: XR rendering is not supported (the XR nodes are carriers).
 - `public VrsModeEnum VrsMode { get; set; }` - Stored: variable-rate shading is not used.
 - `public VrsUpdateModeEnum VrsUpdateMode { get; set; }` - Stored.
 - `public Texture2D? VrsTexture { get; set; }` - Stored.

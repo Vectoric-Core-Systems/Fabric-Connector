@@ -31,6 +31,7 @@ static class Wave4Tests
         public readonly List<string> Calls = new();
         public bool Set(RenderKey key, float value) { Calls.Add($"{key} {value:0.####}"); return true; }
         public bool Post(string key, float value) { Calls.Add($"post {key} {value:0.####}"); return true; }
+        public Aver.Framework.RenderStats? Stats() => new Aver.Framework.RenderStats(12, 3456, 7, 1, 0, 9);
     }
 
     // A relative comparison, for the light and exposure numbers (some are 1e-5, some 1e5).
@@ -181,6 +182,12 @@ static class Wave4Tests
 
     private static void StoredCalls()
     {
+        Recording();
+        T.Check("P18: rendering info reads the engine's statistics, memory counters read 0",
+            RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalObjectsInFrame) == 12UL && RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalPrimitivesInFrame) == 3456UL &&
+            RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame) == 7UL && RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.VideoMemUsed) == 0UL);
+        RenderBackend.Current = new EngineRenderBackend();
+        T.Check("and read 0 without an engine", RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalObjectsInFrame) == 0UL);
         RenderingServer.DirectionalShadowAtlasSetSize(8192, false);
         RenderingServer.DecalsSetFilter(RenderingServer.DecalFilter.Nearest);
         RenderingServer.LightProjectorsSetFilter(RenderingServer.LightProjectorFilter.Linear);

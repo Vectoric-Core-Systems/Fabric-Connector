@@ -78,6 +78,28 @@ public static partial class RenderingServer
         Approximated.Once("RenderingServer.EnvironmentSetVolumetricFogVolumeSize", "kept; Aver's volumetric fog grid is sized by the renderer");
     }
 
+    /// <summary>Godot's RenderingServer.RenderingInfo (RENDERING_INFO_*).</summary>
+    public enum RenderingInfo
+    {
+        TotalObjectsInFrame = 0, TotalPrimitivesInFrame = 1, TotalDrawCallsInFrame = 2, TextureMemUsed = 3, BufferMemUsed = 4, VideoMemUsed = 5,
+        PipelineCompilationsCanvas = 6, PipelineCompilationsMesh = 7, PipelineCompilationsSurface = 8, PipelineCompilationsDraw = 9, PipelineCompilationsSpecialization = 10,
+    }
+
+    /// <summary>What the last frame submitted (P18): objects, triangles and draw calls from the engine's statistics, which are counted only once something has asked (the
+    /// first call returns 0, the next frame's numbers follow). The memory and pipeline counters are not kept by Aver and read 0. In a ray-driven frame the draw calls are 0.</summary>
+    public static ulong GetRenderingInfo(RenderingInfo info)
+    {
+        Aver.Framework.RenderStats? s = RenderBackend.Current.Stats();
+        if (s is not { } r) return 0;
+        return info switch
+        {
+            RenderingInfo.TotalObjectsInFrame => (ulong)Math.Max(r.Objects, 0),
+            RenderingInfo.TotalPrimitivesInFrame => (ulong)Math.Max(r.Triangles, 0),
+            RenderingInfo.TotalDrawCallsInFrame => (ulong)Math.Max(r.DrawCalls, 0),
+            _ => 0UL,
+        };
+    }
+
     /// <summary>Godot's RenderingServer.DecalFilter (DECAL_FILTER_*).</summary>
     public enum DecalFilter { Nearest = 0, NearestMipmaps = 1, NearestMipmapsAnisotropic = 2, Linear = 3, LinearMipmaps = 4, LinearMipmapsAnisotropic = 5 }
 
