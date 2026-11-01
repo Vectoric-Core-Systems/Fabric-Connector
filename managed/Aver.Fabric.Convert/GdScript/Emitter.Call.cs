@@ -170,6 +170,9 @@ internal sealed partial class GdEmitter
             bool rest = init?.Func != null && init.Func.Params.Count > 0 && init.Func.Params[^1].IsRest;
             return new Ex($"new {typeRef.Code}({ArgsFor(args, pt, rest)})", GdType.OfScript(t.Script));
         }
+        // GDScript's Basis(), Transform3D(), Quaternion() ... are the identity and Color() is opaque black; C#'s `new Basis()` is all zeros
+        // and `new Color()` transparent. A zeroed basis flattens whatever it is set on (a player's look reset to Basis() could neither turn nor walk).
+        if (args.Count == 0 && t.Kind == GK.Struct && DefaultValue(t) is var gdDefault && gdDefault != "default") return new Ex(gdDefault, t);
         Rs.INamedTypeSymbol? sym = t.Sym;
         if (Api != null && sym != null)
         {

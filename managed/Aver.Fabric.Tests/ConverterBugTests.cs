@@ -17,6 +17,7 @@ static class ConverterBugTests
         T.Run("converter C3: enum constants resolve by the prefix GodotSharp drops, bare ones against the base class, and names keep GodotSharp's digit casing", EnumConstants);
         T.Run("converter C4: AABB and other acronym spellings reach the Aver.Fabric type", AcronymNames);
         T.Run("converter C5: value type, integer and bool coercions", Coercions);
+        T.Run("converter C5b: Basis(), Transform3D(), Quaternion() are GDScript's identity and Color() opaque black, not C#'s zeros", IdentityConstructors);
         T.Run("converter C6: a member only a subclass has is reached through a cast", BaseTypedReceivers);
         T.Run("converter C7: an autoload names its script as a type, its enum travels in a signal", AutoloadAsType);
         T.Run("converter C8: a static function that needs an instance is written as an instance method", StaticNeedsInstance);
@@ -154,6 +155,25 @@ static class ConverterBugTests
         T.Check("whole(7) = 21", Math.Abs((double)Call(r, "Sample", "Whole", 7L)! - 21.0) < 1e-9);
         T.Check("rounded(2.675) = 268: half away from zero", (long)Call(r, "Sample", "Rounded", 2.675)! == 268);
         T.Check("transparent(27) = 1, transparent(10) = 0, flag(true) = 1", (long)Call(r, "Sample", "Transparent", 27L)! == 1 && (long)Call(r, "Sample", "Transparent", 10L)! == 0 && (long)Call(r, "Sample", "Flag", true)! == 1);
+    }
+
+    // godot-fps's look reset its rotation with `transform.basis = Basis()`: a zero basis left its player unable to turn or walk.
+    private static void IdentityConstructors()
+    {
+        ConversionResult r = One(
+            "extends Node\n\nfunc b() -> Basis:\n\treturn Basis()\n\nfunc t() -> Transform3D:\n\treturn Transform3D()\n\nfunc q() -> Quaternion:\n\treturn Quaternion()\n\n" +
+            "func t2() -> Transform2D:\n\treturn Transform2D()\n\nfunc c() -> Color:\n\treturn Color()\n\nfunc v() -> Vector3:\n\treturn Vector3()\n\n" +
+            "func turned(a: float) -> Vector3:\n\tvar n := Node3D.new()\n\tn.transform.basis = Basis()\n\tn.rotate_y(a)\n\tvar d := n.transform.basis * Vector3(0, 0, -1)\n\tn.free()\n\treturn d\n", keep: true);
+        string t = Text(r);
+        T.Check("it compiles", r.Success, Errors(r));
+        T.Check("the zero-argument constructors are the identities and opaque black", Has(t, "Basis.Identity", "Transform3D.Identity", "Quaternion.Identity", "Transform2D.Identity", "new Color(0, 0, 0, 1)") && !t.Contains("new Basis()"), t);
+        if (!r.Success) return;
+        T.Check("Basis() is the identity", (Basis)Call(r, "Sample", "B")! == Basis.Identity);
+        T.Check("Transform3D() and Quaternion() are the identity", (Transform3D)Call(r, "Sample", "T")! == Transform3D.Identity && (Quaternion)Call(r, "Sample", "Q")! == Quaternion.Identity);
+        T.Check("Color() is opaque black", (Color)Call(r, "Sample", "C")! == new Color(0, 0, 0, 1));
+        T.Check("Vector3() stays zero", (Vector3)Call(r, "Sample", "V")! == Vector3.Zero);
+        var fwd = (Vector3)Call(r, "Sample", "Turned", 0.0)!;
+        T.Check("a node reset to Basis() still turns and points forward", T.Near(fwd, new Vector3(0, 0, -1), 1e-5f), fwd.ToString());
     }
 
     // ---- C6 ----
