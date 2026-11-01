@@ -647,7 +647,8 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
                 if (key.rfind(h, 0) == 0) { editorSetting = true; break; }
             if (editorSetting) {
                 report_.add("setting", kProject, "", "", key, Rating::Approximated,
-                            "an editor or import-time setting (project tags, script warnings, texture compression formats, the Blender importer); it changes nothing a running game does, so it is not written", e.line);
+                            "an editor or import-time setting (project tags, script warnings, texture compression formats, the Blender importer); it changes nothing a running game does, "
+                            "so no Aver key is written; the value is kept for ProjectSettings (Fabric/project.json)", e.line);
                 continue;
             }
             // Settings of the Godot runtime that have no counterpart to set: each says why nothing is lost.
@@ -661,12 +662,14 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
             bool inertSetting = false;
             for (const auto& s : inert)
                 if (key.rfind(s.prefix, 0) == 0) {
-                    report_.add("setting", kProject, "", "", key, Rating::Approximated, s.why, e.line);
+                    report_.add("setting", kProject, "", "", key, Rating::Approximated, std::string(s.why) + "; the value is kept for ProjectSettings (Fabric/project.json)", e.line);
                     inertSetting = true;
                     break;
                 }
             if (inertSetting) continue;
-            report_.add("setting", kProject, "", "", key, Rating::Unsupported, "no Aver project key for this setting", e.line);
+            // The engine has no key for it, but nothing is dropped: Fabric/project.json holds the value and ProjectSettings.get_setting returns it.
+            report_.add("setting", kProject, "", "", key, Rating::Approximated,
+                        "no Aver project key; kept for ProjectSettings (Fabric/project.json), so get_setting returns Godot's value and type, and nothing else reads it", e.line);
         }
     }
     return true;

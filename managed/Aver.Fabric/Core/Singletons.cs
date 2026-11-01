@@ -242,10 +242,52 @@ public static class OS
     }
 }
 
-/// <summary>Godot's ProjectSettings singleton. The converter keeps the project's Godot values it can name in the manifest, so
-/// <c>get_setting</c> answers the well-known keys from the Aver project and the script's own default for the rest.</summary>
+/// <summary>Godot's ProjectSettings singleton. The settings that have an Aver key are answered from the Aver project; every other setting of
+/// project.godot is answered from <c>Fabric/project.json</c> (the converter keeps them all there as Godot's own text), with Godot's type. A key the
+/// project never stated gets the script's own default.</summary>
 public static class ProjectSettings
 {
+    // Fabric/project.json "settings": the project's settings as Godot's variant text, read once per content folder.
+    private static Dictionary<string, string>? s_stored;
+    private static string? s_storedRoot;
+    private static readonly HashSet<string> s_unreadable = new(StringComparer.Ordinal);
+
+    internal static void ResetForTests() { s_stored = null; s_storedRoot = null; s_unreadable.Clear(); }
+
+    private static Dictionary<string, string> Stored()
+    {
+        string root = ResourceLoader.ContentRoot;
+        if (s_stored != null && s_storedRoot == root) return s_stored;
+        s_storedRoot = root;
+        s_stored = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (root.Length == 0) return s_stored;
+        string file = System.IO.Path.Combine(root, "..", "Fabric", "project.json");
+        try
+        {
+            if (!File.Exists(file)) return s_stored;
+            using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object && doc.RootElement.TryGetProperty("settings", out System.Text.Json.JsonElement settings) &&
+                settings.ValueKind == System.Text.Json.JsonValueKind.Object)
+                foreach (System.Text.Json.JsonProperty p in settings.EnumerateObject())
+                    if (p.Value.ValueKind == System.Text.Json.JsonValueKind.String) s_stored[p.Name] = p.Value.GetString() ?? "";
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        {
+            Aver.Scripting.Log.Warn($"[Fabric] cannot read {file}: {ex.Message}");
+        }
+        return s_stored;
+    }
+
+    // The project's own value for a key, parsed from Godot's text each time (an array or dictionary is the caller's to change).
+    private static bool TryStored(string name, out Variant value)
+    {
+        value = default;
+        if (!Stored().TryGetValue(name, out string? text)) return false;
+        if (VariantText.TryParse(text, out value)) return true;
+        if (s_unreadable.Add(name)) Aver.Scripting.Log.Warn($"[Fabric] ProjectSettings: cannot read the value of '{name}': {text}");
+        return false;
+    }
+
     // The manifest is read through the engine's content path; outside the engine (tests, tools) there is none and the key is absent.
     private static string Manifest(string key, string fallback)
     {
@@ -255,6 +297,8 @@ public static class ProjectSettings
 
     public static Variant GetSetting(string name, Variant @default = default)
     {
+        // The project's name as Godot has it (the Aver project's NAME is a file-safe form of it).
+        if (name == "application/config/name" && TryStored(name, out Variant godotName)) return godotName;
         switch (name)
         {
             case "physics/3d/default_gravity":
@@ -277,13 +321,13 @@ public static class ProjectSettings
             case "display/window/stretch/scale": return TryFloat(Manifest("UI.STRETCHSCALE", ""), out double scale) && scale > 0 ? scale : 1.0;
             case "gui/timers/tooltip_delay_sec": return TryFloat(Manifest("UI.TOOLTIPDELAY", ""), out double delay) && delay >= 0 ? delay : 0.5;
         }
-        return @default;
+        return TryStored(name, out Variant stored) ? stored : @default;
     }
 
     public static bool HasSetting(string name) => name is "physics/3d/default_gravity" or "physics/3d/default_gravity_vector" or "application/config/name"
         or "physics/common/physics_ticks_per_second" or "display/window/size/viewport_width" or "display/window/size/viewport_height"
         or "gui/theme/custom" or "display/window/stretch/mode" or "display/window/stretch/aspect" or "display/window/stretch/scale_mode"
-        or "display/window/stretch/scale" or "gui/timers/tooltip_delay_sec";
+        or "display/window/stretch/scale" or "gui/timers/tooltip_delay_sec" || Stored().ContainsKey(name);
 
     /// <summary>The operating-system path for a res:// or user:// path (res:// is the project's content folder, user:// the player's writable folder); any other path is
     /// returned unchanged.</summary>

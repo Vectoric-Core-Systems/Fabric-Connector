@@ -73,8 +73,30 @@ public partial class Node
     public override void OnEndPlay(EndReason reason)
     {
         if (reason == EndReason.Reload) return;
-        // The entity is gone: the node leaves its parent's list quietly and is freed.
+        Retire();
+    }
+
+    // The entity is gone: the node leaves its parent's list quietly and is freed.
+    private void Retire()
+    {
         if (_insideTree) NotifyExitTree();
+        if (_parent != null) { _parent._children.Remove(this); _parent = null; }
+        FreeSubtreeMarks();
+    }
+
+    /// <summary>A test seam: says which nodes the engine destroyed without telling them (null in the engine, where the entity answers).</summary>
+    internal static Func<Node, bool>? EntityGoneProbe;
+
+    /// <summary>True when the engine destroyed this node's entity without running its end edge: the editor's Stop drops the actors a session respawned
+    /// with a raw world destroy, so their nodes stay in the tree, alive to every walk, until something retires them (<see cref="ReapGone"/>).</summary>
+    internal bool EntityGone => EntityGoneProbe != null ? EntityGoneProbe(this) : Self.IsValid && NodeHost.Current.IsEngine && !Self.IsAlive;
+
+    /// <summary>Retires a node whose entity is gone, with its subtree, children first: what the end edge would have done.</summary>
+    internal void ReapGone()
+    {
+        foreach (Node c in _children.ToArray()) c.ReapGone();
+        try { if (_insideTree) NotifyExitTree(); }
+        catch (Exception ex) { Log.Warn($"[Fabric] {GetClass()} '{_name}': leaving the tree after its entity was destroyed failed: {ex.GetType().Name}: {ex.Message}"); }
         if (_parent != null) { _parent._children.Remove(this); _parent = null; }
         FreeSubtreeMarks();
     }

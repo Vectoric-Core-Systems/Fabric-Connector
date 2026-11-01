@@ -23,6 +23,8 @@ static class ConverterGapTests
         T.Run("converter gap: Decal, AnimatedSprite3D, SpriteFrames and the 2D placeholder types compile", NewClassesCompile);
         T.Run("converter gap: Decal maps its box, pose, colour and fade to the engine's decal", DecalFields);
         T.Run("converter gap: AnimatedSprite3D plays SpriteFrames with Godot's frame clock and signals", AnimatedSpritePlayback);
+        T.Run("converter gap: ProjectSettings.get_setting returns every setting of project.godot, with Godot's type", ProjectSettingsKept);
+        T.Run("converter gap: a second Play does not leave the first session's autoloads and scene in the tree", SecondSessionTree);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -282,5 +284,114 @@ static class ConverterGapTests
         var auto = new AnimatedSprite3D { SpriteFrames = frames, Autoplay = "jump" };
         SceneTree.Instance.Root.AddChild(auto);
         T.Check("autoplay starts when it is ready", auto.IsPlaying());
+    }
+
+    // ---- ProjectSettings ----
+
+    // MainMenuScene adds "rel v" to get_setting("application/config/version"); the converter keeps every setting in Fabric/project.json.
+    private static void ProjectSettingsKept()
+    {
+        T.Reset();
+        string root = Path.Combine(Path.GetTempPath(), "aver-fabric-settings-" + Guid.NewGuid().ToString("N"));
+        string content = Path.Combine(root, "Content");
+        Directory.CreateDirectory(content);
+        Directory.CreateDirectory(Path.Combine(root, "Fabric"));
+        try
+        {
+            ResourceLoader.ContentRootOverride = content;
+            T.Check("no project.json: a setting with no Aver key is the caller's default", ProjectSettings.GetSetting("application/config/version", "none").AsString() == "none" && !ProjectSettings.HasSetting("application/config/version"));
+            Variant nothing = ProjectSettings.GetSetting("application/config/version");
+            T.Check("and without a default it is Nil, which is what made the string addition throw",
+                    nothing.VariantType == Variant.Type.Nil && Throws(() => GDScript.Add("godot engine 4.x | rel v", nothing)));
+
+            File.WriteAllText(Path.Combine(root, "Fabric", "project.json"), """
+                { "schema": 1, "name": "G", "settings": {
+                    "config_version": "5",
+                    "application/config/name": "\"FPS Prototype\"",
+                    "application/config/version": "\"0.3.1\"",
+                    "game/difficulty": "3",
+                    "game/scale": "1.5",
+                    "game/hard": "true",
+                    "game/tint": "Color(1, 0, 0, 1)",
+                    "game/list": "[1, \"two\", 3.0]",
+                    "physics/common/physics_ticks_per_second": "120",
+                    "game/broken": "Vector3(1, 2"
+                } }
+                """);
+            ProjectSettings.ResetForTests();
+            Variant version = ProjectSettings.GetSetting("application/config/version");
+            T.Check("a string setting is a String", version.VariantType == Variant.Type.String && version.AsString() == "0.3.1");
+            T.Check("the script's addition now works: the footer text", GDScript.Add("godot engine 4.x | rel v", version).AsString() == "godot engine 4.x | rel v0.3.1");
+            T.Check("an int stays an Int, a float a Float, a bool a Bool, a colour a Color",
+                    ProjectSettings.GetSetting("game/difficulty").VariantType == Variant.Type.Int && ProjectSettings.GetSetting("game/difficulty").AsInt64() == 3 &&
+                    ProjectSettings.GetSetting("game/scale").VariantType == Variant.Type.Float && ProjectSettings.GetSetting("game/scale").AsDouble() == 1.5 &&
+                    ProjectSettings.GetSetting("game/hard").VariantType == Variant.Type.Bool && ProjectSettings.GetSetting("game/hard").AsBool() &&
+                    ProjectSettings.GetSetting("game/tint").VariantType == Variant.Type.Color && ProjectSettings.GetSetting("game/tint").AsColor() == new Color(1, 0, 0, 1) &&
+                    ProjectSettings.GetSetting("config_version").AsInt64() == 5);
+            Variant list = ProjectSettings.GetSetting("game/list");
+            T.Check("an array is an Array of Godot's types, a new one on each read",
+                    list.VariantType == Variant.Type.Array && list.AsGodotArray().Count == 3 && !ReferenceEquals(list.AsGodotArray(), ProjectSettings.GetSetting("game/list").AsGodotArray()));
+            T.Check("HasSetting knows them, and the caller's default still answers for a key the project never stated",
+                    ProjectSettings.HasSetting("game/hard") && !ProjectSettings.HasSetting("game/none") && ProjectSettings.GetSetting("game/none", 7).AsInt64() == 7);
+            T.Check("the project's name is Godot's own, not the Aver project's file-safe NAME", ProjectSettings.GetSetting("application/config/name").AsString() == "FPS Prototype");
+            T.Check("a setting that has an Aver key keeps that mapping (physics ticks: the engine's step, not the stored text)", ProjectSettings.GetSetting("physics/common/physics_ticks_per_second").AsInt64() == 60);
+            T.Logs.Clear();
+            T.Check("a value that cannot be read is the caller's default", ProjectSettings.GetSetting("game/broken", 9).AsInt64() == 9);
+            ProjectSettings.GetSetting("game/broken");
+            T.Check("and the log says so once", T.Logs.Count(l => l.Message.Contains("game/broken")) == 1);
+        }
+        finally
+        {
+            T.Reset();
+            try { Directory.Delete(root, true); } catch (IOException) { }
+        }
+    }
+
+    // ---- a second Play ----
+
+    // The editor's Stop respawns the level's class actors, then destroys them again with a raw world destroy (no end edge) when it reloads the level: their nodes
+    // stay in the tree. The next session's autoloads and scene must not be shadowed by them: current_scene is the new MainRoot, /root/GameManager the new autoload.
+    private static void SecondSessionTree()
+    {
+        T.Reset();
+        var gone = new HashSet<Node>();
+        Node.EntityGoneProbe = n => gone.Contains(n);
+        Window root = SceneTree.Instance.Root;
+
+        (Node Gm, Node Sm, Node Main, Node Ui) Session()
+        {
+            Node gm = new() { Name = "GameManager", Persistent = true };
+            Node sm = new() { Name = "SettingsManager", Persistent = true };
+            Node main = new() { Name = "MainRoot" };
+            Node ui = new() { Name = "UIRoot" };
+            main.AddChild(ui);
+            root.AddChild(gm);
+            root.AddChild(sm);
+            root.AddChild(main);
+            return (gm, sm, main, ui);
+        }
+
+        var first = Session();
+        T.Check("session 1: current_scene is MainRoot, never an autoload", SceneTree.Instance.CurrentScene == first.Main);
+        T.Check("session 1: UIRoot is found under it", SceneTree.Instance.CurrentScene!.GetNodeOrNull("UIRoot") == first.Ui);
+
+        // Stop: the engine drops the entities without telling the nodes.
+        gone.UnionWith(new[] { first.Gm, first.Sm, first.Main, first.Ui });
+        T.Check("after Stop nothing is the current scene (the dead MainRoot is not)", SceneTree.Instance.CurrentScene == null);
+        T.Check("and the dead nodes left the tree", !first.Main.IsInsideTree() && !first.Gm.IsInsideTree() && root.GetChildCount() == 0);
+
+        // The same again, but with the dead nodes still in the tree when the new session's nodes enter (the order the editor's reload produces).
+        gone.Clear();
+        var stale = Session();
+        gone.UnionWith(new[] { stale.Gm, stale.Sm, stale.Main, stale.Ui });
+        var second = Session();
+        T.Check("session 2: the autoload keeps its name (no @GameManager@2) and is the one /root/GameManager finds",
+                second.Gm.Name == "GameManager" && root.GetNodeOrNull("GameManager") == second.Gm && second.Gm.GetPath().ToString() == "/root/GameManager");
+        T.Check("session 2: current_scene is the new MainRoot, whichever order the nodes entered in", SceneTree.Instance.CurrentScene == second.Main);
+        T.Check("session 2: get_node(\"UIRoot\") under it is the new UIRoot", SceneTree.Instance.CurrentScene!.GetNode<Node>("UIRoot") == second.Ui);
+        T.Check("session 2: the top level holds exactly the three live nodes, in order",
+                string.Join(",", root.GetChildren().Select(c => c.Name.ToString())) == "GameManager,SettingsManager,MainRoot");
+        T.Check("the dead session's nodes were retired, not left half alive", !stale.Gm.IsInsideTree() && !stale.Main.IsInsideTree() && !stale.Ui.IsInsideTree());
+        T.Reset();
     }
 }

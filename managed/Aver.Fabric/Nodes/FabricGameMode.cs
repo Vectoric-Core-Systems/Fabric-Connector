@@ -102,6 +102,8 @@ public sealed class FabricGameMode : AverGameMode
     {
         if (reason != BeginReason.Reload) FabricView.UseCameraPose();
         FabricView.Sync();
+        // What a Stop left behind (nodes whose entities the editor destroyed without an end edge) is not part of this session.
+        SceneTree.Instance.ReapGoneTopLevel();
         // The engine forgets its persistent actors when a session stops; the autoloads of the level being played are the same nodes.
         foreach (Node n in SceneTree.Instance.Root.ChildrenSnapshot())
             if (n.Persistent) n.Persistent = true;

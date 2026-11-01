@@ -194,7 +194,8 @@ int main() {
 
     writeText(game + "/project.godot",
               "config_version=5\n\n"
-              "[application]\n\nconfig/name=\"ConverterBugs\"\nrun/main_scene=\"res://main.tscn\"\nrun/low_processor_mode=true\n\n"
+              "[application]\n\nconfig/name=\"ConverterBugs\"\nconfig/version=\"0.9.1\"\nrun/main_scene=\"res://main.tscn\"\nrun/low_processor_mode=true\n\n"
+              "[game]\n\ndifficulty/level=3\ndifficulty/scale=1.5\ndifficulty/title=\"Hard \\\"mode\\\"\"\ndifficulty/tint=Color(1, 0, 0, 1)\n\n"
               "[audio]\n\nbuses/default_bus_layout=\"uid://c0nvbugsbuslayout\"\n\n"
               "[autoload]\n\nSystem=\"*res://system.gd\"\n\n"
               "[debug]\n\nsettings/physics_interpolation/enable_warnings=false\n\n"
@@ -315,7 +316,25 @@ int main() {
                             "gui/theme/default_font_multichannel_signed_distance_field"}) {
         check(reported(jsonl, {"\"kind\":\"setting\"", (std::string("\"property\":\"") + key + "\"").c_str(), "\"rating\":\"approximated\""}), std::string(key) + " is rated approximated");
     }
-    check(!reported(jsonl, {"\"kind\":\"setting\"", "no Aver project key"}), "no setting of the project is left as 'no Aver project key'");
+    check(reported(jsonl, {"\"kind\":\"setting\"", "\"property\":\"application/config/version\"", "\"rating\":\"approximated\"", "kept for ProjectSettings"}),
+          "a setting with no Aver key (application/config/version) is kept for ProjectSettings, not dropped");
+    check(reported(jsonl, {"\"kind\":\"setting\"", "\"property\":\"game/difficulty/level\"", "\"rating\":\"approximated\"", "kept for ProjectSettings"}),
+          "so is a setting of a section of the game's own");
+    check(reported(jsonl, {"\"kind\":\"setting\"", "\"property\":\"filesystem/import/blender/enabled\"", "kept for ProjectSettings"}),
+          "an editor-only setting says its value is kept too");
+    {
+        // Fabric/project.json holds every setting as Godot's own text, mapped ones included, for ProjectSettings.get_setting at run time.
+        const std::string pj = slurp(project + "/Fabric/project.json");
+        check(pj.find("\"settings\": {") != std::string::npos, "project.json has a settings object");
+        check(pj.find("\"application/config/version\": \"\\\"0.9.1\\\"\"") != std::string::npos, "the version is a Godot string: " + pj);
+        check(pj.find("\"game/difficulty/level\": \"3\"") != std::string::npos, "an int is Godot's int text");
+        check(pj.find("\"game/difficulty/scale\": \"1.5\"") != std::string::npos, "a float is Godot's float text");
+        check(pj.find("\"game/difficulty/tint\": \"Color(1, 0, 0, 1)\"") != std::string::npos, "a colour is Godot's constructor text");
+        check(pj.find("\"game/difficulty/title\": \"\\\"Hard \\\\\\\"mode\\\\\\\"\\\"\"") != std::string::npos, "an escaped string stays escaped twice over (Godot text, then JSON)");
+        check(pj.find("\"application/config/name\": \"\\\"ConverterBugs\\\"\"") != std::string::npos, "a setting that has an Aver key is kept as well");
+        check(pj.find("\"config_version\": \"5\"") != std::string::npos, "the file's top-level key is kept");
+        check(pj.find("\"input/save\"") != std::string::npos && pj.find("\"autoload/System\"") != std::string::npos, "input actions and autoloads are kept");
+    }
 
     // ---- C17: a Radiance picture ----------------------------------------------------------------------------------------------------------
 #if AVER_FABRIC_TEST_OCMAT

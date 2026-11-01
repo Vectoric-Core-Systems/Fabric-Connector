@@ -387,6 +387,8 @@ public partial class SceneTree : GodotObject
     internal static void Reset()
     {
         s_instance = null;
+        Node.EntityGoneProbe = null;
+        ProjectSettings.ResetForTests();
         Node.ResetGroups();
         Gui.ResetForTests();
         ThemeDB.ResetForTests();
@@ -414,17 +416,28 @@ public partial class SceneTree : GodotObject
     // ---- scenes ----
 
     /// <summary>The scene's root node (Godot's current_scene): the one a scene change set, else the first node under the window that
-    /// is not an autoload.</summary>
+    /// is not an autoload. A node the engine destroyed without telling it (the editor's Stop does that to what a session respawned) is
+    /// retired here, so it is never the answer.</summary>
     public Node? CurrentScene
     {
         get
         {
-            if (_currentScene is { IsAlive: true } cs && cs.IsInsideTree()) return cs;
+            if (_currentScene is { IsAlive: true } cs && cs.IsInsideTree() && !cs.EntityGone) return cs;
             foreach (Node n in Root.ChildrenSnapshot())
+            {
+                if (n.EntityGone) { n.ReapGone(); continue; }
                 if (!n.Persistent && n.IsAlive && !n.IsQueuedForDeletion() && n is not SceneTreeDriver) return n;
+            }
             return null;
         }
         set => _currentScene = value;
+    }
+
+    /// <summary>Retires every top-level node whose entity the engine destroyed without running its end edge (see <see cref="Node.EntityGone"/>).</summary>
+    internal void ReapGoneTopLevel()
+    {
+        foreach (Node n in Root.ChildrenSnapshot())
+            if (n.EntityGone) n.ReapGone();
     }
 
     /// <summary>Maps a scene path to the level file the converter wrote for it ("res://levels/a.tscn" to "Maps/levels/a.ocworld").</summary>

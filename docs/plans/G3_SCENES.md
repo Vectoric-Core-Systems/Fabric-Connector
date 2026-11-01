@@ -77,8 +77,8 @@ Output is deterministic: the same input gives the same files byte for byte (test
 | `layer_names/3d_physics/layer_N` | `# FABRIC.LAYER 3d_physics N <name>` comment lines in the .ocproject (it has no key) and `layerNames` in `Fabric/project.json` |
 | `[autoload]` with `*` | persistent top-level placements, first in the **start level** (below). An entry without `*` is reported and not placed, as Godot does not add it to the tree either |
 | first scene's `WorldEnvironment` | (G4 R3) `RENDER.TONEMAP` (3 + Godot's `tonemap_mode`), `RENDER.TONEMAPWHITE`, `RENDER.EXPOSURE` (`tonemap_exposure` x the camera attributes' `exposure_multiplier`, written only off 1), `RENDER.AUTOEXPOSURE` (0 unless CameraAttributesPractical enables it), `RENDER.BLOOM` (glow intensity, 0 without glow), `RENDER.ADJUST*` (display adjustments, written only when `adjustment_enabled`); the tonemap mode is also in `Fabric/project.json` |
-| `application/config/tags`, `debug/gdscript/warnings/*`, `debug/shader_language/warnings/*`, `rendering/textures/vram_compression/*` | editor and import-time settings: nothing a running game does changes; reported approximated, not written |
-| every other setting | reported unsupported, by key |
+| `application/config/tags`, `debug/gdscript/warnings/*`, `debug/shader_language/warnings/*`, `rendering/textures/vram_compression/*` | editor and import-time settings: nothing a running game does changes; reported approximated, no Aver key written (the value is kept in `settings{}` of `Fabric/project.json`) |
+| every other setting | reported approximated, "kept for ProjectSettings": no Aver key, but every setting of `project.godot` is in `settings{}` of `Fabric/project.json` |
 
 ### Input map
 
@@ -204,7 +204,7 @@ One entry per `.gd` and `.cs` file in the project, sorted by path. The script pa
 
 ## `Fabric/project.json`
 
-`name`, `godotName`, `godotVersion`, `usesCSharp`, `renderingMethod`, `startScene`, `startLevel`, `levels[]`, `prefabs[]`, `autoloads[{name,path,singleton}]`, `layerNames{}`, `enabledPlugins[]` and `environment{found, tonemapMode, tonemapExposure, glow, source}`.
+`name`, `godotName`, `godotVersion`, `usesCSharp`, `renderingMethod`, `startScene`, `startLevel`, `levels[]`, `prefabs[]`, `autoloads[{name,path,singleton}]`, `layerNames{}`, `enabledPlugins[]`, `environment{found, tonemapMode, tonemapExposure, glow, source}` and `settings{}`: every `project.godot` setting by its full key (`section/key`; the file's unsectioned keys by name) as a string holding Godot's own text for the value (`"\"0.3.1\""`, `"3"`, `"Color(1, 0, 0, 1)"`). `ProjectSettings.get_setting` parses it on demand, so it answers with Godot's type.
 
 ## The report
 

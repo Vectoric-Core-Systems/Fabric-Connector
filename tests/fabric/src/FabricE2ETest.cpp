@@ -259,8 +259,13 @@ int main() {
     std::set<std::string> unsupported;
     for (const Entry& e : report)
         if (e.rating == "unsupported") unsupported.insert(e.kind + ":" + e.type + ":" + e.node + ":" + e.property);
-    const std::set<std::string> wantUnsupported = {"node:XRFaceModifier3D:Music:","node:Sprite2D:Logo:", "setting:::rendering/renderer/rendering_method"};
-    check(unsupported == wantUnsupported, "exactly the XR node, the 2D sprite and the renderer setting are unsupported (" + std::to_string(unsupported.size()) + " item(s))");
+    // The renderer setting has no Aver key but is kept for ProjectSettings, so it is no longer lost (approximated).
+    const std::set<std::string> wantUnsupported = {"node:XRFaceModifier3D:Music:","node:Sprite2D:Logo:"};
+    check(unsupported == wantUnsupported, "exactly the XR node and the 2D sprite are unsupported (" + std::to_string(unsupported.size()) + " item(s))");
+    check(std::any_of(report.begin(), report.end(), [](const Entry& e) {
+              return e.kind == "setting" && e.property == "rendering/renderer/rendering_method" && e.rating == "approximated";
+          }),
+          "the renderer setting is kept for ProjectSettings (approximated), not dropped");
     if (unsupported != wantUnsupported)
         for (const std::string& u : unsupported) AVER_INFO("        unsupported: {}", u);
     const std::string md = slurp(out1 + "/FabricReport.md");

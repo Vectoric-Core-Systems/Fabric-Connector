@@ -313,7 +313,18 @@ public partial class Node : GodotObject
     // Picks a name no sibling has. Empty names get "@Class@N"; a taken name gets "@name@N" ("name" + N when readable).
     private string UniqueChildName(Node child, string desired, bool readable)
     {
-        bool Taken(string n) => _children.Any(c => c != child && c._name == n);
+        // A sibling of that name whose entity the engine destroyed behind its back is not a sibling any more: it is retired here, so the new node keeps the name.
+        bool Taken(string n)
+        {
+            for (int i = 0; i < _children.Count; i++)
+            {
+                Node c = _children[i];
+                if (c == child || c._name != n) continue;
+                if (c.EntityGone) { c.ReapGone(); _children.Remove(c); i--; continue; }
+                return true;
+            }
+            return false;
+        }
         if (desired.Length > 0 && !Taken(desired)) return desired;
         if (desired.Length == 0)
         {
@@ -427,7 +438,13 @@ public partial class Node : GodotObject
     private Node? FindChildByName(string name)
     {
         EnsureChildren();
-        foreach (Node c in _children) if (c._name == name) return c;
+        for (int i = 0; i < _children.Count; i++)
+        {
+            Node c = _children[i];
+            if (c._name != name) continue;
+            if (c.EntityGone) { c.ReapGone(); _children.Remove(c); i--; continue; }   // destroyed by the engine without a word: not a node to find
+            return c;
+        }
         return null;
     }
 

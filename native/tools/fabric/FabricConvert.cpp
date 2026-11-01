@@ -235,6 +235,18 @@ bool Converter::writeProjectManifest() {
     for (size_t i = 0; i < project_.layerNames.size(); ++i)
         j += std::string(i ? ", " : "") + jsonString(project_.layerNames[i].first) + ": " + jsonString(project_.layerNames[i].second);
     j += "},\n  \"enabledPlugins\": " + jsonList(project_.enabledPlugins);
+    // Every setting of project.godot, as Godot's own text for the value ("section/key": "<variant text>"): ProjectSettings.get_setting reads them at run
+    // time, so a setting with no Aver key still answers with Godot's value and type.
+    j += ",\n  \"settings\": {";
+    bool firstSetting = true;
+    for (const gd::GodotConfigSection& sec : project_.config.sections) {
+        for (const gd::GodotProperty& e : sec.entries) {
+            const std::string key = sec.name.empty() ? e.name : sec.name + "/" + e.name;
+            j += std::string(firstSetting ? "\n    " : ",\n    ") + jsonString(key) + ": " + jsonString(gd::godotVariantToText(e.value));
+            firstSetting = false;
+        }
+    }
+    j += firstSetting ? "}" : "\n  }";
     j += ",\n  \"environment\": {\"found\": " + std::string(projectEnv_.found ? "true" : "false") + ", \"tonemapMode\": " + std::to_string(projectEnv_.tonemapMode) +
          ", \"tonemapExposure\": " + std::to_string(projectEnv_.tonemapExposure) + ", \"glow\": " + (projectEnv_.glow ? "true" : "false") +
          ", \"source\": " + jsonString(projectEnv_.source) + "}";
