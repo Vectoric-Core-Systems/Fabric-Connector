@@ -109,6 +109,7 @@ internal sealed partial class GdEmitter
     {
         _script = s;
         _notes.Clear();
+        _noted2D.Clear();
         _noteTag = 0;
         var body = new CodeWriter();
         _w = body;

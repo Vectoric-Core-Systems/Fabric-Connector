@@ -275,9 +275,30 @@ public partial class MeshInstance3D : GeometryInstance3D
         return base.TryDynamicGet(name, out value);
     }
 
-    public int GetSurfaceOverrideMaterialCount() => 1;
-    public Material? GetSurfaceOverrideMaterial(int surface) => surface == 0 ? MaterialOverride : null;
-    public void SetSurfaceOverrideMaterial(int surface, Material? material) { if (surface == 0) MaterialOverride = material; }
+    // Per-surface overrides. The engine draws a mesh renderer with one material, so surface 0 is the material override (it reaches the entity) and the
+    // overrides of the other surfaces are kept and read back (get_active_material, get_surface_override_material) but not drawn: approximated.
+    private readonly Dictionary<int, Material?> _surfaceOverrides = new();
+
+    /// <summary>The surfaces of the mesh (at least 1: the single slot the engine draws).</summary>
+    public int GetSurfaceOverrideMaterialCount() => Math.Max(1, _mesh?.GetSurfaceCount() ?? 0);
+
+    public Material? GetSurfaceOverrideMaterial(int surface) =>
+        surface == 0 ? MaterialOverride : _surfaceOverrides.TryGetValue(surface, out Material? m) ? m : null;
+
+    public void SetSurfaceOverrideMaterial(int surface, Material? material)
+    {
+        if (surface < 0) return;
+        if (surface == 0) MaterialOverride = material;
+        else if (material == null) _surfaceOverrides.Remove(surface);
+        else _surfaceOverrides[surface] = material;
+    }
+
+    /// <summary>The material a surface is drawn with: the material override, else the surface's override, else the mesh's own material for it (Godot's get_active_material).</summary>
+    public Material? GetActiveMaterial(int surface)
+    {
+        if (surface < 0) return null;
+        return MaterialOverride ?? GetSurfaceOverrideMaterial(surface) ?? _mesh?.SurfaceGetMaterial(surface);
+    }
 
     // "res://meshes/a.ocmesh" and "meshes/a.ocmesh" both name the content asset "meshes/a.ocmesh".
     internal static string AssetPath(string resourcePath) =>

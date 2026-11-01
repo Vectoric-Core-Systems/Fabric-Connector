@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-778 public types and 8384 public members, read from `managed/Aver.Fabric/` (150 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+787 public types and 8458 public members, read from `managed/Aver.Fabric/` (153 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -92,6 +92,39 @@
 `public class AnimatableBody3D : StaticBody3D` - A body moved by script or animation that pushes others (Godot's AnimatableBody3D).
 
 - `public bool SyncToPhysics { get; set; }` - When true the body follows its node through the physics step, so what rests on it is carried.
+
+### AnimatedSprite3D
+
+`public class AnimatedSprite3D : SpriteBase3D` - A sprite in the world that plays a SpriteFrames animation (Godot's AnimatedSprite3D).
+
+- `public event Action SpriteFramesChanged`
+- `public event Action AnimationChanged`
+- `public event Action FrameChanged`
+- `public event Action AnimationLooped`
+- `public event Action AnimationFinished`
+- `public StringName Autoplay { get; set; }`
+- `public SpriteFrames? SpriteFrames { get; set; }`
+- `public StringName Animation { get; set; }` - The animation shown.
+- `public int Frame { get; set; }`
+- `public float FrameProgress { get; set; }` - How far through the current frame, 0 to 1.
+- `public float SpeedScale { get; set; }`
+- `public void SetFrameAndProgress(int frame, float progress)`
+- `public bool IsPlaying()`
+- `public float GetPlayingSpeed()` - The speed in frames a second the animation runs at now: its speed times SpeedScale and the speed given to Play; negative when playing backwards.
+- `public void Play(StringName? name = null, float customSpeed = 1f, bool fromEnd = false)` - Plays an animation (the current one when no name is given).
+- `public void PlayBackwards(StringName? name = null)`
+- `public void Pause()`
+- `public void Stop()` - Stops and returns to the first frame.
+
+### AnimatedSprite3D.SignalName
+
+`public new class SignalName : SpriteBase3D.SignalName`
+
+- `public static readonly StringName SpriteFramesChanged`
+- `public static readonly StringName AnimationChanged`
+- `public static readonly StringName FrameChanged`
+- `public static readonly StringName AnimationLooped`
+- `public static readonly StringName AnimationFinished`
 
 ### Animation
 
@@ -2385,6 +2418,13 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public static string[] GetClassList()` - Every known class, in no particular order.
 - `public static string[] GetInheritersFromClass(StringName @class)` - Every known class that extends class (not including it).
 
+### CollisionObject2D
+
+`public class CollisionObject2D : Node2D` - What a 2D body or area derives from (Godot's CollisionObject2D).
+
+- `public uint CollisionLayer { get; set; }`
+- `public uint CollisionMask { get; set; }`
+
 ### CollisionObject3D
 
 `public class CollisionObject3D : Node3D` - Base of every node that takes part in physics (Godot's CollisionObject3D).
@@ -3193,6 +3233,34 @@ Values: `Free = 0`, `Linear = 1`
 
 - `public float Radius { get; set; }`
 - `public float Height { get; set; }`
+
+### Decal
+
+`public class Decal : VisualInstance3D` - Godot's Decal.
+
+- `public Vector3 Size { get; set; }` - The box in metres: x and z are the extent on the surface, y how far the projection reaches.
+- `public Texture2D? TextureAlbedo { get; set; }`
+- `public Texture2D? TextureNormal { get; set; }`
+- `public Texture2D? TextureOrm { get; set; }`
+- `public Texture2D? TextureEmission { get; set; }`
+- `public float EmissionEnergy { get; set; }`
+- `public Color Modulate { get; set; }` - Multiplies the albedo image (sRGB); its alpha fades the decal.
+- `public float AlbedoMix { get; set; }`
+- `public float NormalFade { get; set; }`
+- `public float UpperFade { get; set; }`
+- `public float LowerFade { get; set; }`
+- `public bool DistanceFadeEnabled { get; set; }`
+- `public float DistanceFadeBegin { get; set; }` - Metres from the camera where the fade starts.
+- `public float DistanceFadeLength { get; set; }` - Metres the fade takes to reach nothing.
+- `public uint CullMask { get; set; }` - The render layers of the surfaces it paints.
+- `public void SetTexture(DecalTexture type, Texture2D? texture)`
+- `public Texture2D? GetTexture(DecalTexture type)`
+
+### Decal.DecalTexture
+
+`public enum DecalTexture`
+
+Values: `Albedo = 0`, `Normal = 1`, `Orm = 2`, `Emission = 3`, `Max = 4`
 
 ### DictionaryExtensions
 
@@ -5450,9 +5518,10 @@ Values: `Points = 0`, `Lines = 1`, `LineStrip = 2`, `Triangles = 3`, `TriangleSt
 - `public Mesh? Mesh { get; set; }`
 - `public void SetBlendShapeValueByName(string name, float value)`
 - `public float GetBlendShapeValueByName(string name)`
-- `public int GetSurfaceOverrideMaterialCount()`
+- `public int GetSurfaceOverrideMaterialCount()` - The surfaces of the mesh (at least 1: the single slot the engine draws).
 - `public Material? GetSurfaceOverrideMaterial(int surface)`
 - `public void SetSurfaceOverrideMaterial(int surface, Material? material)`
+- `public Material? GetActiveMaterial(int surface)` - The material a surface is drawn with: the material override, else the surface's override, else the mesh's own material for it (Godot's get_active_material).
 - `public NodePath SkeletonPath { get; set; }` - The path to the Skeleton3D that poses this mesh (default "..", the node's parent).
 - `public Skin? Skin { get; set; }`
 - `public SkinReference? GetSkinReference()`
@@ -6285,6 +6354,17 @@ Values: `Inherit = 0`, `Pausable = 1`, `WhenPaused = 2`, `Always = 3`, `Disabled
 - `public static readonly StringName ChildOrderChanged`
 - `public static readonly StringName ReplacingBy`
 
+### Node2D
+
+`public class Node2D : CanvasItem` - A node with a 2D transform (Godot's Node2D).
+
+- `public Vector2 Position { get; set; }`
+- `public float Rotation { get; set; }`
+- `public Vector2 Scale { get; set; }`
+- `public int ZIndex { get; set; }`
+- `public Vector2 GlobalPosition { get; set; }` - Same as Position: there is no 2D parent chain to compose with.
+- `public float GlobalRotation { get; set; }`
+
 ### Node3D
 
 `public class Node3D : Node` - A node with a position, rotation and scale in 3D (Godot's Node3D).
@@ -6754,6 +6834,10 @@ Values: `None = 0`, `Pin = 1`, `Cone = 2`, `Hinge = 3`, `Slider = 4`, `Joint6Dof
 - `public Color GroundColor { get; set; }`
 - `public float EnergyMultiplier { get; set; }`
 - `public bool UseDebanding { get; set; }`
+
+### PhysicsBody2D
+
+`public class PhysicsBody2D : CollisionObject2D` - The base of the 2D bodies (Godot's PhysicsBody2D).
 
 ### PhysicsBody3D
 
@@ -8553,9 +8637,39 @@ Values: `Visible = 0`, `Hidden = 1`, `HiddenCollapsed = 2`
 
 Values: `Disabled = 0`, `Discard = 1`, `OpaquePrepass = 2`, `Hash = 3`
 
+### SpriteFrames
+
+`public class SpriteFrames : Resource` - Named animations made of textures with a speed in frames a second and a loop flag (Godot's SpriteFrames).
+
+- `public SpriteFrames()`
+- `public void AddAnimation(StringName anim)`
+- `public bool HasAnimation(StringName anim)`
+- `public void RemoveAnimation(StringName anim)`
+- `public void RenameAnimation(StringName anim, StringName newName)`
+- `public string[] GetAnimationNames()` - The names of the animations, in the order they were added.
+- `public void SetAnimationSpeed(StringName anim, double fps)`
+- `public double GetAnimationSpeed(StringName anim)`
+- `public void SetAnimationLoop(StringName anim, bool loop)`
+- `public bool GetAnimationLoop(StringName anim)`
+- `public int GetFrameCount(StringName anim)`
+- `public void AddFrame(StringName anim, Texture2D? texture, float duration = 1f, int atPosition = -1)` - Adds a frame; duration is relative to the animation's speed (1 is one tick of it).
+- `public void SetFrame(StringName anim, int idx, Texture2D? texture, float duration = 1f)`
+- `public void RemoveFrame(StringName anim, int idx)`
+- `public Texture2D? GetFrameTexture(StringName anim, int idx)`
+- `public float GetFrameDuration(StringName anim, int idx)`
+- `public void Clear(StringName anim)` - Removes every frame of an animation.
+- `public void ClearAll()` - Removes every animation and every frame.
+
 ### StandardMaterial3D
 
 `public class StandardMaterial3D : BaseMaterial3D`
+
+### StaticBody2D
+
+`public class StaticBody2D : PhysicsBody2D` - A body that does not move (Godot's StaticBody2D).
+
+- `public Vector2 ConstantLinearVelocity { get; set; }`
+- `public float ConstantAngularVelocity { get; set; }`
 
 ### StaticBody3D
 

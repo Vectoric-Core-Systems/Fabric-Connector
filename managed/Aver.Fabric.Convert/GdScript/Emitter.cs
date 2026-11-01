@@ -272,8 +272,14 @@ internal sealed partial class GdEmitter
         GdType? script = ResolveScriptPath(t.Parts, from);
         if (script != null) return script;
         string full = string.Join(".", t.Parts);
+        if (s_placeholder2D.Contains(full) && _noted2D.Add(t))
+            Note(t, "type", full, Rating.Unsupported, $"2D is not supported: {full} is an empty placeholder type that lets the script compile; it is not drawn or simulated");
         return Obj(full);
     }
+
+    // The 2D classes Aver.Fabric has as placeholders (Nodes2D.cs): a type hint that names one is reported unsupported.
+    private static readonly HashSet<string> s_placeholder2D = new(StringComparer.Ordinal) { "Node2D", "CollisionObject2D", "PhysicsBody2D", "StaticBody2D" };
+    private readonly HashSet<TypeRef> _noted2D = new();
 
     private GdType Obj(string apiName)
     {
@@ -413,6 +419,10 @@ internal sealed partial class GdEmitter
         if (to.Kind == GK.Struct && from.Kind == GK.Struct && to.Sym != null && from.Sym != null && Api != null && to.Cs != from.Cs && Api.HasConversion(from.Sym, to.Sym))
             return "(" + to.Cs + ")" + Wrap(e, P.Unary);
         if (to.Kind == GK.Bool && from.Kind != GK.Bool) return Truth(e);
+        // A physics object where a RID is wanted (query.exclude = [self]): its RID, as get_rid() gives.
+        if (to.Sym?.Name == "Rid" && from.IsGodotObject && Api != null &&
+            (from.Kind == GK.ScriptClass ? from.Script!.ApiRoot : from.Sym) is { } ridOwner && Api.Lookup(ridOwner, "get_rid") is { Kind: MemberKind.Method })
+            return Wrap(e, P.Primary) + ".GetRid()";
         if (to.Kind == GK.String && from.Kind == GK.NodePath) return e.Code;
         if (to.Kind == GK.StringName && from.Kind == GK.NodePath) return "(string)" + Wrap(e, P.Unary);
         if (to.IsGodotObject && from.IsGodotObject && !to.Accepts(from) && to.Cs != "GodotObject")

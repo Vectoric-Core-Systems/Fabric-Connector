@@ -90,6 +90,15 @@ internal sealed class ApiModel
         return result;
     }
 
+    /// <summary>True when some class below <paramref name="baseType"/> has the member (or its get_ / set_ accessor): GDScript finds it on the object when the code runs,
+    /// even where no single class can be named to cast to (RigidBody3D, PhysicalBone3D and SoftBody3D all have apply_impulse, none is a Node3D).</summary>
+    public bool AnySubclassWithMember(INamedTypeSymbol baseType, string gd)
+    {
+        foreach (INamedTypeSymbol t in TypeIndex().Values)
+            if (!SymbolEqualityComparer.Default.Equals(t, baseType) && t.TypeKind == TypeKind.Class && IsSubclassOf(t, baseType) && HasMemberOrAccessor(t, gd)) return true;
+        return false;
+    }
+
     private static bool IsSubclassOf(INamedTypeSymbol t, INamedTypeSymbol baseType)
     {
         for (INamedTypeSymbol? b = t.BaseType; b != null; b = b.BaseType) if (SymbolEqualityComparer.Default.Equals(b, baseType)) return true;

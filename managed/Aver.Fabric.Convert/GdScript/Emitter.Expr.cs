@@ -366,6 +366,8 @@ internal sealed partial class GdEmitter
                 // Typed as a base class and only a subclass has the member (Viewport.content_scale_size is the Window's): read it through a cast.
                 if (Api != null && tt.Kind == GK.Object && Api.SubclassWithMember(sym, name) is { } owner)
                     return MemberOf(new Ex("(" + owner.ToDisplayString(s_nameFormat) + ")" + Wrap(target, P.Unary), GdType.Obj(owner), P.Unary), name, at, expected);
+                // Neither the declared class nor one subclass has it: a script member or a subclass property is read by name when the code runs.
+                if (MayExistBelow(tt, name)) return DynamicMember(target, name, at);
                 Note(at, "member", name, Rating.Unsupported, $"Aver.Fabric has no member '{name}' on {tt.Cs}");
                 return new Ex(tcode + "." + Naming.Pascal(name), GdType.Variant);
             }
@@ -829,8 +831,13 @@ internal sealed partial class GdEmitter
 
     private static string WrapRight(Ex e, int prec) => e.Prec > prec ? e.Code : "(" + e.Code + ")";
 
-    private static string StringOperand(Ex e, int min = P.Add) =>
-        e.Type.Kind == GK.String ? Wrap(e, min) : e.Type.Kind == GK.NodePath ? "(string)" + Wrap(e, P.Unary) : "(string)" + Wrap(e, P.Unary);
+    // Godot lets every String method run on a StringName or a NodePath: the operand is the string, and a cast that a member access follows is parenthesised.
+    private static string StringOperand(Ex e, int min = P.Add)
+    {
+        if (e.Type.Kind == GK.String) return Wrap(e, min);
+        string cast = "(string)" + Wrap(e, P.Unary);
+        return min > P.Unary ? "(" + cast + ")" : cast;
+    }
 
     private int ScoreArg(GdType from, GdType to)
     {

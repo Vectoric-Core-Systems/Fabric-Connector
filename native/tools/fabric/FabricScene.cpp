@@ -164,6 +164,19 @@ ClassChoice chooseClass(const std::string& t) {
         c.reason = "solved with FABRIK on the script-level skeleton, not with Godot's solver";
         return c;
     }
+    if (t == "Decal") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "drawn as one pooled engine decal (256 at most, the oldest recycled) placed when the node enters the tree and again when it moves or a property changes; the albedo, normal and ORM "
+                   "images, size, modulate, albedo mix and distance fade apply; emission, upper / lower / normal fade and the cull mask are kept and not drawn";
+        return c;
+    }
+    if (t == "AnimatedSprite3D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "the animation, frame, speed and signals run as in Godot; the picture is not drawn (a texture set at run time does not reach the engine's material)";
+        return c;
+    }
     if (t == "OccluderInstance3D") {
         c.fabricClass = t;
         c.rating = Rating::Approximated;

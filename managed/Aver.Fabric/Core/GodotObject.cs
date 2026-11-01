@@ -216,6 +216,8 @@ public abstract partial class GodotObject : AverActor, IDisposable
         if (MemberAccess.TryGet(this, name, out Variant v)) return v;
         if (name.StartsWith("metadata/", StringComparison.Ordinal)) return GetMeta(name["metadata/".Length..]);
         if (TryDynamicGet(name, out Variant dynamicValue)) return dynamicValue;
+        // obj.some_signal on an object whose class the script does not know is the signal itself: obj.some_signal.connect(...).
+        if (HasSignal(name)) return new Signal(this, CanonicalSignal(name));
         return default;
     }
 

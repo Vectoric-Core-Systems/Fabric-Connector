@@ -437,7 +437,10 @@ internal sealed partial class GdEmitter
                     Ex? castAccessor = ApiAccessorCall(owner, cast, name, c.Args, c);
                     if (castAccessor != null) return castAccessor;
                 }
-                // A member the runtime lacks: keep the name, let the compiler say so.
+                // The declared class lacks the method and no single subclass has it: GDScript finds it on the object when the code runs (a script method, or a method of
+                // a subclass such as RigidBody3D.apply_impulse), so the call is by name. Godot only warns here (UNSAFE_METHOD_ACCESS).
+                if (MayExistBelow(tt, name)) return DynamicCall(t, name, c);
+                // A member nothing below has: keep the name, let the compiler say so.
                 string args = string.Join(", ", c.Args.Select(a => VariantFromTyped(Expr(a, null))));
                 Note(c, "call", name, Rating.Unsupported, $"Aver.Fabric has no method '{name}' on {tt.Cs}");
                 return new Ex($"{Wrap(t, P.Primary)}.{Naming.Pascal(name)}({args})", GdType.Variant);
@@ -526,8 +529,9 @@ internal sealed partial class GdEmitter
             case "emit":
             {
                 if (owner.Length == 0) _ctx.UsedInstance = true;
-                // Our own signals have an EmitSignalX helper with the declared parameter types.
-                if (owner.Length == 0 && sr.EmitHelper != null && sr.Script != null && ReferenceEquals(sr.Script, _script) || (owner.Length == 0 && sr.EmitHelper != null))
+                // Our own signals have an EmitSignalX helper with the declared parameter types. Godot lets emit() pass more arguments than the signal declares (the
+                // handler takes them); the helper has no room for them, so that call goes through EmitSignal and delivers all of them.
+                if (owner.Length == 0 && sr.EmitHelper != null && c.Args.Count <= sr.ParamTypes.Count)
                     return new Ex($"{sr.EmitHelper}({ArgsFor(c.Args, sr.ParamTypes)})", GdType.Void);
                 var args = c.Args.Select(a => VariantFromTyped(Expr(a, null))).ToList();
                 return new Ex($"{recv}EmitSignal({sr.NameCode}{(args.Count > 0 ? ", " + string.Join(", ", args) : "")})", Obj("Error"));

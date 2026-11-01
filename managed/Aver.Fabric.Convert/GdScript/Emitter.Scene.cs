@@ -165,6 +165,15 @@ internal sealed partial class GdEmitter
         return best;
     }
 
+    // A member the declared class lacks that something below it has: two or more scripts of the project (so none can be named), or several Aver.Fabric subclasses. GDScript
+    // finds it on the object when the code runs (Godot only warns, UNSAFE_METHOD_ACCESS), so the access is by name. A name nothing below has is a gap and stays an error.
+    private bool MayExistBelow(GdType tt, string name)
+    {
+        if (tt.Kind != GK.Object || !tt.IsGodotObject || tt.Sym == null) return false;
+        if (Api != null && Api.AnySubclassWithMember(tt.Sym, name)) return true;
+        return _m.Scripts.Any(s => s.ApiRoot is { } root && GdType.Derives(root, tt.Sym) && s.Find(name) != null);
+    }
+
     private Ex AsScriptType(Ex target, ScriptInfo s)
     {
         GdType t = GdType.OfScript(s);
@@ -191,6 +200,7 @@ internal sealed partial class GdEmitter
         catch (Exception ex) when (ex is not OutOfMemoryException) { _hints.Clear(); }   // the hints only sharpen types; the real pass reports its own failures
         finally { _observed = null; }
         _notes.Clear();
+        _noted2D.Clear();
         _noteTag = 0;
         _forced.Clear();
         _forceNew.Clear();
