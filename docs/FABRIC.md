@@ -46,7 +46,7 @@ Scripts are converted by `Aver.Fabric.Convert`, a .NET tool in the extension's `
 
 ### From the editor
 
-**File > Import Godot Project...** is a menu item the Fabric Connector adds through its `extension.json` (`importers`): the editor's import dialog is generic and draws whatever the installed extensions list, so the item exists only while the extension is installed ([EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md), "The editor"). The dialog:
+**Import Godot 4 Project...** on the start screen (under **Open Project...**) and **File > Import Godot Project...** once a project is open are a button and a menu item the Fabric Connector adds through its `extension.json` (`importers`, `startButton`): the editor's import dialog is generic and draws whatever the installed extensions list, so the item exists only while the extension is installed ([EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md), "The editor"). The dialog:
 
 1. **Godot project**: browse to the project's `project.godot` (or type the folder).
 2. **Output folder**: filled in as `<project>_Aver` beside the Godot folder; change it if you like.

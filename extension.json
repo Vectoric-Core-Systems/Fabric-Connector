@@ -12,6 +12,7 @@
   "importers": [ {
     "id": "godot-project",
     "menu": "Import Godot Project...",
+    "startButton": "Import Godot 4 Project...",
     "tooltip": "Convert a Godot 4.1+ project (scenes, assets, scripts, GDExtensions) into an Aver project.\nSee docs/FABRIC.md.",
     "description": "Converts a Godot 4.1+ project (3D scenes, assets, scripts and GDExtensions) into a standalone Aver project in <output folder>/<Name>. The Godot project is only read. What did not convert is listed in FabricReport.md.",
     "command": "fabric",
