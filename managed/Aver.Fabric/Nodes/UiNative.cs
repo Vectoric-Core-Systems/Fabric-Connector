@@ -327,6 +327,43 @@ internal static class UiNative
         aver_ui_mesh(m.Xyuv, m.Colors, m.VertexCount, m.Indices, m.Indices.Length, m.Texture);
     }
 
+    // ---- the engine's clipboard (ui_abi.h "the clipboard"): the OS clipboard when the host lent it ----
+    private static bool s_clipEntryMissing;
+
+    internal static bool ClipboardAvailable
+    {
+        get
+        {
+            if (!Available || s_clipEntryMissing) return false;
+            try { return aver_ui_clipboard_available() == 1; }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_clipEntryMissing = true; return false; }
+        }
+    }
+
+    /// <summary>The clipboard's text; false when it has none.</summary>
+    internal static bool ClipboardGet(out string text)
+    {
+        text = "";
+        try
+        {
+            int n = aver_ui_clipboard_get(null, 0);
+            if (n < 0) return false;
+            if (n == 0) return true;
+            var buf = new byte[n + 1];
+            int got = aver_ui_clipboard_get(buf, buf.Length);
+            if (got < 0) return false;
+            text = System.Text.Encoding.UTF8.GetString(buf, 0, Math.Min(got, n));
+            return true;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_clipEntryMissing = true; return false; }
+    }
+
+    internal static bool ClipboardSet(string text)
+    {
+        try { return aver_ui_clipboard_set(text) == 1; }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_clipEntryMissing = true; return false; }
+    }
+
     // ---- the engine's world text (ui_abi.h "text in the world") ----
     private static int s_text3dProbe;
 
@@ -421,6 +458,10 @@ internal static class UiNative
     internal static extern int aver_text3d_measure([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_text3d_configure(int sdf, int sdfPx, int sdfSpread, int pageSize, int maxPages);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_text3d_stats(float[] out8);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_clipboard_available();
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_clipboard_get(byte[]? @out, int cap);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_clipboard_set([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_clipboard_host(IntPtr get, IntPtr set);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_available();
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern ulong aver_ui_image_acquire([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8Path);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_image_release(ulong id);

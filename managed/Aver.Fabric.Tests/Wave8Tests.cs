@@ -38,6 +38,7 @@ static class Wave8Tests
             T.Run("wave 8: CanvasLayer and z_index order the drawing (F59)", DrawOrder);
             T.Run("wave 8: a rotated control is drawn through the engine's transform (P40)", Rotation);
             T.Run("wave 8: the world text ABI takes a label (E6)", WorldTextAbi);
+            T.Run("wave 8: copy and paste go through the host's clipboard (E16)", ClipboardSeam);
         }
         else Console.WriteLine("Test: wave 8 draw order, rotation, world text (native part SKIP: Aver.UI.Abi was not found, or predates wave 8a; build the Aver.UI.Abi target and delete the old copy)");
     });
@@ -775,6 +776,63 @@ static class Wave8Tests
         Gui.DrawAll();
         T.Check("a quarter turn about the centre is still a transform (the engine takes it exactly)", UiNative.TransformPushes - before == 2);
         T.Check("IsAxisAligned: identity, a scale, a flip are; a turn is not", Gui.IsAxisAligned(Transform2D.Identity) && Gui.IsAxisAligned(new Transform2D(0f, new Vector2(3, -2), 0f, Vector2.Zero)) && !Gui.IsAxisAligned(new Transform2D(0.3f, Vector2.Zero)));
+    }
+
+    // ---- E16 (native) ----
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate int ClipGetFn(IntPtr @out, int cap);
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate int ClipSetFn([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)] string utf8);
+
+    private static string s_osClipboard = "";
+    private static ClipGetFn? s_clipGet;
+    private static ClipSetFn? s_clipSet;
+
+    private static void ClipboardSeam()
+    {
+        T.Reset();
+        s_osClipboard = "";
+        T.Check("with no host the controls share a buffer, as before", !UiNative.ClipboardAvailable);
+        UiClipboard.Text = "buffered";
+        T.Check("(copy then paste)", UiClipboard.Text == "buffered");
+
+        s_clipGet = (@out, cap) =>
+        {
+            if (s_osClipboard.Length == 0) return -1;
+            byte[] b = System.Text.Encoding.UTF8.GetBytes(s_osClipboard);
+            if (@out != IntPtr.Zero && cap > 0)
+            {
+                int n = Math.Min(b.Length, cap - 1);
+                System.Runtime.InteropServices.Marshal.Copy(b, 0, @out, n);
+                System.Runtime.InteropServices.Marshal.WriteByte(@out, n, 0);
+            }
+            return b.Length;
+        };
+        s_clipSet = utf8 => { s_osClipboard = utf8; return 1; };
+        UiNative.aver_ui_set_clipboard_host(System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(s_clipGet), System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(s_clipSet));
+        try
+        {
+            T.Check("a host's clipboard is seen", UiNative.ClipboardAvailable);
+            UiClipboard.Text = "copied: é中";
+            T.Check("copy reaches it, UTF-8 and all", s_osClipboard == "copied: é中");
+            s_osClipboard = "from another program";
+            T.Check("paste reads what another program put there", UiClipboard.Text == "from another program");
+            s_osClipboard = "";
+            T.Check("with nothing there the controls' own buffer answers", UiClipboard.Text == "copied: é中");
+
+            var edit = new LineEdit { Text = "hello world" };
+            SceneTree.Instance.Root.AddChild(edit);
+            edit.SelectAll();
+            edit.Copy();
+            T.Check("a LineEdit's copy puts its selection on the OS clipboard", s_osClipboard == "hello world");
+            s_osClipboard = "pasted";
+            edit.SelectAll();
+            edit.Paste();
+            T.Check("and its paste takes the OS clipboard's text", edit.Text == "pasted");
+        }
+        finally { UiNative.aver_ui_set_clipboard_host(IntPtr.Zero, IntPtr.Zero); }
+        T.Check("clearing the host returns to the buffer", !UiNative.ClipboardAvailable);
     }
 
     // ---- E6 (native) ----

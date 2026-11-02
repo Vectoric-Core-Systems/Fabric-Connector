@@ -218,6 +218,17 @@ if(TARGET Aver.Formats.Particles)
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 endif()
 
+# FabricWave8Test -- wave 8a of the Godot parity plan (text and UI): the converter on tests/fabric/data/Wave8Game (a Label3D's ratings, a WOFF font converted, a WOFF2 font unsupported).
+# Runs the tool as a process, like FabricWave6Test.
+add_executable(FabricWave8Test src/FabricWave8Test.cpp)
+target_link_libraries(FabricWave8Test PRIVATE Aver.Platform Aver.Core)
+fabric_needs_converter(FabricWave8Test)
+target_compile_definitions(FabricWave8Test PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricWave8Test PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricGeometryTest -- G4 R7 (ArrayMesh, MultiMesh, trail meshes, CSG, Sprite3D, Label3D, GridMap) through the converter on tests/fabric/data/GeomGame.
 # Runs the tool as a process, like FabricConvertTest.
 add_executable(FabricGeometryTest src/FabricGeometryTest.cpp)

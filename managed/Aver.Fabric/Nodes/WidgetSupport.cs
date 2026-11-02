@@ -64,10 +64,26 @@ public class Shortcut : Resource
     }
 }
 
-/// <summary>The text the editing controls copy and paste. The engine host has no clipboard seam yet, so it is a buffer shared by the controls of this process.</summary>
+/// <summary>The text the editing controls copy and paste. When the engine's host lends the operating system's clipboard (ui_abi.h "the clipboard", E16) this is that
+/// clipboard, so text moves between the game and other programs; without one (a headless run, a host from before wave 8a) it is a buffer shared by the controls of
+/// this process, as it was.</summary>
 internal static class UiClipboard
 {
-    internal static string Text = "";
+    private static string s_buffer = "";
+
+    internal static string Text
+    {
+        get
+        {
+            if (UiNative.ClipboardAvailable && UiNative.ClipboardGet(out string os)) return os;
+            return s_buffer;
+        }
+        set
+        {
+            s_buffer = value ?? "";
+            if (UiNative.ClipboardAvailable) UiNative.ClipboardSet(s_buffer);
+        }
+    }
 }
 
 public partial class Control
