@@ -675,6 +675,12 @@ static class ConverterGapTests
         T.Check("the clipboard round-trips", DisplayServer.ClipboardGet() == "copied" && DisplayServer.ClipboardHas());
         T.Check("Array and packed arrays convert element by element",
             PackedArrays.FromArray<string>(new Aver.Fabric.Collections.Array { "a", "b" }).SequenceEqual(new[] { "a", "b" }) && PackedArrays.ToArray(new[] { 1L, 2L }).Count == 2);
+        // A game's saved bindings name Godot's .macos variants (COGITO's defaults were taken from InputMap.get_actions()).
+        InputMap.ActionAddEvent("ui_text_caret_line_end.macos", new InputEventKey { Keycode = Key.F9 });
+        T.Check("Godot's .macos built-in actions exist on every platform, as in Godot",
+            InputMap.HasAction("ui_text_caret_line_end.macos") && InputMap.GetActions().Contains("ui_text_select_word_under_caret.macos") &&
+            InputMap.ActionGetEvents("ui_text_caret_line_end.macos").Count == 4);
+        InputMap.LoadFromProjectSettings();
         ClassValue cls = GDScript.ClassObject(typeof(Node3D));
         Variant made = cls.New();
         T.Check("a class used as a value is one object, and new() builds an instance", ReferenceEquals(cls, GDScript.ClassObject(typeof(Node3D))) && made.AsGodotObject() is Node3D);

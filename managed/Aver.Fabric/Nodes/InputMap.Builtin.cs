@@ -12,8 +12,9 @@ public static partial class InputMap
     private static readonly HashSet<string> s_erasedBuiltins = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, InputEvent[]> s_builtinCache = new(StringComparer.Ordinal);
 
-    // Key names are Aver.Fabric's Key members; "Joy:" a JoyButton, "Axis:" a JoyAxis with the direction after it. "Ctrl+Shift+Z" has modifiers. The mac variants of Godot's
-    // text-editing shortcuts are not listed. Actions with no default event on a PC are listed with an empty spec.
+    // Key names are Aver.Fabric's Key members; "Joy:" a JoyButton, "Axis:" a JoyAxis with the direction after it. "Ctrl+Shift+Z" has modifiers. Actions with no default
+    // event on a PC are listed with an empty spec. The ".macos" text-editing variants are actions on every platform in Godot too (InputMap.get_actions lists them,
+    // and a game's saved bindings name them), with the events Godot gives them on a PC.
     private static readonly Dictionary<string, string> Builtins = new(StringComparer.Ordinal)
     {
         ["ui_accept"] = "Enter|KpEnter|Space|Joy:A",
@@ -78,6 +79,21 @@ public static partial class InputMap
         ["ui_filedialog_refresh"] = "F5",
         ["ui_filedialog_show_hidden"] = "H",
         ["ui_swap_input_direction"] = "",
+        ["ui_text_backspace_all_to_left.macos"] = "Ctrl+Backspace",
+        ["ui_text_backspace_word.macos"] = "Alt+Backspace",
+        ["ui_text_caret_add_above.macos"] = "Ctrl+Shift+O",
+        ["ui_text_caret_add_below.macos"] = "Ctrl+Shift+L",
+        ["ui_text_caret_document_end.macos"] = "Ctrl+Down|Ctrl+End",
+        ["ui_text_caret_document_start.macos"] = "Ctrl+Up|Ctrl+Home",
+        ["ui_text_caret_line_end.macos"] = "Ctrl+E|Ctrl+Right|End",
+        ["ui_text_caret_line_start.macos"] = "Ctrl+A|Ctrl+Left|Home",
+        ["ui_text_caret_word_left.macos"] = "Alt+Left",
+        ["ui_text_caret_word_right.macos"] = "Alt+Right",
+        ["ui_text_delete_all_to_right.macos"] = "Ctrl+Delete",
+        ["ui_text_delete_word.macos"] = "Alt+Delete",
+        ["ui_text_scroll_down.macos"] = "Ctrl+Alt+Down",
+        ["ui_text_scroll_up.macos"] = "Ctrl+Alt+Up",
+        ["ui_text_select_word_under_caret.macos"] = "Ctrl+Meta+G",
     };
 
     /// <summary>The names of Godot's built-in actions.</summary>
@@ -124,6 +140,7 @@ public static partial class InputMap
                 case "Ctrl": e.CtrlPressed = true; break;
                 case "Shift": e.ShiftPressed = true; break;
                 case "Alt": e.AltPressed = true; break;
+                case "Meta": e.MetaPressed = true; break;
             }
         }
         return e;
