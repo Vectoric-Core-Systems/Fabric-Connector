@@ -107,7 +107,20 @@ public class TextEdit : Control
     public bool MinimapDraw { get; set; }
     public bool IndentUseSpaces { get; set; }
     public int IndentSize { get; set; } = 4;
-    public Resource? SyntaxHighlighter { get; set; }
+    private SyntaxHighlighter? _highlighter;
+
+    /// <summary>Colours runs of the lines as they are drawn (F50). A highlighter belongs to one editor.</summary>
+    public SyntaxHighlighter? SyntaxHighlighter
+    {
+        get => _highlighter;
+        set
+        {
+            if (_highlighter != null) _highlighter.Owner = null;
+            _highlighter = value;
+            if (_highlighter != null) _highlighter.Owner = this;
+            QueueRedraw();
+        }
+    }
     public string Language { get; set; } = "";
     public new TextServer.Direction TextDirection { get; set; } = TextServer.Direction.Inherited;
 
@@ -642,6 +655,20 @@ public class TextEdit : Control
 
     // ---- drawing ----
 
+    // One visual line of a line, drawn in the highlighter's colour runs: each run is a separate string placed after the width of the text before it.
+    private void DrawHighlighted(int line, string s, int start, int len, float x0, float y, Font? font, int px, Color color, CanvasItem.TextFx fx)
+    {
+        List<(int Start, Color? Color)> runs = _highlighter!.Runs(line, s);
+        int end = start + len;
+        for (int i = 0; i < runs.Count; i++)
+        {
+            int a = Math.Max(runs[i].Start, start), b = Math.Min(i + 1 < runs.Count ? runs[i + 1].Start : s.Length, end);
+            if (b <= a) continue;
+            float x = x0 + UiText.Width(font, px, s.Substring(start, a - start));
+            DrawTextLine(new Vector2(x, y), s.Substring(a, b - a), font, px, runs[i].Color ?? color, fx);
+        }
+    }
+
     public override void _Draw()
     {
         StyleBox style = GetThemeStylebox(_editable ? "normal" : "read_only");
@@ -680,7 +707,8 @@ public class TextEdit : Control
                         DrawRect(new Rect2(xa, y, xb - xa, pitch), GetThemeColor("selection_color"));
                     }
                 }
-                if (len > 0) DrawTextLine(new Vector2(x0, y), s.Substring(start, len), font, px, color, fx);
+                if (len > 0 && _highlighter != null) DrawHighlighted(l, s, start, len, x0, y, font, px, color, fx);
+                else if (len > 0) DrawTextLine(new Vector2(x0, y), s.Substring(start, len), font, px, color, fx);
             }
         }
         if (HasFocus() && _editable)

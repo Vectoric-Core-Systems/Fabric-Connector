@@ -333,7 +333,7 @@ int main() {
         check(has("\"node\":\"Csg/Base\"", "\"rating\":\"converted\"", "folded"), "CSG children are reported as folded");
         check(has("\"node\":\"Road\"", "\"property\":\"path_node\"", "\"rating\":\"converted\""), "a polygon swept along its path reports the path properties converted");
         check(has("\"node\":\"Csg\"", "\"property\":\"use_collision\"", "_CSGCollision"), "use_collision is explained");
-        check(has("\"node\":\"Label\"", "\"property\":\"text\"", "\"rating\":\"unsupported\""), "Label3D text is unsupported (not drawn)");
+        check(has("\"node\":\"Label\"", "\"property\":\"text\"", "\"rating\":\"converted\""), "Label3D text is converted (the engine's world text draws it, wave 8a)");
         check(has("\"node\":\"Grid\"", "\"rating\":\"approximated\"", "converted once") || has("\"node\":\"Grid\"", "\"rating\":\"approximated\"", "built once at convert time"), "the GridMap node is approximated (static)");
         check(has("\"node\":\"Grid\"", "\"property\":\"mesh_library\"", "\"rating\":\"converted\""), "mesh_library is converted");
         check(has("\"node\":\"Sprite\"", "\"property\":\"billboard\"", "\"rating\":\"converted\""), "Sprite3D billboard is converted");

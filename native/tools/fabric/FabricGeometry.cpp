@@ -568,13 +568,26 @@ void Converter::geometryNode(FNode& fn, std::vector<std::pair<std::string, Var>>
 
     if (t == "Label3D") {
         cc.rating = Rating::Approximated;
-        cc.reason = "placed as a Label3D with Godot's properties; the engine has no world-space text renderer, so the text is NOT drawn (use a Control label on screen)";
+        cc.reason = "placed as a Label3D, which draws its text in the world every frame through the engine's world text (wave 8a): glyph quads in a plane, plain raster, in the transparent pass. "
+                    "Not drawn in ray-driven mode, and never looked at on a GPU";
         for (const Prop& p : fn.props) {
-            if (p.key == "text") rate(p.key, Rating::Unsupported, "kept as the label's text; nothing is drawn for it in the world");
-            else if (p.key == "pixel_size" || p.key == "billboard" || p.key == "modulate" || p.key == "outline_modulate" || p.key == "double_sided" || p.key == "alpha_cut" || p.key == "font" || p.key == "font_size" ||
-                     p.key == "outline_size" || p.key == "horizontal_alignment" || p.key == "vertical_alignment" || p.key == "width" || p.key == "autowrap_mode" || p.key == "shaded" || p.key == "fixed_size" ||
-                     p.key == "no_depth_test" || p.key == "render_priority" || p.key == "outline_render_priority" || p.key == "line_spacing" || p.key == "uppercase" || p.key == "texture_filter")
-                rate(p.key, Rating::Unsupported, "kept on the node; it only matters when the text is drawn");
+            if (p.key == "text" || p.key == "pixel_size" || p.key == "modulate" || p.key == "outline_modulate" || p.key == "font" || p.key == "font_size" || p.key == "outline_size" ||
+                p.key == "horizontal_alignment" || p.key == "vertical_alignment" || p.key == "width" || p.key == "line_spacing" || p.key == "uppercase" || p.key == "offset" || p.key == "no_depth_test" ||
+                p.key == "double_sided")
+                rate(p.key, Rating::Converted, "drawn by the engine's world text");
+            else if (p.key == "billboard")
+                rate(p.key, Rating::Approximated, "enabled and fixed-Y billboards turn the text plane to the camera; the particles mode draws as enabled");
+            else if (p.key == "autowrap_mode")
+                rate(p.key, Rating::Approximated, "every wrapping mode wraps at words (the engine has no arbitrary or smart break)");
+            else if (p.key == "fixed_size")
+                rate(p.key, Rating::Approximated, "the label keeps its screen size; Godot's scale (half the viewport height per plane unit) is inferred from its shader, so the size wants a look by eye");
+            else if (p.key == "shaded")
+                rate(p.key, Rating::Approximated, "the label is drawn unlit; a lit label is not lit");
+            else if (p.key == "alpha_cut")
+                rate(p.key, Rating::Approximated, "discard drops pixels under alpha_scissor_threshold; opaque prepass and hash draw as ordinary blended text");
+            else if (p.key == "render_priority" || p.key == "outline_render_priority" || p.key == "texture_filter" || p.key == "alpha_hash_scale" || p.key == "language" || p.key == "text_direction" ||
+                     p.key == "structured_text_bidi_override")
+                rate(p.key, Rating::Unsupported, "kept on the node; the world text sorts labels back to front and samples glyphs linearly");
         }
         return;
     }

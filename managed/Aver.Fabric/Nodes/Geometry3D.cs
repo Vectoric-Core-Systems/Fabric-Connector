@@ -668,38 +668,4 @@ public class Sprite3D : SpriteBase3D
     }
 }
 
-/// <summary>Text in the world (Godot's Label3D). The engine has no world-space text renderer yet: the properties and the text are kept, and nothing is drawn. Show text
-/// with a UI label instead.</summary>
-public class Label3D : GeometryInstance3D
-{
-    public string Text { get; set; } = "";
-    /// <summary>The font; null draws with the project's default. Kept for measuring (<see cref="Font.GetStringSize"/>): nothing is drawn here.</summary>
-    public Font? Font { get; set; }
-    public int FontSize { get; set; } = 32;
-    public int OutlineSize { get; set; } = 12;
-    public float PixelSize { get; set; } = 0.005f;
-    public Vector2 Offset { get; set; }
-    public Color Modulate { get; set; } = new(1, 1, 1, 1);
-    public Color OutlineModulate { get; set; } = new(0, 0, 0, 1);
-    public HorizontalAlignment HorizontalAlignment { get; set; } = HorizontalAlignment.Center;
-    public VerticalAlignment VerticalAlignment { get; set; } = VerticalAlignment.Center;
-    public float LineSpacing { get; set; }
-    public int AutowrapMode { get; set; }
-    public float Width { get; set; } = 500f;
-    public bool Uppercase { get; set; }
-    public BaseMaterial3D.BillboardModeEnum Billboard { get; set; }
-    public bool Shaded { get; set; }
-    public bool DoubleSided { get; set; } = true;
-    public bool NoDepthTest { get; set; }
-    public bool FixedSize { get; set; }
-    public int AlphaCut { get; set; }
-    public float AlphaScissorThreshold { get; set; } = 0.5f;
-    public float AlphaHashScale { get; set; } = 1f;
-    public int TextureFilter { get; set; } = 3;
-    public int RenderPriority { get; set; }
-    public int OutlineRenderPriority { get; set; } = -1;
-    public string Language { get; set; } = "";
-
-    /// <summary>Always false: this runtime does not draw world-space text.</summary>
-    public bool IsDrawn => false;
-}
+// Label3D is in Label3D.cs: it draws, through the engine's world text (wave 8a, E6).

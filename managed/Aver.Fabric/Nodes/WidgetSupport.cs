@@ -18,6 +18,9 @@ public static class TextServer
     [Flags]
     public enum JustificationFlag { None = 0, Kashida = 1, WordBound = 2, TrimEdgeSpaces = 4, AfterLastTab = 8, ConstrainEllipsis = 16, SkipLastLine = 32, SkipLastLineWithVisibleChars = 64, DoNotSkipSingleLine = 128 }
 
+    [Flags]
+    public enum LineBreakFlag { None = 0, Mandatory = 1, WordBound = 2, Grapheme = 4, Adaptive = 8, TrimEdgeSpaces = 16 }
+
     public enum Direction { Auto = 0, Ltr = 1, Rtl = 2, Inherited = 3 }
 
     public enum Orientation { Horizontal = 0, Vertical = 1 }

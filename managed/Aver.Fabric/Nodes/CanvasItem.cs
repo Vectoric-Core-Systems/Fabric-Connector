@@ -43,9 +43,17 @@ public class CanvasItem : Node
     /// <summary>One recorded draw: a rectangle, a style box, a string or a texture, in the item's own space.</summary>
     internal readonly struct DrawCommand
     {
-        public enum Kind { Rect, StyleBox, Text, Texture, PushClip, PopClip }
+        public enum Kind { Rect, StyleBox, Text, Texture, PushClip, PopClip, Mesh, SetTransform }
 
         public Kind Type { get; init; }
+        /// <summary>Mesh: the triangles, in the item's space.</summary>
+        public CanvasMesh? Triangles { get; init; }
+        /// <summary>SetTransform: what draw_set_transform set; the commands after it are drawn through it.</summary>
+        public Transform2D Xform { get; init; }
+        /// <summary>Texture: the source repeats (a tiled draw), so its rectangle is sampled with the repeat address.</summary>
+        public bool Tile { get; init; }
+        /// <summary>Text: the font's spacing block (line multiplier, glyph, space, line pixels), null for none.</summary>
+        public float[]? Spacing { get; init; }
         public Rect2 Rect { get; init; }
         public Color Color { get; init; }
         public UiStyleBoxStruct Box { get; init; }
@@ -85,7 +93,53 @@ public class CanvasItem : Node
     public Color Modulate { get; set; } = new(1, 1, 1, 1);
     public Color SelfModulate { get; set; } = new(1, 1, 1, 1);
     public int ZIndex { get; set; }
+    /// <summary>Whether <see cref="ZIndex"/> is added to the parent's (Godot's z_as_relative, on by default).</summary>
+    public bool ZAsRelative { get; set; } = true;
     public bool TopLevel { get; set; }
+
+    public enum TextureFilterEnum { ParentNode = 0, Nearest = 1, Linear = 2, NearestWithMipmaps = 3, LinearWithMipmaps = 4, NearestWithMipmapsAnisotropic = 5, LinearWithMipmapsAnisotropic = 6, Max = 7 }
+
+    public enum TextureRepeatEnum { ParentNode = 0, Disabled = 1, Enabled = 2, Mirror = 3, Max = 4 }
+
+    public enum ClipChildrenMode { Disabled = 0, Only = 1, AndDraw = 2, Max = 3 }
+
+    /// <summary>How this item's textures are filtered; <see cref="TextureFilterEnum.ParentNode"/> takes the parent's, and the top takes the project's default (linear).
+    /// Mipmaps are not drawn with: the engine samples the base level, so the mipmapped modes are the plain ones.</summary>
+    public TextureFilterEnum TextureFilter { get; set; }
+    public TextureRepeatEnum TextureRepeat { get; set; }
+    /// <summary>Godot's clip_children. The engine clips children to a rectangle, not to the alpha of what the item draws, so both modes clip to the item's rectangle
+    /// (a control's size) and Only does not hide the item's own drawing.</summary>
+    public ClipChildrenMode ClipChildren { get; set; }
+    /// <summary>A <see cref="CanvasItemMaterial"/> sets the blend mode of what the item draws; any other material is kept and changes nothing.</summary>
+    public Material? Material { get; set; }
+    public bool UseParentMaterial { get; set; }
+
+    /// <summary>The filter this item draws with: its own, else its parents', else linear.</summary>
+    internal UiFilterId ResolvedFilter()
+    {
+        for (Node? n = this; n is CanvasItem ci; n = n.GetParent())
+            if (ci.TextureFilter != TextureFilterEnum.ParentNode) return ci.TextureFilter is TextureFilterEnum.Nearest or TextureFilterEnum.NearestWithMipmaps or TextureFilterEnum.NearestWithMipmapsAnisotropic ? UiFilterId.Nearest : UiFilterId.Linear;
+        return UiFilterId.Linear;
+    }
+
+    /// <summary>The address mode this item draws with: its own, else its parents', else clamped.</summary>
+    internal UiAddressId ResolvedAddress()
+    {
+        for (Node? n = this; n is CanvasItem ci; n = n.GetParent())
+            if (ci.TextureRepeat != TextureRepeatEnum.ParentNode) return ci.TextureRepeat == TextureRepeatEnum.Enabled ? UiAddressId.Repeat : ci.TextureRepeat == TextureRepeatEnum.Mirror ? UiAddressId.Mirror : UiAddressId.Clamp;
+        return UiAddressId.Clamp;
+    }
+
+    /// <summary>The blend this item draws with: its material's, else (when it uses its parent's) the parent's, else the ordinary blend.</summary>
+    internal UiBlendId ResolvedBlend()
+    {
+        for (Node? n = this; n is CanvasItem ci; n = n.GetParent())
+        {
+            if (ci.Material is CanvasItemMaterial m) return m.ToEngineBlend();
+            if (!ci.UseParentMaterial) break;
+        }
+        return UiBlendId.Mix;
+    }
 
     public void Show() => Visible = true;
     public void Hide() => Visible = false;
@@ -197,7 +251,7 @@ public class CanvasItem : Node
         Commands.Add(new DrawCommand
         {
             Type = DrawCommand.Kind.Text, Rect = box, Color = onlyOutline ? new Color(color.R, color.G, color.B, 0f) : color, Text = text, FontSize = px,
-            Family = font?.Family ?? "", Align = align, Width = box.Size.X, Flags = font?.StyleFlags ?? 0, Fx = fx,
+            Family = font?.Family ?? "", Align = align, Width = box.Size.X, Flags = font?.StyleFlags ?? 0, Fx = fx, Spacing = font?.SpacingBlock,
         });
     }
 
@@ -223,7 +277,7 @@ public class CanvasItem : Node
         Vector2 ts = texture.GetSize();
         var uv = new Rect2(0, 0, 1, 1);
         if (tile && ts.X > 0 && ts.Y > 0) uv = new Rect2(0, 0, rect.Size.X / ts.X, rect.Size.Y / ts.Y);
-        Commands.Add(new DrawCommand { Type = DrawCommand.Kind.Texture, Rect = rect, Color = modulate ?? new Color(1, 1, 1, 1), Handle = texture.EngineHandle, Uv = uv });
+        Commands.Add(new DrawCommand { Type = DrawCommand.Kind.Texture, Rect = rect, Color = modulate ?? new Color(1, 1, 1, 1), Handle = texture.EngineHandle, Uv = uv, Tile = tile });
     }
 
     /// <summary>Draws a part of a texture (<paramref name="srcRect"/>, in texels) into a rectangle (Godot's draw_texture_rect_region).</summary>
@@ -235,13 +289,87 @@ public class CanvasItem : Node
         Commands.Add(new DrawCommand { Type = DrawCommand.Kind.Texture, Rect = rect, Color = modulate ?? new Color(1, 1, 1, 1), Handle = texture.EngineHandle, Uv = uv });
     }
 
-    /// <summary>A line. Only horizontal and vertical lines are drawn (as rectangles); the UI draw list has no thick diagonal line.</summary>
+    /// <summary>A line. Horizontal and vertical lines are rectangles (as they always were); any other is a quad of the width (wave 8a), so a diagonal line draws.</summary>
     public void DrawLine(Vector2 from, Vector2 to, Color color, float width = -1f, bool antialiased = false)
     {
         if (!CanDraw(nameof(DrawLine))) return;
         float t = Math.Max(1f, width);
         if (MathF.Abs(from.Y - to.Y) < 0.01f) Commands.Add(new DrawCommand { Type = DrawCommand.Kind.Rect, Rect = new Rect2(MathF.Min(from.X, to.X), from.Y - t / 2f, MathF.Abs(to.X - from.X), t), Color = color });
         else if (MathF.Abs(from.X - to.X) < 0.01f) Commands.Add(new DrawCommand { Type = DrawCommand.Kind.Rect, Rect = new Rect2(from.X - t / 2f, MathF.Min(from.Y, to.Y), t, MathF.Abs(to.Y - from.Y)), Color = color });
+        else AddMesh(CanvasTess.Line(from, to, color, t));
+    }
+
+    private void AddMesh(CanvasMesh? m)
+    {
+        if (m != null) Commands.Add(new DrawCommand { Type = DrawCommand.Kind.Mesh, Triangles = m });
+    }
+
+    /// <summary>Sets a transform every command recorded after it is drawn through, until the next call (Godot's draw_set_transform: a position, a rotation in radians and a scale).</summary>
+    public void DrawSetTransform(Vector2 position, float rotation = 0f, Vector2? scale = null)
+        => DrawSetTransformMatrix(new Transform2D(rotation, scale ?? Vector2.One, 0f, position));
+
+    public void DrawSetTransformMatrix(Transform2D xform)
+    {
+        if (CanDraw(nameof(DrawSetTransformMatrix))) Commands.Add(new DrawCommand { Type = DrawCommand.Kind.SetTransform, Xform = xform });
+    }
+
+    /// <summary>A polyline of the width (Godot's draw_polyline); a width below zero is one pixel.</summary>
+    public void DrawPolyline(Vector2[] points, Color color, float width = -1f, bool antialiased = false)
+    {
+        if (CanDraw(nameof(DrawPolyline))) AddMesh(CanvasTess.Polyline(points, new[] { color }, width));
+    }
+
+    /// <summary>A polyline with a colour per point.</summary>
+    public void DrawPolylineColors(Vector2[] points, Color[] colors, float width = -1f, bool antialiased = false)
+    {
+        if (CanDraw(nameof(DrawPolylineColors))) AddMesh(CanvasTess.Polyline(points, colors, width));
+    }
+
+    public void DrawMultiline(Vector2[] points, Color color, float width = -1f, bool antialiased = false)
+    {
+        if (CanDraw(nameof(DrawMultiline))) AddMesh(CanvasTess.Multiline(points, new[] { color }, width, false));
+    }
+
+    public void DrawMultilineColors(Vector2[] points, Color[] colors, float width = -1f, bool antialiased = false)
+    {
+        if (CanDraw(nameof(DrawMultilineColors))) AddMesh(CanvasTess.Multiline(points, colors, width, true));
+    }
+
+    /// <summary>An arc of <paramref name="pointCount"/> points (radians, 0 along +x), as a polyline.</summary>
+    public void DrawArc(Vector2 center, float radius, float startAngle, float endAngle, int pointCount, Color color, float width = -1f, bool antialiased = false)
+    {
+        if (CanDraw(nameof(DrawArc))) AddMesh(CanvasTess.Polyline(CanvasTess.ArcPoints(center, radius, startAngle, endAngle, pointCount), new[] { color }, width));
+    }
+
+    /// <summary>A circle: filled, or (Godot 4.3) a ring of the width.</summary>
+    public void DrawCircle(Vector2 position, float radius, Color color, bool filled = true, float width = -1f, bool antialiased = false)
+    {
+        if (!CanDraw(nameof(DrawCircle))) return;
+        if (filled) AddMesh(CanvasTess.Circle(position, radius, color));
+        else AddMesh(CanvasTess.Polyline(CanvasTess.ArcPoints(position, radius, 0f, MathF.Tau, CanvasTess.CirclePoints(radius) + 1), new[] { color }, width));
+    }
+
+    /// <summary>A filled polygon with a colour per point (or one colour) and optional texture coordinates (Godot's draw_polygon).</summary>
+    public void DrawPolygon(Vector2[] points, Color[] colors, Vector2[]? uvs = null, Texture2D? texture = null)
+    {
+        if (CanDraw(nameof(DrawPolygon))) AddMesh(CanvasTess.Polygon(points, colors, uvs, texture?.EngineHandle ?? 0));
+    }
+
+    public void DrawColoredPolygon(Vector2[] points, Color color, Vector2[]? uvs = null, Texture2D? texture = null)
+    {
+        if (CanDraw(nameof(DrawColoredPolygon))) AddMesh(CanvasTess.Polygon(points, new[] { color }, uvs, texture?.EngineHandle ?? 0));
+    }
+
+    /// <summary>One to four points as a pixel, a line, a triangle or a quad (Godot's draw_primitive).</summary>
+    public void DrawPrimitive(Vector2[] points, Color[] colors, Vector2[]? uvs = null, Texture2D? texture = null)
+    {
+        if (CanDraw(nameof(DrawPrimitive))) AddMesh(CanvasTess.Primitive(points, colors, uvs, texture?.EngineHandle ?? 0));
+    }
+
+    /// <summary>Records triangles built by the caller (the radial fill of a TextureProgressBar).</summary>
+    internal void DrawTriangles(CanvasMesh? mesh)
+    {
+        if (CanDraw(nameof(DrawTriangles))) AddMesh(mesh);
     }
 
     /// <summary>The item's transform to the UI's space. A plain canvas item has none of its own: identity.</summary>

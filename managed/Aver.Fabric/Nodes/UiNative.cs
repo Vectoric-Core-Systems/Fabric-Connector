@@ -58,6 +58,56 @@ internal struct UiStyleBoxStruct
     public float GrowBegin, GrowEnd;
 }
 
+/// <summary>AVER_UI_FILTER_*.</summary>
+internal enum UiFilterId { Linear = 0, Nearest = 1 }
+
+/// <summary>AVER_UI_ADDRESS_*.</summary>
+internal enum UiAddressId { Clamp = 0, Repeat = 1, Mirror = 2 }
+
+/// <summary>AVER_UI_BLEND_*.</summary>
+internal enum UiBlendId { Mix = 0, Add = 1, Sub = 2, Mul = 3, Disabled = 4 }
+
+/// <summary>AverText3dDesc, field for field (the engine reads the size first, so a smaller or larger struct is read as far as it goes).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct Text3dDesc
+{
+    public int Size;
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)] public float[] World;
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 64)] public byte[] Family;
+    public float Px;
+    public float PixelSize;
+    public float Width;
+    public int Flags;
+    public int HAlign;
+    public int VAlign;
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public float[] Spacing;
+    public uint Rgba;
+    public uint OutlineRgba;
+    public float OutlineSize;
+    public float OffsetX, OffsetY;
+    public int DrawFlags;
+    public float AlphaCut;
+    public float Intensity;
+    public float FixedPxPerUnit;
+    public float SdfSoftness;
+    public int MaxLines;
+
+    /// <summary>A descriptor with its arrays allocated and the engine's defaults.</summary>
+    public static Text3dDesc Create()
+    {
+        var d = new Text3dDesc { World = new float[16], Family = new byte[64], Spacing = new float[4] };
+        d.World[0] = d.World[5] = d.World[10] = d.World[15] = 1f;
+        return d;
+    }
+
+    public void SetFamily(string family)
+    {
+        Array.Clear(Family);
+        byte[] b = System.Text.Encoding.UTF8.GetBytes(family);
+        Array.Copy(b, Family, Math.Min(b.Length, 63));
+    }
+}
+
 /// <summary>The geometry the engine tessellated for a style box: what <c>aver_ui_stylebox_mesh</c> returns.</summary>
 public sealed class StyleBoxMesh
 {
@@ -229,6 +279,97 @@ internal static class UiNative
         return (new Rect2(o[0], o[1], o[2], o[3]), new Vector2(o[4], o[5]), new Vector2(o[6], o[7]), new Vector2(o[8], o[9]), o[10] != 0f);
     }
 
+    // ---- wave 8a (ui_abi.h "transform and draw state", the mesh, the spacing block, "text in the world") ----
+    private static int s_stateProbe;   // 0 unknown, 1 present, 2 an engine from before wave 8a: nothing below is called
+
+    /// <summary>True when the engine has the transform stack, the sampler / blend state, the mesh export and the spacing calls.</summary>
+    internal static bool StateAvailable
+    {
+        get
+        {
+            if (s_stateProbe == 0 && Available)
+            {
+                try { aver_ui_set_blend(0); s_stateProbe = 1; }
+                catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_stateProbe = 2; }
+            }
+            return s_stateProbe == 1;
+        }
+    }
+
+    /// <summary>Forgets the probes (a test that has just copied the library beside itself).</summary>
+    internal static void ReprobeState() { s_stateProbe = 0; s_text3dProbe = 0; }
+
+    /// <summary>How many rotated or sheared draws went through the engine's transform stack (a stat, and what a test counts).</summary>
+    internal static int TransformPushes;
+
+    /// <summary>Pushes an affine transform onto the engine's stack: x' = a x + c y + tx, y' = b x + d y + ty.</summary>
+    internal static bool PushTransform(Transform2D t)
+    {
+        if (!StateAvailable) return false;
+        aver_ui_push_transform(t.X.X, t.X.Y, t.Y.X, t.Y.Y, t.Origin.X, t.Origin.Y);
+        return true;
+    }
+
+    internal static void PopTransform() { if (StateAvailable) aver_ui_pop_transform(); }
+
+    /// <summary>Sets the sampler and blend of what is drawn next (<see cref="UiFilterId"/>, <see cref="UiAddressId"/>, <see cref="UiBlendId"/>).</summary>
+    internal static void SetState(UiFilterId filter, UiAddressId address, UiBlendId blend)
+    {
+        if (!StateAvailable) return;
+        aver_ui_set_sampler((int)filter, (int)address);
+        aver_ui_set_blend((int)blend);
+    }
+
+    /// <summary>Draws triangles built here (x, y, u, v and a straight colour per vertex).</summary>
+    internal static void DrawMesh(CanvasMesh m)
+    {
+        if (!StateAvailable || m.VertexCount == 0 || m.Indices.Length < 3) return;
+        aver_ui_mesh(m.Xyuv, m.Colors, m.VertexCount, m.Indices, m.Indices.Length, m.Texture);
+    }
+
+    // ---- the engine's world text (ui_abi.h "text in the world") ----
+    private static int s_text3dProbe;
+
+    /// <summary>True when the engine has world text.</summary>
+    internal static bool Text3dAvailable
+    {
+        get
+        {
+            if (s_text3dProbe == 0 && Available)
+            {
+                try { aver_text3d_stats(new float[8]); s_text3dProbe = 1; }
+                catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { s_text3dProbe = 2; }
+            }
+            return s_text3dProbe == 1;
+        }
+    }
+
+    internal static bool Text3dDraw(string text, ref Text3dDesc desc, out Vector2 size, out int lines)
+    {
+        size = Vector2.Zero;
+        lines = 0;
+        if (!Text3dAvailable) return false;
+        var whl = new float[3];
+        desc.Size = Marshal.SizeOf<Text3dDesc>();
+        int ok = aver_text3d_draw(text, ref desc, whl);
+        size = new Vector2(whl[0], whl[1]);
+        lines = (int)whl[2];
+        return ok != 0;
+    }
+
+    internal static bool Text3dMeasure(string text, ref Text3dDesc desc, out Vector2 size, out int lines)
+    {
+        size = Vector2.Zero;
+        lines = 0;
+        if (!Text3dAvailable) return false;
+        var whl = new float[3];
+        desc.Size = Marshal.SizeOf<Text3dDesc>();
+        int ok = aver_text3d_measure(text, ref desc, whl);
+        size = new Vector2(whl[0], whl[1]);
+        lines = (int)whl[2];
+        return ok != 0;
+    }
+
     // ---- ui_style_abi.h ----
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_style_abi_version();
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_stylebox_struct_size();
@@ -261,6 +402,25 @@ internal static class UiNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     internal static extern float aver_ui_text_block_fx(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
                                                        float outlineSize, uint outlineRgba, uint shadowRgba, float shadowOffX, float shadowOffY, float shadowOutlineSize, float[]? outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_push_transform(float a, float b, float c, float d, float tx, float ty);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_pop_transform();
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_sampler(int filter, int address);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_blend(int mode);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void aver_ui_mesh(float[] xyuv, uint[] rgba, int vertexCount, uint[] indices, int indexCount, ulong texture);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int aver_ui_text_measure_ex([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, float[]? spacing4, float[] outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern float aver_ui_text_block_ex(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align, float[]? spacing4, float[]? outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern float aver_ui_text_block_fx_ex(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
+                                                          float outlineSize, uint outlineRgba, uint shadowRgba, float shadowOffX, float shadowOffY, float shadowOutlineSize, float[]? spacing4, float[]? outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int aver_text3d_draw([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int aver_text3d_measure([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_text3d_configure(int sdf, int sdfPx, int sdfSpread, int pageSize, int maxPages);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_text3d_stats(float[] out8);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_available();
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern ulong aver_ui_image_acquire([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8Path);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_image_release(ulong id);

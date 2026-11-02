@@ -25,6 +25,15 @@ public class Font : Resource
     internal virtual bool IsBold => false;
     internal virtual bool IsItalic => false;
 
+    /// <summary>Pixels added after every glyph, after every space, and to a line's height (a FontVariation's spacing_glyph, spacing_space and spacing_top + spacing_bottom).
+    /// Zero for a font that has none; a variation adds its base font's.</summary>
+    internal virtual float GlyphSpacing => 0f;
+    internal virtual float SpaceSpacing => 0f;
+    internal virtual float LineExtra => 0f;
+
+    /// <summary>The engine's spacing block (line multiplier 0, glyph, space, line pixels), or null when the font adds nothing, so a plain font draws and measures exactly as before.</summary>
+    internal float[]? SpacingBlock => GlyphSpacing == 0f && SpaceSpacing == 0f ? null : new[] { 0f, GlyphSpacing, SpaceSpacing, 0f };
+
     internal static string FamilyOfPath(string path)
     {
         if (path.Length == 0) return "";
@@ -148,7 +157,8 @@ public class SystemFont : Font
 }
 
 /// <summary>A font with variation settings on a base font (Godot's FontVariation). Embolden above zero asks for the base family's bold face (there is no
-/// synthetic emboldening); the transform, OpenType variation axes and features are stored; glyph and space spacing are stored and not applied by the engine.</summary>
+/// synthetic emboldening); the transform, OpenType variation axes and features are stored; the glyph and space spacing reach the text engine (wave 8a, P38) and
+/// the top and bottom spacing lengthen the line.</summary>
 public class FontVariation : Font
 {
     public Font? BaseFont { get; set; }
@@ -164,6 +174,9 @@ public class FontVariation : Font
     public float BaselineOffset { get; set; }
 
     internal override string Family => BaseFont?.Family ?? "";
+    internal override float GlyphSpacing => SpacingGlyph + (BaseFont?.GlyphSpacing ?? 0f);
+    internal override float SpaceSpacing => SpacingSpace + (BaseFont?.SpaceSpacing ?? 0f);
+    internal override float LineExtra => SpacingTop + SpacingBottom + (BaseFont?.LineExtra ?? 0f);
     internal override bool IsBold => VariationEmbolden > 0f || (BaseFont?.IsBold ?? false);
     internal override bool IsItalic => (BaseFont?.IsItalic ?? false) || MathF.Abs(VariationTransform.Y.X) > 0.05f;
 
@@ -209,14 +222,17 @@ internal static class UiText
         LineProvider = null;
     }
 
-    private static bool EngineMeasure(string text, string family, float px, int flags, out float w, out float h)
+    private static bool EngineMeasure(string text, string family, float px, int flags, out float w, out float h, float[]? spacing = null)
     {
         w = h = 0f;
         if (!UiNative.Available) return false;
         var whl = new float[3];
         try
         {
-            if (UiNative.aver_ui_text_measure(text, family.Length > 0 ? family : null, px, flags, 0f, whl) == 0) return false;
+            int ok = spacing != null && UiNative.StateAvailable
+                ? UiNative.aver_ui_text_measure_ex(text, family.Length > 0 ? family : null, px, flags, 0f, spacing, whl)
+                : UiNative.aver_ui_text_measure(text, family.Length > 0 ? family : null, px, flags, 0f, whl);
+            if (ok == 0) return false;
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return false; }
         w = whl[0];
@@ -230,13 +246,28 @@ internal static class UiText
         if (text.Length == 0) return 0f;
         string family = font?.Family ?? "";
         int flags = font?.StyleFlags ?? 0;
-        if (WidthProvider != null) return WidthProvider(family, px, flags, text);
-        var key = (family, (int)MathF.Round(px * 4f), flags, text);
+        float[]? spacing = font?.SpacingBlock;
+        if (WidthProvider != null) return WidthProvider(family, px, flags, text) + SpacingWidth(text, spacing);
+        // A spaced font is its own key (the glyph and space pixels ride in the family name's place), so a plain font's keys are as they were.
+        var key = (spacing == null ? family : family + "\u0001" + spacing[1].ToString("R") + "\u0001" + spacing[2].ToString("R"), (int)MathF.Round(px * 4f), flags, text);
         if (s_widths.TryGetValue(key, out float known)) return known;
-        float w = EngineMeasure(text, family, px, flags, out float ew, out _) ? ew : FallbackWidth(text, px);
+        float w = EngineMeasure(text, family, px, flags, out float ew, out _, spacing) ? ew : FallbackWidth(text, px) + SpacingWidth(text, spacing);
         if (s_widths.Count > 8192) s_widths.Clear();
         s_widths[key] = w;
         return w;
+    }
+
+    /// <summary>What a spacing block adds to a string: the glyph pixels after every character and the space pixels after every space or tab.</summary>
+    internal static float SpacingWidth(string text, float[]? spacing)
+    {
+        if (spacing == null) return 0f;
+        float n = 0f, spaces = 0f;
+        foreach (Rune r in text.EnumerateRunes())
+        {
+            n += 1f;
+            if (r.Value == ' ' || r.Value == '\t') spaces += 1f;
+        }
+        return n * spacing[1] + spaces * spacing[2];
     }
 
     /// <summary>Half an em per character, a tab as four.</summary>
@@ -250,12 +281,13 @@ internal static class UiText
     internal static float LineHeight(Font? font, float px)
     {
         string family = font?.Family ?? "";
-        if (LineProvider != null) return LineProvider(family, px);
+        float extra = font?.LineExtra ?? 0f;   // a FontVariation's spacing_top and spacing_bottom
+        if (LineProvider != null) return LineProvider(family, px) + extra;
         var key = (family, (int)MathF.Round(px * 4f));
-        if (s_lines.TryGetValue(key, out float known)) return known;
+        if (s_lines.TryGetValue(key, out float known)) return known + extra;
         float h = EngineMeasure("A", family, px, 0, out _, out float eh) && eh > 0f ? eh : px * FallbackLine;
         s_lines[key] = h;
-        return h;
+        return h + extra;
     }
 
     internal static float Ascent(Font? font, float px) => LineHeight(font, px) * AscentShare;

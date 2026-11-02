@@ -169,6 +169,13 @@ std::string Converter::fontAsset(const std::string& resPath, const Where& w) {
     std::string asset;
     std::vector<u8> bytes;
     const std::string disk = fs_.toDiskPath(resPath);
+    if (extLower(resPath) == ".woff2") {
+        // WOFF 1.0 is read by the engine (P37, wave 8a: its inflate rebuilds the sfnt); WOFF2 compresses with Brotli, which the engine does not carry for fonts.
+        report_.add("resource", resPath, w.node, "Font", "", Rating::Unsupported,
+                    "a WOFF2 font needs Brotli, which the engine does not carry for fonts: convert the file to .woff or .ttf and convert again (text with it falls back to the default family)", 0);
+        fontAssets_[resPath] = asset;
+        return asset;
+    }
     if (disk.empty() || !readFileBytes(disk, bytes)) {
         report_.add("resource", resPath, w.node, "Font", "", Rating::Unsupported, "the font file is missing", 0);
     } else {
@@ -182,7 +189,8 @@ std::string Converter::fontAsset(const std::string& resPath, const Where& w) {
         } else {
             noteFontAsset(asset);
             report_.add("resource", resPath, "", "FontFile", "", Rating::Converted,
-                        "copied to " + asset + " and named as a family (" + stemOf(asset) + ") of the engine's font set UI/Fonts.ocfonts; the engine rasterises the TrueType outlines at run time. "
+                        "copied to " + asset + " and named as a family (" + stemOf(asset) + ") of the engine's font set UI/Fonts.ocfonts; the engine rasterises the TrueType outlines at run time" +
+                        (extLower(resPath) == ".woff" ? " (a WOFF 1.0 file is rebuilt to its sfnt when it loads)" : "") + ". "
                         "MSDF, hinting modes, OpenType substitutions and variable-font axes are not applied", 0);
         }
     }

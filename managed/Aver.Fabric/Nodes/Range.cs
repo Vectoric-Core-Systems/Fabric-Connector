@@ -493,7 +493,12 @@ public class TextureProgressBar : Range
     public (float Start, float Sweep) GetRadialAngles()
     {
         float sweep = (float)GetAsRatio() * RadialFillDegrees;
-        return _mode == FillModeEnum.CounterClockwise ? (RadialInitialAngle - sweep, sweep) : (RadialInitialAngle, sweep);
+        return _mode switch
+        {
+            FillModeEnum.CounterClockwise => (RadialInitialAngle - sweep, sweep),
+            FillModeEnum.ClockwiseAndCounterClockwise => (RadialInitialAngle - sweep / 2f, sweep),   // grows both ways from the initial angle
+            _ => (RadialInitialAngle, sweep),
+        };
     }
 
     private bool Radial => _mode is FillModeEnum.Clockwise or FillModeEnum.CounterClockwise or FillModeEnum.ClockwiseAndCounterClockwise;
@@ -502,10 +507,18 @@ public class TextureProgressBar : Range
     {
         var all = new Rect2(Vector2.Zero, NinePatchStretch ? Size : (TextureUnder ?? TextureProgress)?.GetSize() ?? Size);
         if (TextureUnder != null) DrawTextureRect(TextureUnder, all, false, TintUnder);
-        if (TextureProgress != null)
+        if (TextureProgress != null && Radial)
+        {
+            // A radial fill (F56) is the progress texture swept by a wedge about its centre: a textured fan, no longer the left-to-right stand-in.
+            Rect2 full = NinePatchStretch ? all : new Rect2(TextureProgressOffset, TextureProgress.GetSize());
+            (float start, float sweep) = GetRadialAngles();
+            if (TextureProgress.EngineHandle != 0)
+                DrawTriangles(CanvasTess.RadialFill(full, full.Position + full.Size / 2f + RadialCenterOffset, start, sweep, TintProgress, TextureProgress.EngineHandle));
+        }
+        else if (TextureProgress != null)
         {
             Vector2 ts = TextureProgress.GetSize();
-            Rect2 region = Radial ? new Rect2(0, 0, (float)GetAsRatio(), 1) : GetFillRegion();
+            Rect2 region = GetFillRegion();
             var dest = new Rect2(TextureProgressOffset + new Vector2(ts.X * region.Position.X, ts.Y * region.Position.Y), new Vector2(ts.X * region.Size.X, ts.Y * region.Size.Y));
             if (NinePatchStretch) dest = new Rect2(all.Position + new Vector2(all.Size.X * region.Position.X, all.Size.Y * region.Position.Y), new Vector2(all.Size.X * region.Size.X, all.Size.Y * region.Size.Y));
             DrawTextureRectRegion(TextureProgress, dest, new Rect2(ts.X * region.Position.X, ts.Y * region.Position.Y, ts.X * region.Size.X, ts.Y * region.Size.Y), TintProgress);

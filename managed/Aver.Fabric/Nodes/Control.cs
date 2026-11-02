@@ -106,6 +106,10 @@ public partial class Control : CanvasItem
     }
 
     public Vector2 PivotOffset { get => _pivot; set { _pivot = value; NotifyTransformChanged(); } }
+    private Vector2 _pivotRatio;
+
+    /// <summary>The pivot as a share of the control's size, added to <see cref="PivotOffset"/> (Godot 4.5's pivot_offset_ratio): (0.5, 0.5) rotates and scales about the centre.</summary>
+    public Vector2 PivotOffsetRatio { get => _pivotRatio; set { _pivotRatio = value; NotifyTransformChanged(); } }
     public float Rotation { get => _rotation; set { _rotation = value; NotifyTransformChanged(); } }
     public float RotationDegrees { get => Mathf.RadToDeg(_rotation); set => Rotation = Mathf.DegToRad(value); }
     public Vector2 Scale { get => _scale; set { _scale = value; NotifyTransformChanged(); } }
@@ -377,7 +381,8 @@ public partial class Control : CanvasItem
     public Transform2D GetTransform()
     {
         var rs = new Transform2D(_rotation, _scale, 0f, Vector2.Zero);
-        rs.Origin = _pivot - rs.BasisXform(_pivot) + _pos;
+        Vector2 pivot = _pivot + _size * _pivotRatio;   // pivot_offset_ratio (F57): the pivot also moves with the size
+        rs.Origin = pivot - rs.BasisXform(pivot) + _pos;
         return rs;
     }
 
@@ -493,7 +498,7 @@ public partial class Control : CanvasItem
     /// <summary>Children are clipped to the control's rectangle when drawn and cannot receive the pointer outside it.</summary>
     public bool ClipContents { get; set; }
 
-    internal override bool ClipsChildren => ClipContents;
+    internal override bool ClipsChildren => ClipContents || ClipChildren != ClipChildrenMode.Disabled;
 
     internal override Rect2 ClipRectGlobal => GetGlobalTransform() * new Rect2(Vector2.Zero, _size);
 
@@ -507,7 +512,26 @@ public partial class Control : CanvasItem
 
     public CursorShape GetCursorShape(Vector2 position = default) => MouseDefaultCursorShape;
 
-    public bool IsLayoutRtl() => LayoutDirection == LayoutDirectionEnum.Rtl;
+    /// <summary>True when the layout runs right to left: this control's direction, else the nearest ancestor's that is set (Inherited and the locale settings read as left to right here).</summary>
+    public bool IsLayoutRtl()
+    {
+        for (Node? n = this; n is Control c; n = n.GetParent())
+            if (c.LayoutDirection is LayoutDirectionEnum.Rtl or LayoutDirectionEnum.Ltr) return c.LayoutDirection == LayoutDirectionEnum.Rtl;
+        return false;
+    }
+
+    // Godot 4.5's accessibility_* properties and the shortcut context: kept for scripts and the editor's inspector. The engine's accessibility layer
+    // (docs/ACCESSIBILITY.md) names a control from its text, so these do not reach it yet.
+    public enum AccessibilityLiveMode { Off = 0, Polite = 1, Assertive = 2 }
+
+    public string AccessibilityName { get; set; } = "";
+    public string AccessibilityDescription { get; set; } = "";
+    public AccessibilityLiveMode AccessibilityLive { get; set; }
+    public Collections.Array AccessibilityControlsNodes { get; set; } = new();
+    public Collections.Array AccessibilityDescribedByNodes { get; set; } = new();
+    public Collections.Array AccessibilityLabeledByNodes { get; set; } = new();
+    public Collections.Array AccessibilityFlowToNodes { get; set; } = new();
+    public Node? ShortcutContext { get; set; }
 
     internal override bool TryDynamicSet(string name, Variant value)
     {

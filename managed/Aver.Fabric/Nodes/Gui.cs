@@ -821,7 +821,7 @@ internal static class Gui
         if (window.IsLetterboxed()) DrawLetterbox(origin, window.WindowPixels, content);
         // Godot shows nothing of the UI outside the content rectangle: a control larger than the window stops at its edge, not in a letterbox bar.
         UiNative.aver_ui_push_clip((int)MathF.Floor(content.Position.X), (int)MathF.Floor(content.Position.Y), (int)MathF.Ceiling(content.End.X), (int)MathF.Ceiling(content.End.Y));
-        foreach (Node n in window.ChildrenSnapshot()) DrawNode(n, toWindow);
+        DrawPasses(window, toWindow);
         if (s_popups.Count > 0)
         {
             int previous = UiNative.aver_ui_layer();
@@ -844,18 +844,75 @@ internal static class Gui
         if (end.Y > content.End.Y) UiNative.aver_ui_rect(content.Position.X, content.End.Y, content.Size.X, end.Y - content.End.Y, black);
     }
 
-    private static void DrawNode(Node node, Transform2D toWindow, Node? popupRoot = null)
+    // ---- the order UI is drawn in (F59) ----
+    //
+    // Tree order is the draw order, as it always was. Godot also orders by the CanvasLayer an item hangs from (a lower layer first) and by z_index (the sum of
+    // the z of the item and of its ancestors while z_as_relative holds). Walking the tree once per distinct (layer, z) pair, drawing only the items that belong to
+    // that pair and still pushing every clip on the way down, gives that order and keeps a child clipped by a parent drawn in another pass. A tree with one pair
+    // (nearly every UI) is walked once, unfiltered, exactly as before.
+
+    private static bool s_passFilter;
+    private static int s_passLayer, s_passZ;
+
+    private static void DrawPasses(Window window, Transform2D toWindow)
+    {
+        var keys = new SortedSet<(int Layer, int Z)>();
+        foreach (Node n in window.ChildrenSnapshot()) CollectDrawKeys(n, 0, 0, keys);
+        if (keys.Count <= 1)
+        {
+            s_passFilter = false;
+            foreach (Node n in window.ChildrenSnapshot()) DrawNode(n, toWindow, layer: 0, zParent: 0);
+            return;
+        }
+        s_passFilter = true;
+        try
+        {
+            foreach ((int layer, int z) in keys)
+            {
+                s_passLayer = layer;
+                s_passZ = z;
+                foreach (Node n in window.ChildrenSnapshot()) DrawNode(n, toWindow, layer: 0, zParent: 0);
+            }
+        }
+        finally { s_passFilter = false; }
+    }
+
+    private static void CollectDrawKeys(Node node, int layer, int zParent, SortedSet<(int Layer, int Z)> keys)
+    {
+        if (node is SubViewport || node is CanvasLayer { Visible: false }) return;
+        if (node is CanvasLayer cl) layer = cl.Layer;
+        if (node is CanvasItem ci)
+        {
+            if (!ci.Visible) return;
+            zParent = ci.ZAsRelative ? zParent + ci.ZIndex : ci.ZIndex;
+            if (ci.Commands.Count > 0 || ci.NeedsRedraw) keys.Add((layer, zParent));
+        }
+        foreach (Node c in node.ChildrenSnapshot()) CollectDrawKeys(c, layer, zParent, keys);
+    }
+
+    private static void DrawNode(Node node, Transform2D toWindow, Node? popupRoot = null, int layer = 0, int zParent = 0)
     {
         if (node is SubViewport) return;
         if (node is PopupWindow shown && node != popupRoot && s_popups.Contains(shown)) return;   // drawn last, on the overlay layer, each once
+        if (node is CanvasLayer cl)
+        {
+            if (!cl.Visible) return;
+            layer = cl.Layer;
+            if (!cl.FollowViewportEnabled) toWindow *= cl.Transform;   // the layer's offset, rotation and scale carry everything under it
+        }
         int clips = 0;
         if (node is CanvasItem ci)
         {
             if (!ci.Visible) return;
+            int z = ci.ZAsRelative ? zParent + ci.ZIndex : ci.ZIndex;
+            zParent = z;
             ci.RunDraw();
-            Transform2D xf = toWindow * ci.GlobalCanvasTransform;
-            Color mod = ci.GetCombinedModulate();
-            foreach (CanvasItem.DrawCommand cmd in ci.Commands) Replay(cmd, xf, mod);
+            if (!s_passFilter || (layer == s_passLayer && z == s_passZ))
+            {
+                Transform2D xf = toWindow * ci.GlobalCanvasTransform;
+                Color mod = ci.GetCombinedModulate();
+                if (ci.Commands.Count > 0) ReplayItem(ci, xf, mod);
+            }
             if (ci.ClipsChildren)
             {
                 Rect2 r = toWindow * ci.ClipRectGlobal;
@@ -863,8 +920,68 @@ internal static class Gui
                 clips++;
             }
         }
-        foreach (Node c in node.ChildrenSnapshot()) DrawNode(c, toWindow, popupRoot);
+        foreach (Node c in node.ChildrenSnapshot()) DrawNode(c, toWindow, popupRoot, layer, zParent);
         for (; clips > 0; clips--) UiNative.aver_ui_pop_clip();
+    }
+
+    // ---- one item's commands: sampler and blend state (P41), the transform (P40), then each command ----
+
+    private static bool s_stateDirty;
+    private static UiFilterId s_filter;
+    private static UiAddressId s_address;
+    private static UiBlendId s_blend;
+
+    /// <summary>A test sink: the names of the items drawn, in the order they were (null when nobody listens).</summary>
+    internal static List<string>? DrawLog;
+
+    private static void ReplayItem(CanvasItem ci, Transform2D xf, Color mod)
+    {
+        DrawLog?.Add(ci.Name.ToString());
+        if (UiNative.StateAvailable)
+        {
+            UiFilterId f = ci.ResolvedFilter();
+            UiAddressId a = ci.ResolvedAddress();
+            UiBlendId b = ci.ResolvedBlend();
+            bool nonDefault = f != UiFilterId.Linear || a != UiAddressId.Clamp || b != UiBlendId.Mix;
+            if (nonDefault || s_stateDirty)
+            {
+                UiNative.SetState(f, a, b);
+                s_stateDirty = nonDefault;
+            }
+            s_filter = f; s_address = a; s_blend = b;
+        }
+        Transform2D extra = Transform2D.Identity;
+        bool hasExtra = false;
+        foreach (CanvasItem.DrawCommand cmd in ci.Commands)
+        {
+            if (cmd.Type == CanvasItem.DrawCommand.Kind.SetTransform)
+            {
+                extra = cmd.Xform;
+                hasExtra = extra != Transform2D.Identity;
+                continue;
+            }
+            ReplayTransformed(cmd, hasExtra ? xf * extra : xf, mod);
+        }
+    }
+
+    /// <summary>True when the transform keeps axes parallel to the screen's: a rectangle stays a rectangle, which is all the draw list could do before wave 8a.</summary>
+    internal static bool IsAxisAligned(Transform2D t) => MathF.Abs(t.X.Y) < 1e-5f && MathF.Abs(t.Y.X) < 1e-5f;
+
+    private static void ReplayTransformed(CanvasItem.DrawCommand cmd, Transform2D xf, Color mod)
+    {
+        if (IsAxisAligned(xf) || !UiNative.StateAvailable)
+        {
+            Replay(cmd, xf, mod);
+            return;
+        }
+        // A rotated or sheared item: the engine draws through the transform (P40). Its scale is taken out into the rectangle sizes and the font size, so text
+        // is rasterised at the size it appears at and the pushed matrix is a pure rotation (and shear) with the origin.
+        float sx = xf.X.Length(), sy = xf.Y.Length();
+        if (!(sx > 1e-6f) || !(sy > 1e-6f) || !float.IsFinite(sx) || !float.IsFinite(sy)) return;
+        UiNative.TransformPushes++;
+        UiNative.PushTransform(new Transform2D(xf.X / sx, xf.Y / sy, xf.Origin));
+        try { Replay(cmd, new Transform2D(new Vector2(sx, 0), new Vector2(0, sy), Vector2.Zero), mod); }
+        finally { UiNative.PopTransform(); }
     }
 
     private static uint Tint(uint rgba, Color m)
@@ -901,13 +1018,22 @@ internal static class Gui
                 float scale = Math.Max(Math.Abs(xf.X.X), 0.0001f);
                 string? family = cmd.Family.Length > 0 ? cmd.Family : null;
                 float width = cmd.Width > 0 ? cmd.Width * scale : 0f;
+                // A font that spaces its glyphs (FontVariation, P38) draws through the calls that take the spacing block, scaled with the text.
+                float[]? spacing = cmd.Spacing != null && UiNative.StateAvailable ? new[] { 0f, cmd.Spacing[1] * scale, cmd.Spacing[2] * scale, 0f } : null;
                 if (cmd.Fx.Any)
                 {
                     CanvasItem.TextFx fx = cmd.Fx;
-                    UiNative.aver_ui_text_block_fx(r.Position.X, r.Position.Y, cmd.Text, Tint(StyleBoxFlat.Pack(cmd.Color), mod), family, cmd.FontSize * scale, cmd.Flags, width, align,
-                                                   fx.OutlineSize * scale, Tint(StyleBoxFlat.Pack(fx.OutlineColor), mod), Tint(StyleBoxFlat.Pack(fx.ShadowColor), mod),
-                                                   fx.ShadowOffset.X * scale, fx.ShadowOffset.Y * scale, fx.ShadowOutlineSize * scale, null);
+                    if (spacing != null)
+                        UiNative.aver_ui_text_block_fx_ex(r.Position.X, r.Position.Y, cmd.Text, Tint(StyleBoxFlat.Pack(cmd.Color), mod), family, cmd.FontSize * scale, cmd.Flags, width, align,
+                                                          fx.OutlineSize * scale, Tint(StyleBoxFlat.Pack(fx.OutlineColor), mod), Tint(StyleBoxFlat.Pack(fx.ShadowColor), mod),
+                                                          fx.ShadowOffset.X * scale, fx.ShadowOffset.Y * scale, fx.ShadowOutlineSize * scale, spacing, null);
+                    else
+                        UiNative.aver_ui_text_block_fx(r.Position.X, r.Position.Y, cmd.Text, Tint(StyleBoxFlat.Pack(cmd.Color), mod), family, cmd.FontSize * scale, cmd.Flags, width, align,
+                                                       fx.OutlineSize * scale, Tint(StyleBoxFlat.Pack(fx.OutlineColor), mod), Tint(StyleBoxFlat.Pack(fx.ShadowColor), mod),
+                                                       fx.ShadowOffset.X * scale, fx.ShadowOffset.Y * scale, fx.ShadowOutlineSize * scale, null);
                 }
+                else if (spacing != null)
+                    UiNative.aver_ui_text_block_ex(r.Position.X, r.Position.Y, cmd.Text, Tint(StyleBoxFlat.Pack(cmd.Color), mod), family, cmd.FontSize * scale, cmd.Flags, width, align, spacing, null);
                 else
                     UiNative.aver_ui_text_block(r.Position.X, r.Position.Y, cmd.Text, Tint(StyleBoxFlat.Pack(cmd.Color), mod), family, cmd.FontSize * scale, cmd.Flags, width, align, null);
                 break;
@@ -920,7 +1046,26 @@ internal static class Gui
                 break;
             case CanvasItem.DrawCommand.Kind.Texture:
                 if (cmd.Handle != 0)
+                {
+                    // A tiled draw has texture coordinates past 1: it needs the repeat address, for this draw only.
+                    bool repeat = cmd.Tile && s_address != UiAddressId.Repeat && UiNative.StateAvailable;
+                    if (repeat) UiNative.SetState(s_filter, UiAddressId.Repeat, s_blend);
                     UiNative.aver_ui_textured_rect(r.Position.X, r.Position.Y, r.Size.X, r.Size.Y, cmd.Handle, cmd.Uv.Position.X, cmd.Uv.Position.Y, cmd.Uv.End.X, cmd.Uv.End.Y, Tint(StyleBoxFlat.Pack(cmd.Color), mod));
+                    if (repeat) UiNative.SetState(s_filter, s_address, s_blend);
+                }
+                break;
+            case CanvasItem.DrawCommand.Kind.Mesh:
+                if (cmd.Triangles != null)
+                {
+                    CanvasMesh m = cmd.Triangles.Transformed(xf);
+                    if (mod.R != 1f || mod.G != 1f || mod.B != 1f || mod.A != 1f)
+                    {
+                        var tinted = new uint[m.Colors.Length];
+                        for (int i = 0; i < tinted.Length; i++) tinted[i] = Tint(m.Colors[i], mod);
+                        m.Colors = tinted;
+                    }
+                    UiNative.DrawMesh(m);
+                }
                 break;
         }
     }
