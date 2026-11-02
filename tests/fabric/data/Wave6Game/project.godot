@@ -1,0 +1,11 @@
+; Engine configuration file.
+; A fixture for wave 6 of the Godot parity plan (FabricWave6Test): GPUParticles3D with a ParticleProcessMaterial, CPUParticles3D, particle colliders and attractors,
+; trails, sprite sheets, a Decal with the wave 6 fields and an AnimatedSprite3D.
+
+config_version=5
+
+[application]
+
+config/name="Wave6 Game"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")

@@ -45,6 +45,9 @@ const std::set<std::string>& supportedClasses() {
                                             "OccluderInstance3D",
                                             // G6 SH3: a particle emitter whose process material is a particles shader
                                             "GPUParticles3D",
+                                            // wave 6: CPUParticles3D, and the colliders and attractors the converter bakes into the effects of the emitters in their scene
+                                            "CPUParticles3D", "GPUParticlesCollisionSphere3D", "GPUParticlesCollisionBox3D", "GPUParticlesCollisionHeightField3D", "GPUParticlesCollisionSDF3D",
+                                            "GPUParticlesAttractorSphere3D", "GPUParticlesAttractorBox3D", "GPUParticlesAttractorVectorField3D",
                                             // G5 A1: property-track animation
                                             "AnimationPlayer",
                                             // G5 A2: animation trees, skeletons, paths and helper nodes
@@ -169,13 +172,14 @@ ClassChoice chooseClass(const std::string& t) {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
         c.reason = "drawn as one pooled engine decal (256 at most, the oldest recycled) placed when the node enters the tree and again when it moves or a property changes; the albedo, normal and ORM "
-                   "images, size, modulate, albedo mix and distance fade apply; emission, upper / lower / normal fade and the cull mask are kept and not drawn";
+                   "images, size, modulate, albedo mix, distance fade, emission and upper / lower / normal fade apply (the emission, the fades and the albedo mix are drawn by the plain raster pipeline, "
+                   "not by ray-driven mode); the cull mask is kept and not drawn, and a soft 2% edge stands in for Godot's hard box edge";
         return c;
     }
     if (t == "AnimatedSprite3D") {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
-        c.reason = "the animation, frame, speed and signals run as in Godot; the picture is not drawn (a texture set at run time does not reach the engine's material)";
+        c.reason = "the animation, frame, speed and signals run as in Godot; the picture is drawn from quads and materials baked per frame texture, which the node swaps as the frame changes";
         return c;
     }
     if (t == "OccluderInstance3D") {
@@ -223,6 +227,13 @@ ClassChoice chooseClass(const std::string& t) {
         c.rating = Rating::Approximated;
         c.reason = "simulated by the engine's soft-body physics over the welded points of its mesh; stiffness, pressure and damping are mapped by formula, not by Godot's units, and need tuning by eye; "
                    "a mesh that is only an imported file has no vertices to simulate and stays a plain mesh";
+        return c;
+    }
+    if (t.rfind("GPUParticlesCollision", 0) == 0 || t.rfind("GPUParticlesAttractor", 0) == 0) {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "kept with its properties; the converter bakes it into the effect of every particle emitter in its scene as a module (a sphere or box collider, a flat plane for a height field, a "
+                   "sphere attractor), at the pose it has in the file: moving or resizing the node at run time changes nothing, and a signed-distance-field collider and a vector-field attractor are ignored";
         return c;
     }
     if (supportedClasses().count(t)) { c.fabricClass = t; return c; }
@@ -1368,7 +1379,7 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     comp.type = "Props";
     for (auto& [k, v] : props) comp.kv.emplace_back(k, gd::godotVariantToText(v));
     p.components.push_back(std::move(comp));
-    if (fn.type == "GPUParticles3D") emitGpuParticles(fn, props, p, scan.prefabPass);   // G6 SH3
+    if (fn.type == "GPUParticles3D" || fn.type == "CPUParticles3D") emitParticles(fn, props, p, scan.prefabPass);   // G6 SH3 (a particles shader), wave 6 (a ParticleProcessMaterial, CPUParticles3D)
     if (!fn.groups.empty()) {
         fmt::OcPlacedComponent g;
         g.type = "Groups";

@@ -205,7 +205,7 @@ static class ConverterGapTests
         var d = new Decal { Size = new Vector3(2, 1, 2), Modulate = new Color(1, 1, 1, 0.5f), AlbedoMix = 0.8f, DistanceFadeEnabled = true, DistanceFadeBegin = 40, DistanceFadeLength = 10 };
         Aver.Scene.DecalDesc desc = d.ComputeDesc(withImages: false);
         T.Check("the box: depth is Godot's y, width its x, height its z, in centimetres", T.Near(desc.SizeCm.X, 100f) && T.Near(desc.SizeCm.Y, 200f) && T.Near(desc.SizeCm.Z, 200f), $"{desc.SizeCm.X} {desc.SizeCm.Y} {desc.SizeCm.Z}");
-        T.Check("opacity is the modulate alpha times the mix", T.Near(desc.Transparency, 0.6f), desc.Transparency.ToString());
+        T.Check("opacity is the modulate alpha, and the mix is its own weight on the colour (wave 6)", T.Near(desc.Transparency, 0.5f) && T.Near(desc.AlbedoMix, 0.8f), desc.Transparency.ToString());
         T.Check("the distance fade ends where it was set, in centimetres", T.Near(desc.FadeDistanceCm, 5000f));
         T.Check("white modulate is a white tint", T.Near(desc.Tint.X, 1f) && T.Near(desc.Tint.Z, 1f));
         (float x, float y, float z) = Rotate(desc.Rotation, 1, 0, 0);

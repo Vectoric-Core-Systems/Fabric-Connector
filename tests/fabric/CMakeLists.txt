@@ -205,6 +205,19 @@ target_compile_definitions(FabricWave4Test PRIVATE
 set_target_properties(FabricWave4Test PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricWave6Test -- wave 6 of the Godot parity plan (particles, decals, sprites): the pure mappings of GodotParticles.hpp and the converter on tests/fabric/data/Wave6Game, each
+# written .ocparticle read back with the engine's parser. Runs the tool as a process, like FabricWave4Test.
+if(TARGET Aver.Formats.Particles)
+  add_executable(FabricWave6Test src/FabricWave6Test.cpp)
+  target_link_libraries(FabricWave6Test PRIVATE Aver.Formats.Godot Aver.Formats.Particles Aver.Formats Aver.Particles Aver.Platform Aver.Core)
+  fabric_needs_converter(FabricWave6Test)
+  target_compile_definitions(FabricWave6Test PRIVATE
+    AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+    AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+  set_target_properties(FabricWave6Test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+
 # FabricGeometryTest -- G4 R7 (ArrayMesh, MultiMesh, trail meshes, CSG, Sprite3D, Label3D, GridMap) through the converter on tests/fabric/data/GeomGame.
 # Runs the tool as a process, like FabricConvertTest.
 add_executable(FabricGeometryTest src/FabricGeometryTest.cpp)

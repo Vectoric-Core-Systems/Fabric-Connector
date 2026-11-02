@@ -946,11 +946,11 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
             addFx(bb == 1 ? "billboard=on" : (bb == 2 ? "billboard=y" : "billboard=particles"));
             if (boolOf(get("billboard_keep_scale"), false)) addFx("keepscale=1");
             rate("billboard_mode", bb == 3 ? Rating::Approximated : Rating::Converted,
-                 bb == 3 ? "billboard like mode 1; the sprite sheet shows its first frame (the engine's mesh draws carry no particle age)"
+                 bb == 3 ? "on a mesh, billboard like mode 1 with the sprite sheet's first frame (a mesh draw carries no particle age); as the draw pass of a particle emitter the emitter plays the sheet itself (the emitter's own rows say how)"
                          : "the vertex stage turns the mesh toward the camera (VSMainFx); its shadow and depth prepass are the un-billboarded mesh's");
             if (bb == 3) {
                 addFx("frames=" + std::to_string(static_cast<int>(numOf(get("particles_anim_h_frames"), 1))) + "," + std::to_string(static_cast<int>(numOf(get("particles_anim_v_frames"), 1))));
-                for (const char* n : {"particles_anim_h_frames", "particles_anim_v_frames", "particles_anim_loop"}) if (has(n)) rate(n, Rating::Approximated, "the sheet's first frame is shown");
+                for (const char* n : {"particles_anim_h_frames", "particles_anim_v_frames", "particles_anim_loop"}) if (has(n)) rate(n, Rating::Approximated, "on a mesh the sheet's first frame is shown; as a particle draw pass the emitter plays the sheet (SUBUV)");
             }
         }
         if (has("billboard_keep_scale")) rate("billboard_keep_scale", bb != 0 ? Rating::Converted : Rating::Approximated, "the node's scale survives the billboard");
@@ -964,7 +964,7 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
             rate("grow_amount", Rating::Approximated, "only read with grow");
         }
         for (const char* n : {"use_point_size", "point_size"}) if (has(n)) rate(n, Rating::Unsupported, "point rendering has no equivalent");
-        for (const char* n : {"use_particle_trails"}) if (has(n)) rate(n, Rating::Unsupported, "particle trails have no equivalent");
+        for (const char* n : {"use_particle_trails"}) if (has(n)) rate(n, Rating::Approximated, "on a particle emitter's trail draw pass the emitter draws a ribbon along each particle's recent positions (the emitter's trail_enabled row); on a mesh it does nothing");
         for (const char* n : {"use_z_clip_scale", "z_clip_scale", "use_fov_override", "fov_override"}) if (has(n)) rate(n, Rating::Unsupported, "no per-material projection override");
     }
 
@@ -1420,7 +1420,13 @@ Var Converter::genericResourceDict(const std::string& type, const std::vector<gd
         if (ignorableResourceProp(p.name)) continue;
         entries.emplace_back(p.name, convertValue(p.value, doc, w, p.name));
     }
-    report_.add("resource", doc.file, w.node, type, "", Rating::Approximated, why, 0);
+    if (type == "ParticleProcessMaterial")
+        report_.add("resource", doc.file, w.node, type, "", Rating::Converted,
+                    "held as a ParticleProcessMaterial for scripts; the emitter's .ocparticle is written from its values (the particle node's own rows say what each property became)", 0);
+    else if (type == "SpriteFrames")
+        report_.add("resource", doc.file, w.node, type, "", Rating::Converted, "held as a SpriteFrames: its animations, speeds, loops and frame durations are kept and each frame texture is a copied texture", 0);
+    else
+        report_.add("resource", doc.file, w.node, type, "", Rating::Approximated, why, 0);
     return makeDict(std::move(entries));
 }
 
@@ -1742,7 +1748,7 @@ void Converter::convertStandaloneResources() {
             }
             if (t == "ShaderMaterial")
                 shaderMaterialAsset(res, r->props, *r, stemOf(res), w);   // G6 SH2: every shader material is written, whether or not a scene names it
-            else if (isShapeType(t) || t == "PhysicsMaterial")
+            else if (isShapeType(t) || t == "PhysicsMaterial" || t == "SpriteFrames" || t == "ParticleProcessMaterial")
                 report_.add("resource", res, "", t, "", Rating::Converted, "converted where a scene uses it", 0);
             else if (isOccluderType(t))
                 report_.add("resource", res, "", t, "", Rating::Approximated, "kept as Aver.Fabric's " + t + " where a scene uses it; occlusion culling is automatic", 0);

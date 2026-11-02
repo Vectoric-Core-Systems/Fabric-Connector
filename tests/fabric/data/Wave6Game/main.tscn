@@ -1,0 +1,219 @@
+[gd_scene load_steps=24 format=3]
+
+[ext_resource type="Texture2D" path="res://sheet.png" id="1_sheet"]
+[ext_resource type="Texture2D" path="res://frame_b.png" id="2_frameb"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_walk"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_sheet")
+}, {
+"duration": 2.0,
+"texture": ExtResource("2_frameb")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_frameb")
+}],
+"loop": false,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="Curve" id="Curve_scale"]
+_data = [Vector2(0, 0.5), 0.0, 0.0, 0, 0, Vector2(0.5, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), -2.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_scale"]
+curve = SubResource("Curve_scale")
+
+[sub_resource type="Gradient" id="Gradient_fire"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(1, 1, 0, 1, 1, 0.4, 0, 1, 0.2, 0.2, 0.2, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_fire"]
+gradient = SubResource("Gradient_fire")
+
+[sub_resource type="ParticleProcessMaterial" id="PPM_fountain"]
+emission_shape = 6
+emission_ring_axis = Vector3(0, 1, 0)
+emission_ring_height = 0.2
+emission_ring_radius = 2.0
+emission_ring_inner_radius = 1.0
+direction = Vector3(0, 1, 0)
+spread = 20.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+angular_velocity_min = -90.0
+angular_velocity_max = 90.0
+angle_min = 10.0
+angle_max = 50.0
+gravity = Vector3(0, -9.8, 0)
+linear_accel_min = 1.0
+linear_accel_max = 2.0
+radial_accel_min = -0.5
+radial_accel_max = 0.5
+tangential_accel_min = 0.25
+tangential_accel_max = 0.5
+damping_min = 0.1
+damping_max = 0.2
+orbit_velocity_min = 0.25
+orbit_velocity_max = 0.5
+scale_min = 0.5
+scale_max = 1.5
+scale_curve = SubResource("CurveTexture_scale")
+color = Color(1, 0.8, 0.6, 1)
+color_ramp = SubResource("GradientTexture1D_fire")
+hue_variation_min = -0.1
+hue_variation_max = 0.1
+anim_speed_min = 0.0
+anim_speed_max = 0.0
+anim_offset_min = 0.0
+anim_offset_max = 1.0
+collision_mode = 1
+collision_friction = 0.1
+collision_bounce = 0.6
+turbulence_enabled = true
+turbulence_noise_strength = 2.0
+turbulence_noise_scale = 4.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_sheet"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = ExtResource("1_sheet")
+billboard_mode = 3
+particles_anim_h_frames = 4
+particles_anim_v_frames = 4
+particles_anim_loop = false
+
+[sub_resource type="QuadMesh" id="Quad_sheet"]
+material = SubResource("Mat_sheet")
+size = Vector2(0.5, 0.5)
+
+[sub_resource type="ParticleProcessMaterial" id="PPM_simple"]
+emission_shape = 3
+emission_box_extents = Vector3(1, 0.5, 2)
+direction = Vector3(0, 0, -1)
+spread = 0.0
+initial_velocity_min = 1.0
+initial_velocity_max = 1.0
+gravity = Vector3(0, 0, 0)
+collision_mode = 2
+
+[sub_resource type="SphereMesh" id="Sphere_p"]
+radius = 0.1
+height = 0.2
+
+[sub_resource type="ParticleProcessMaterial" id="PPM_trail"]
+direction = Vector3(0, 0, 1)
+spread = 0.0
+initial_velocity_min = 3.0
+initial_velocity_max = 3.0
+gravity = Vector3(0, 0, 0)
+
+[sub_resource type="RibbonTrailMesh" id="Ribbon_t"]
+size = 0.3
+sections = 4
+
+[sub_resource type="ParticleProcessMaterial" id="PPM_plain"]
+
+[sub_resource type="Gradient" id="Gradient_cpu"]
+offsets = PackedFloat32Array(0, 0.2, 0.4, 0.6, 0.8, 1)
+colors = PackedColorArray(1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="Curve" id="Curve_cpu"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="QuadMesh" id="Quad_cpu"]
+size = Vector2(0.2, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="Mat_plain"]
+vertex_color_use_as_albedo = true
+
+[node name="Root" type="Node3D"]
+
+[node name="Fountain" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+amount = 40
+lifetime = 2.0
+explosiveness = 0.3
+process_material = SubResource("PPM_fountain")
+draw_pass_1 = SubResource("Quad_sheet")
+
+[node name="Dust" type="GPUParticles3D" parent="."]
+amount = 12
+lifetime = 4.0
+one_shot = true
+process_material = SubResource("PPM_simple")
+draw_pass_1 = SubResource("Sphere_p")
+
+[node name="Streak" type="GPUParticles3D" parent="."]
+amount = 6
+lifetime = 1.0
+trail_enabled = true
+trail_lifetime = 0.5
+process_material = SubResource("PPM_trail")
+draw_pass_1 = SubResource("Ribbon_t")
+
+[node name="Plain" type="GPUParticles3D" parent="."]
+process_material = SubResource("PPM_plain")
+
+[node name="Sparks" type="CPUParticles3D" parent="."]
+amount = 30
+lifetime = 1.5
+lifetime_randomness = 0.5
+mesh = SubResource("Quad_cpu")
+emission_shape = 1
+emission_sphere_radius = 0.5
+direction = Vector3(0, 1, 0)
+spread = 30.0
+initial_velocity_min = 2.0
+initial_velocity_max = 3.0
+gravity = Vector3(0, -4, 0)
+scale_amount_min = 2.0
+scale_amount_max = 2.0
+scale_amount_curve = SubResource("Curve_cpu")
+color = Color(1, 0.5, 0.5, 1)
+color_ramp = SubResource("Gradient_cpu")
+
+[node name="Ball" type="GPUParticlesCollisionSphere3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 1, 0)
+radius = 1.5
+
+[node name="Crate" type="GPUParticlesCollisionBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 3)
+size = Vector3(2, 1, 4)
+
+[node name="Ground" type="GPUParticlesCollisionHeightField3D" parent="."]
+size = Vector3(10, 4, 10)
+
+[node name="Well" type="GPUParticlesAttractorSphere3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1, 0)
+strength = 2.0
+attenuation = 2.0
+radius = 3.0
+
+[node name="Field" type="GPUParticlesAttractorVectorField3D" parent="."]
+
+[node name="Hero" type="AnimatedSprite3D" parent="."]
+pixel_size = 0.02
+sprite_frames = SubResource("SpriteFrames_walk")
+animation = &"walk"
+frame = 1
+autoplay = "walk"
+
+[node name="Mark" type="Decal" parent="."]
+size = Vector3(2, 1, 3)
+upper_fade = 0.5
+lower_fade = 0.25
+normal_fade = 0.2
+albedo_mix = 0.5
+emission_energy = 2.0

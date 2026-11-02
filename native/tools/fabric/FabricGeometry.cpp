@@ -9,6 +9,7 @@
 #include "aver/formats/OcMesh.hpp"
 #include "aver/formats/godot/GodotMesh.hpp"
 #include "aver/platform/FileSystem.hpp"
+#include "aver/platform/Image.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -397,6 +398,17 @@ bool pngSize(const std::string& disk, int& w, int& h) {
     return w > 0 && h > 0;
 }
 
+// The size of a picture file: a PNG from its header, anything else (JPEG, WebP, ...) by decoding it with the engine's loader.
+bool imageSize(const std::string& disk, int& w, int& h) {
+    if (pngSize(disk, w, h)) return true;
+    ImageData img;
+    std::string why;
+    if (disk.empty() || !decodeImage(disk, img, &why) || !img.valid()) return false;
+    w = static_cast<int>(img.width);
+    h = static_cast<int>(img.height);
+    return w > 0 && h > 0;
+}
+
 }  // namespace
 
 // ---- ArrayMesh ------------------------------------------------------------------------------------------------------------
@@ -578,8 +590,8 @@ void Converter::geometryNode(FNode& fn, std::vector<std::pair<std::string, Var>>
         const gd::GodotExtResource* e = doc.findExt(texProp->value.s);
         const std::string res = e ? fs_.resolve(*e, &diag_, doc.file) : std::string{};
         int tw = 64, th = 64;
-        const bool sized = !res.empty() && pngSize(fs_.toDiskPath(res), tw, th);
-        if (!sized) rate("texture", Rating::Approximated, "the texture's size could not be read (only PNG headers are); a 64 x 64 quad stands in, so pixel_size does not give Godot's size");
+        const bool sized = !res.empty() && imageSize(fs_.toDiskPath(res), tw, th);
+        if (!sized) rate("texture", Rating::Approximated, "the texture's size could not be read (a PNG by its header, JPEG and WebP by decoding); a 64 x 64 quad stands in, so pixel_size does not give Godot's size");
         const double ps = nodeNum(fn, "pixel_size", 0.01);
         const int hf = std::max(1, static_cast<int>(nodeNum(fn, "hframes", 1))), vf = std::max(1, static_cast<int>(nodeNum(fn, "vframes", 1)));
         double bx = 0, by = 0, bw = tw, bh = th;
@@ -655,6 +667,142 @@ void Converter::geometryNode(FNode& fn, std::vector<std::pair<std::string, Var>>
             else if (k == "alpha_scissor_threshold" || k == "alpha_hash_scale") rate(k, Rating::Converted, "the material's cut-off");
             else if (k == "texture_filter" || k == "alpha_antialiasing_mode" || k == "alpha_antialiasing_edge") rate(k, Rating::Approximated, "the engine's own texture filtering and antialiasing apply");
             else if (k == "axis") {}
+            else if (k == "sorting_offset" || k == "use_texture_repeat") rate(k, Rating::Unsupported, "not modelled");
+        }
+        return;
+    }
+
+    // Wave 6 (F19): an AnimatedSprite3D gets one baked quad and one material per distinct frame texture, listed in frame_assets for the node to swap between; the node's own
+    // mesh and material are those of the frame it starts on. The quad and the material are a Sprite3D's: pixel_size, offset, centering, flips, axis, modulate, billboard and the
+    // alpha and shading flags apply to every frame; a frame is its whole texture (an AnimatedSprite3D has no hframes or region).
+    if (t == "AnimatedSprite3D") {
+        const Prop* sfProp = nodeProp(fn, "sprite_frames");
+        std::optional<ResRef> sf;
+        if (sfProp && sfProp->doc) sf = resolveRes(*this, sfProp->value, *sfProp->doc);
+        const Var* anims = sf && sf->type == "SpriteFrames" && sf->props ? findP(*sf->props, "animations") : nullptr;
+        if (!anims || anims->type != VType::Array || !sf->doc) {
+            cc.rating = Rating::Approximated;
+            cc.reason = "an AnimatedSprite3D with no SpriteFrames draws nothing";
+            return;
+        }
+        const double ps = nodeNum(fn, "pixel_size", 0.01);
+        const bool centered = nodeBool(fn, "centered", true), flipH = nodeBool(fn, "flip_h", false), flipV = nodeBool(fn, "flip_v", false);
+        const int axis = static_cast<int>(nodeNum(fn, "axis", 2));
+        double ox = 0, oy = 0;
+        if (const Prop* op = nodeProp(fn, "offset"); op && op->value.nums.size() >= 2) { ox = op->value.nums[0]; oy = op->value.nums[1]; }
+        std::vector<std::string> table;
+        std::set<std::string> done;
+        std::string startMesh, startMat;
+        const Var* curName = nodeProp(fn, "animation") ? &nodeProp(fn, "animation")->value : nullptr;
+        const std::string curAnim = curName ? curName->asString() : std::string("default");
+        const int curFrame = static_cast<int>(nodeNum(fn, "frame", 0));
+        int unreadable = 0, sizeUnknown = 0, frameCount = 0;
+        for (const Var& anim : anims->items) {
+            const Var* frames = anim.find("frames");
+            const Var* nameV = anim.find("name");
+            if (!frames || frames->type != VType::Array) continue;
+            const std::string animName = nameV ? nameV->asString() : std::string();
+            int index = 0;
+            for (const Var& fr : frames->items) {
+                const int thisIndex = index++;
+                ++frameCount;
+                const Var* tex = fr.find("texture");
+                if (!tex) { ++unreadable; continue; }
+                const std::string src = textureSource(tex, *sf->doc, w);
+                std::string asset;
+                if (!src.empty()) asset = src.rfind("gen://", 0) == 0 ? generatedTextureAsset(src) : copyTexture(src, w);
+                if (asset.empty()) { ++unreadable; continue; }
+                std::string meshAsset, matName;
+                const std::string cacheKey = asset;
+                if (done.insert(cacheKey).second) {
+                    int tw = 64, th = 64;
+                    const bool sized = src.rfind("res://", 0) == 0 && imageSize(fs_.toDiskPath(src), tw, th);
+                    if (!sized) ++sizeUnknown;
+                    const double fw = tw, fh = th;
+                    double u0 = 0, u1 = 1, v0 = 0, v1 = 1;
+                    if (flipH) std::swap(u0, u1);
+                    if (flipV) std::swap(v0, v1);
+                    const double x0 = (centered ? ox - fw / 2 : ox) * ps, x1 = x0 + fw * ps;
+                    const double y1 = -(centered ? oy - fh / 2 : oy) * ps, y0 = y1 - fh * ps;
+                    SoupMesh soup;
+                    const auto vert = [&](double x, double y, double u, double v) {
+                        double px = x, py = y, pz = 0, nx = 0, ny = 0, nz = 1;
+                        if (axis == 0) { pz = -x; px = 0; nx = 1; nz = 0; }
+                        else if (axis == 1) { pz = -y; py = 0; nz = 0; ny = 1; }
+                        soup.pos.insert(soup.pos.end(), {float(px), float(py), float(pz)});
+                        soup.nrm.insert(soup.nrm.end(), {float(nx), float(ny), float(nz)});
+                        soup.uv.insert(soup.uv.end(), {float(u), float(v)});
+                    };
+                    vert(x0, y0, u0, v1); vert(x1, y0, u1, v1); vert(x1, y1, u1, v0); vert(x0, y1, u0, v0);
+                    soup.idx = {0, 1, 2, 0, 2, 3};
+                    std::vector<gd::GodotProperty> mp;
+                    const auto addMat = [&](const char* name, const Var& v) { gd::GodotProperty p; p.name = name; p.value = v; mp.push_back(std::move(p)); };
+                    addMat("albedo_texture", *tex);
+                    if (const Prop* mod = nodeProp(fn, "modulate"); mod && mod->value.type == VType::Color) addMat("albedo_color", mod->value);
+                    const bool transparent = nodeBool(fn, "transparent", true);
+                    const int alphaCut = static_cast<int>(nodeNum(fn, "alpha_cut", 0));
+                    int transparency = 0;
+                    if (transparent) transparency = alphaCut == 1 ? 2 : (alphaCut == 3 ? 3 : (alphaCut == 2 ? 4 : 1));
+                    addMat("transparency", makeInt(transparency));
+                    if (const Prop* th2 = nodeProp(fn, "alpha_scissor_threshold")) addMat("alpha_scissor_threshold", th2->value);
+                    if (const Prop* hs = nodeProp(fn, "alpha_hash_scale")) addMat("alpha_hash_scale", hs->value);
+                    addMat("shading_mode", makeInt(nodeBool(fn, "shaded", false) ? 1 : 0));
+                    addMat("cull_mode", makeInt(nodeBool(fn, "double_sided", true) ? 2 : 0));
+                    if (const int bb = static_cast<int>(nodeNum(fn, "billboard", 0)); bb != 0) addMat("billboard_mode", makeInt(bb));
+                    if (nodeBool(fn, "no_depth_test", false)) addMat("no_depth_test", makeBool(true));
+                    if (nodeBool(fn, "fixed_size", false)) addMat("fixed_size", makeBool(true));
+                    if (const Prop* rp = nodeProp(fn, "render_priority")) addMat("render_priority", rp->value);
+                    std::string canon = "AnimatedSprite3D|" + sf->doc->file + "|" + asset;
+                    for (const gd::GodotProperty& p : mp) canon += "|" + p.name + "=" + gd::godotVariantToText(p.value);
+                    const std::string matAsset = materialAsset(canon, "StandardMaterial3D", mp, *sf->doc, stemOf(asset) + "_Sprite", w);
+                    const std::string slot = matAsset.empty() ? "M_Default" : stemOf(matAsset);
+                    matName = matAsset;
+                    fmt::OcMeshData mesh = toOcMesh(soup, slot);
+                    const std::string qcanon = "SpriteQuad|" + std::to_string(x0) + "|" + std::to_string(x1) + "|" + std::to_string(y0) + "|" + std::to_string(y1) + "|" + std::to_string(u0) + "|" +
+                                               std::to_string(u1) + "|" + std::to_string(v0) + "|" + std::to_string(v1) + "|" + std::to_string(axis) + "|" + slot;
+                    meshAsset = "Meshes/Generated/SpriteQuad_" + fnvHex(qcanon) + ".ocmesh";
+                    if (!saveMesh(*this, mesh, meshAsset, w, "AnimatedSprite3D")) { ++unreadable; continue; }
+                    table.push_back(asset + "|" + meshAsset + "|" + matName);
+                } else {
+                    for (const std::string& e : table)
+                        if (e.rfind(asset + "|", 0) == 0) {
+                            const size_t a = e.find('|'), b = e.find('|', a + 1);
+                            meshAsset = e.substr(a + 1, b - a - 1);
+                            matName = e.substr(b + 1);
+                        }
+                }
+                if (startMesh.empty() || (animName == curAnim && thisIndex == curFrame)) { startMesh = meshAsset; startMat = matName; }
+            }
+        }
+        if (table.empty()) {
+            cc.rating = Rating::Approximated;
+            cc.reason = "an AnimatedSprite3D whose frames name no readable texture draws nothing";
+            return;
+        }
+        Var list;
+        list.type = VType::PackedStringArray;
+        list.strs = table;
+        props.emplace_back("frame_assets", std::move(list));
+        if (!startMesh.empty()) {
+            props.emplace_back("mesh", makeResource(startMesh));
+            if (!startMat.empty()) props.emplace_back("material_override", makeResource(startMat));
+        }
+        cc.rating = Rating::Approximated;
+        cc.reason = "the animation, frame, speed and signals run as in Godot, and the picture is drawn: " + std::to_string(table.size()) + " quad(s) with their materials are baked, one per frame texture, and the node "
+                    "swaps them as the frame changes; a frame added by a script after load has no quad" +
+                    (sizeUnknown > 0 ? "; " + std::to_string(sizeUnknown) + " texture size(s) could not be read, a 64 x 64 quad stands in" : std::string()) +
+                    (unreadable > 0 ? "; " + std::to_string(unreadable) + " of " + std::to_string(frameCount) + " frame(s) had no readable texture" : std::string());
+        for (const Prop& p : fn.props) {
+            const std::string& k = p.key;
+            if (k == "sprite_frames" || k == "animation" || k == "frame" || k == "frame_progress" || k == "speed_scale" || k == "autoplay" || k == "playing")
+                rate(k, Rating::Converted, "the node plays the animation as Godot's does");
+            else if (k == "pixel_size" || k == "centered" || k == "offset" || k == "flip_h" || k == "flip_v" || k == "modulate" || k == "transparent" || k == "shaded" || k == "double_sided" ||
+                     k == "no_depth_test" || k == "render_priority" || k == "fixed_size")
+                rate(k, Rating::Converted, "baked into every frame's quad and UVs, or into its material");
+            else if (k == "billboard") rate(k, static_cast<int>(numOf(&p.value, 0)) == 3 ? Rating::Approximated : Rating::Converted, "the material's billboard mode (enabled, or Y-billboard)");
+            else if (k == "alpha_cut") rate(k, static_cast<int>(numOf(&p.value, 0)) <= 1 ? Rating::Converted : Rating::Approximated, "alpha scissor and blend are exact; hash and opaque pre-pass are the material's approximations");
+            else if (k == "alpha_scissor_threshold" || k == "alpha_hash_scale") rate(k, Rating::Converted, "the material's cut-off");
+            else if (k == "texture_filter" || k == "alpha_antialiasing_mode" || k == "alpha_antialiasing_edge") rate(k, Rating::Approximated, "the engine's own texture filtering and antialiasing apply");
             else if (k == "sorting_offset" || k == "use_texture_repeat") rate(k, Rating::Unsupported, "not modelled");
         }
         return;

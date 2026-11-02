@@ -315,6 +315,10 @@ public:
                                const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const std::string& nameHint, const Where& w);
     // GPUParticles3D with a particles ShaderMaterial: the .ocparticle it plays and the ParticleEmitter component on its placement.
     void emitGpuParticles(const FNode& fn, const std::vector<std::pair<std::string, Var>>& props, aver::fmt::OcWorldPlacement& p, bool quiet);
+    // Wave 6 (FabricParticles.cpp): GPUParticles3D with a ParticleProcessMaterial, and CPUParticles3D, as an .ocparticle and a ParticleEmitter component. A GPUParticles3D
+    // whose process material is a particles shader goes to emitGpuParticles from here.
+    void emitParticles(const FNode& fn, const std::vector<std::pair<std::string, Var>>& props, aver::fmt::OcWorldPlacement& p, bool quiet);
+    std::set<std::string> particleReported_;   // the colliders and attractors already given their report row
     // A VisualShader .tres as shading-language text (and the per-node report); false when it does not convert.
     bool visualShaderSource(const gd::GodotResource& r, const std::string& file, std::string& source);
     std::map<std::string, std::string> visualShaderCode_;   // VisualShader file -> generated text (written under Fabric/visualshaders/)

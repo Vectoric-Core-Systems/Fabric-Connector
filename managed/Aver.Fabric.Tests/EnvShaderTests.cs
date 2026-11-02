@@ -113,7 +113,7 @@ static class EnvShaderTests
             ((ShaderMaterial)sparks.ProcessMaterial!).SetShaderParameter("spin", Variant.CreateFrom(8f));
             T.Check("set_shader_parameter reaches the running emitter's user parameters", parts.Calls > before && T.Near(parts.Regs[1][3], 8f));
             var plain = main.GetNode<GPUParticles3D>("Plain");
-            T.Check("a ParticleProcessMaterial is kept as a value and drives nothing", plain.ProcessMaterial is null);
+            T.Check("a ParticleProcessMaterial is kept as a value for scripts (wave 6) and drives no shader registers", plain.ProcessMaterial is ParticleProcessMaterial && plain.RegisterPushes == 0);
             main.QueueFree();
         }
         finally

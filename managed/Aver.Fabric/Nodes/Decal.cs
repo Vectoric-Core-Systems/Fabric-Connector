@@ -9,8 +9,15 @@ namespace Aver.Fabric;
 
 /// <summary>Godot's Decal. The box projects down its local -Y, as in Godot. Drawn as one pooled engine decal (Aver.Scene.Decals) placed when the node enters the tree and
 /// placed again once a frame when a property or the global transform changed (approximated): the albedo image and its alpha, the modulate colour, albedo mix, size, the
-/// distance fade and the normal and ORM images are applied; emission, upper and lower fade and the cull mask are kept for scripts and not drawn. The engine pool holds 256
-/// decals and recycles the oldest, so a script that spawns a decal per bullet hole keeps the latest 256. Without an engine nothing is drawn.</summary>
+/// distance fade, the normal and ORM images, and (wave 6, P13) the emission image and energy, the upper and lower fade and the normal fade are applied; the cull mask is kept for
+/// scripts and not drawn (the engine paints every surface). The emission, the depth and normal fades and the albedo mix are drawn by the plain raster pipeline only, not by
+/// ray-driven mode (docs/rendering/DECALS.md). The engine pool holds 256 decals and recycles the oldest, so a script that spawns a decal per bullet hole keeps the latest 256.
+/// Without an engine nothing is drawn.
+///
+/// The axes, derived from Godot's decal shader (the box's xform maps the surface into 0..1; the texture coordinate is the local x and z, the depth is y, and the projector looks
+/// along -Y): Godot's image u runs along local +X, its v along local +Z (down the image), the projection along -Y. The engine's decal projects along its +X with u along +Y and
+/// v-up along +Z. With Godot's -Z forward mapped to the engine's +X (FabricSpace), the engine's decal frame is the node's frame turned a quarter about the engine's Y:
+/// engine X = Godot -Y (down), engine Y = Godot +X (right), engine Z = Godot -Z (image up). <c>Wave6Tests</c> checks all three for arbitrary rotations.</summary>
 public class Decal : VisualInstance3D
 {
     public enum DecalTexture { Albedo = 0, Normal = 1, Orm = 2, Emission = 3, Max = 4 }
@@ -86,15 +93,28 @@ public class Decal : VisualInstance3D
             Rotation = FabricSpace.ToAverRotation(g.Basis.GetRotationQuaternion()) * quarter,
             SizeCm = new Vec3(Math.Abs(_size.Y * s.Y) * FabricSpace.CmPerMetre, Math.Abs(_size.X * s.X) * FabricSpace.CmPerMetre, Math.Abs(_size.Z * s.Z) * FabricSpace.CmPerMetre),
             Tint = new Vec3(lin.R, lin.G, lin.B),
-            Transparency = 1f - Math.Clamp(_modulate.A, 0f, 1f) * mix,
+            // Godot multiplies the modulate alpha into the decal's alpha (which weighs the albedo, normal and ORM alike) and weighs the albedo again by albedo_mix.
+            Transparency = 1f - Math.Clamp(_modulate.A, 0f, 1f),
+            UseAlbedoMix = true,
+            AlbedoMix = mix,
+            // Godot fades along the projection by (1 - |y| / half)^fade on each side of the centre, and has no soft edge on the sides: a hard 2% edge stands in for that.
+            UseDepthFade = true,
+            UpperFade = Math.Max(_upperFade, 0f),
+            LowerFade = Math.Max(_lowerFade, 0f),
+            NormalFade = Math.Clamp(_normalFade, 0f, 0.999f),
+            EdgeFade = 0.02f,
+            EmissionEnergy = _emissionEnergy,
             FadeDistanceCm = _fadeEnabled ? (_fadeBegin + _fadeLength) * FabricSpace.CmPerMetre : 0f,
             LifetimeSeconds = 0f,
         };
+        // A decal with no albedo image does not paint a flat colour (Godot paints the albedo only when it has one).
+        if (_textures[0] == null) d.Disable |= DecalChannels.Colour;
         if (withImages)
         {
             d.BaseTexture = ImageId(_textures[0]);
             d.NormalTexture = ImageId(_textures[1]);
             d.OrmTexture = ImageId(_textures[2]);
+            d.EmissionTexture = ImageId(_textures[3]);
         }
         return d;
     }

@@ -1,8 +1,9 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// Godot's SpriteFrames and AnimatedSprite3D. The frame clock, the animations and the signals work as in Godot; nothing is drawn (see AnimatedSprite3D).
+// Godot's SpriteFrames and AnimatedSprite3D. The frame clock, the animations and the signals work as in Godot; the picture is drawn from quads the converter baked (see AnimatedSprite3D).
 
+using Aver.Framework;
 using Aver.Scripting;
 
 namespace Aver.Fabric;
@@ -53,6 +54,51 @@ public class SpriteFrames : Resource
 
     /// <summary>The names of the animations, in the order they were added.</summary>
     public string[] GetAnimationNames() => _order.ToArray();
+
+    /// <summary>Godot's stored form: an array of dictionaries <c>{frames: [{duration, texture}], loop, name, speed}</c>. Setting it replaces every animation (this is how a converted
+    /// scene's frames arrive); reading it gives the same shape back.</summary>
+    public Collections.Array Animations
+    {
+        get
+        {
+            var all = new Collections.Array();
+            foreach (string name in _order)
+            {
+                Anim a = _anims[name];
+                var frames = new Collections.Array();
+                foreach ((Texture2D? texture, float duration) in a.Frames)
+                    frames.Add(new Collections.Dictionary { ["duration"] = duration, ["texture"] = Variant.CreateFrom(texture) });
+                all.Add(new Collections.Dictionary { ["frames"] = frames, ["loop"] = a.Loop, ["name"] = new StringName(name), ["speed"] = a.Speed });
+            }
+            return all;
+        }
+        set
+        {
+            _anims.Clear();
+            _order.Clear();
+            foreach (Variant entry in value)
+            {
+                Collections.Dictionary d = entry.AsGodotDictionary();
+                if (!d.TryGetValue("name", out Variant nameV)) continue;
+                string name = nameV.AsString();
+                if (name.Length == 0 || _anims.ContainsKey(name)) continue;
+                var a = new Anim();
+                if (d.TryGetValue("speed", out Variant sp)) a.Speed = Math.Max(sp.AsDouble(), 0.0);
+                if (d.TryGetValue("loop", out Variant lp)) a.Loop = lp.AsBool();
+                if (d.TryGetValue("frames", out Variant fr))
+                    foreach (Variant f in fr.AsGodotArray())
+                    {
+                        Collections.Dictionary fd = f.AsGodotDictionary();
+                        float duration = fd.TryGetValue("duration", out Variant du) ? du.AsSingle() : 1f;
+                        Texture2D? tex = fd.TryGetValue("texture", out Variant tx) ? tx.AsGodotObject() as Texture2D : null;
+                        a.Frames.Add((tex, duration));
+                    }
+                _anims[name] = a;
+                _order.Add(name);
+            }
+            EmitChanged();
+        }
+    }
 
     public void SetAnimationSpeed(StringName anim, double fps)
     {
@@ -116,10 +162,64 @@ public class SpriteFrames : Resource
 
 /// <summary>A sprite in the world that plays a <see cref="SpriteFrames"/> animation (Godot's AnimatedSprite3D). The animation state is Godot's: <see cref="Play"/>, <see cref="Stop"/>,
 /// <see cref="Frame"/>, <see cref="FrameProgress"/>, <see cref="SpeedScale"/>, looping, backwards play, and the <c>animation_finished</c>, <c>animation_looped</c>, <c>frame_changed</c>,
-/// <c>animation_changed</c> and <c>sprite_frames_changed</c> signals, driven by the scaled game time. Approximated: the picture is not drawn. A textured quad is baked at convert
-/// time and a texture assigned at run time does not reach the engine's material, so there is nothing to show the current frame with.</summary>
+/// <c>animation_changed</c> and <c>sprite_frames_changed</c> signals, driven by the scaled game time.
+/// Wave 6 (F19): the picture is drawn for a converted scene. The converter bakes one quad mesh and one material per distinct frame texture (the sprite's size, offset, flips and
+/// material flags applied, as for a Sprite3D) and lists them in <see cref="FrameAssets"/>; the node swaps the entity's mesh and material to the current frame's when the
+/// animation or the frame changes. A frame texture the converter did not see (a SpriteFrames built or changed by a script) has no baked quad and keeps the previous picture.</summary>
 public class AnimatedSprite3D : SpriteBase3D
 {
+    /// <summary>One entry per frame texture, <c>texture path|mesh asset|material asset</c>, written by the converter. The texture path is the texture's <see cref="Resource.ResourcePath"/>.</summary>
+    public string[] FrameAssets { get; set; } = System.Array.Empty<string>();
+
+    private string? _shownKey;
+
+    // "res://a/b.png", "Textures/a/b.png" and "a/b.png" are one texture.
+    private static string NormTexturePath(string p)
+    {
+        if (p.StartsWith("res://", StringComparison.Ordinal)) p = p["res://".Length..];
+        if (p.StartsWith("Textures/", StringComparison.Ordinal)) p = p["Textures/".Length..];
+        return p;
+    }
+
+    private string? CurrentTexturePath()
+    {
+        Texture2D? t = _frames?.GetFrameTexture(_animation, _frame);
+        return t is { ResourcePath.Length: > 0 } ? NormTexturePath(t.ResourcePath) : null;
+    }
+
+    /// <summary>Gives the engine entity the current frame's quad and material, once per change. Nothing without an engine entity or a baked entry.</summary>
+    internal void RefreshPicture()
+    {
+        string? key = CurrentTexturePath();
+        if (key == null || key == _shownKey || FrameAssets.Length == 0) return;
+        if (!Self.IsValid || !NodeHost.Current.IsEngine) return;
+        foreach (string entry in FrameAssets)
+        {
+            string[] parts = entry.Split('|');
+            if (parts.Length < 3 || NormTexturePath(parts[0]) != key) continue;
+            _shownKey = key;
+            ContentPreload.Mesh(parts[1]);
+            if (parts[2].Length > 0) ContentPreload.Material(parts[2]);
+            foreach (Entity e in RenderEntities)
+            {
+                e.SetMesh(parts[1]);
+                if (parts[2].Length > 0) e.SetMaterial(System.IO.Path.GetFileNameWithoutExtension(parts[2]));
+            }
+            PictureSwaps++;
+            return;
+        }
+    }
+
+    /// <summary>How many times the picture was changed (0 without an engine).</summary>
+    internal int PictureSwaps { get; private set; }
+
+    internal override void OnEnteringTree()
+    {
+        base.OnEnteringTree();
+        _shownKey = null;
+        RefreshPicture();
+    }
+
     public new class SignalName : SpriteBase3D.SignalName
     {
         public static readonly StringName SpriteFramesChanged = "sprite_frames_changed";
@@ -260,8 +360,8 @@ public class AnimatedSprite3D : SpriteBase3D
 
     internal override void InternalProcess(double delta)
     {
-        if (!_playing || _frames == null || !CanProcess()) return;
-        Advance(delta);
+        if (_playing && _frames != null && CanProcess()) Advance(delta);
+        RefreshPicture();
     }
 
     // A frame lasts duration / speed seconds, so the clock is the fraction of the current frame, moved on by delta * speed / duration.
