@@ -609,6 +609,10 @@ int main() {
         check(report4.find("level.scn") != std::string::npos && report4.find("resave it as text") != std::string::npos,
               "a binary .scn is reported as 'resave it as text'");
         check(fileExists(out4 + "/MiniGame/Content/Maps/main.ocworld"), "the rest of that project still converted");
+        const std::string loadout = slurp(out4 + "/MiniGame/Content/Resources/props/loadout.ocres");
+        check(loadout.find("\"__class\": \"Loadout\"") != std::string::npos && loadout.find("\"label\": \"starter\"") != std::string::npos &&
+                  loadout.find("\"count\": 3") != std::string::npos,
+              "a custom resource file is written as its value, so a script's load() of it builds the class");
     }
 
     AVER_INFO("=== {} checks, {} failed ===", g_checks, g_failures);

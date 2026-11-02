@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-896 public types and 9738 public members, read from `managed/Aver.Fabric/` (173 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+897 public types and 9744 public members, read from `managed/Aver.Fabric/` (173 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -3289,7 +3289,7 @@ Values: `SwingSpan = 0`, `TwistSpan = 1`, `Bias = 2`, `Softness = 3`, `Relaxatio
 - `public bool ClipContents { get; set; }` - Children are clipped to the control's rectangle when drawn and cannot receive the pointer outside it.
 - `public LayoutDirectionEnum LayoutDirection { get; set; }`
 - `public TextDirection TextDirectionMode { get; set; }`
-- `public bool AutoTranslate { get; set; }`
+- `public bool AutoTranslate { get; set; }` - Godot 4.2's name for AutoTranslateMode: setting it picks Always or Disabled.
 - `public CursorShape MouseDefaultCursorShape { get; set; }`
 - `public bool MouseForcePassScrollEvents { get; set; }`
 - `public CursorShape GetCursorShape(Vector2 position = default)`
@@ -7254,6 +7254,9 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public Node? GetParent()` - The parent in the tree, or null for a node not in one.
 - `public T? GetParent<T>() where T : class` - The parent as T, or null.
 - `public string SceneFilePath { get; set; }` - The scene file this node was instanced from, if it is a scene root.
+- `public AutoTranslateModeEnum AutoTranslateMode { get; set; }` - Whether tr() applies to this node's text: Inherit takes the parent's answer, and the root's is Always.
+- `public bool CanAutoTranslate()`
+- `public string EditorDescription { get; set; }` - The note Godot's editor shows for the node; kept, never shown.
 - `public Node? Owner { get; set; }` - The node that owns this one (normally the root of the scene it was authored in).
 - `public bool UniqueNameInOwner { get; set; }` - Whether %Name paths from inside the owner's scene reach this node.
 - `public int GetChildCount(bool includeInternal = true)`
@@ -7298,6 +7301,12 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public bool IsPhysicsInterpolated()` - True when this node's mode, or the first one above it that is not Inherit, is On (the tree's switch not asked).
 - `public bool IsPhysicsInterpolatedAndEnabled()` - True when IsPhysicsInterpolated and the tree's switch (PhysicsInterpolation) is on.
 - `public void ResetPhysicsInterpolation()` - The next position of the node is a teleport: it is drawn there at once instead of sliding from where it was (Godot's reset_physics_interpolation).
+
+### Node.AutoTranslateModeEnum
+
+`public enum AutoTranslateModeEnum`
+
+Values: `Inherit = 0`, `Always = 1`, `Disabled = 2`
 
 ### Node.DuplicateFlags
 

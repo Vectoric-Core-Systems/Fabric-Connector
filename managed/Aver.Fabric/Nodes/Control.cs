@@ -509,7 +509,12 @@ public partial class Control : CanvasItem
 
     public LayoutDirectionEnum LayoutDirection { get; set; } = LayoutDirectionEnum.Inherited;
     public TextDirection TextDirectionMode { get; set; } = TextDirection.Inherited;
-    public bool AutoTranslate { get; set; } = true;
+    /// <summary>Godot 4.2's name for <see cref="Node.AutoTranslateMode"/>: setting it picks Always or Disabled.</summary>
+    public bool AutoTranslate
+    {
+        get => CanAutoTranslate();
+        set => AutoTranslateMode = value ? AutoTranslateModeEnum.Always : AutoTranslateModeEnum.Disabled;
+    }
     public CursorShape MouseDefaultCursorShape { get; set; } = CursorShape.Arrow;
     public bool MouseForcePassScrollEvents { get; set; } = true;
 

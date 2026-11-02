@@ -27,6 +27,7 @@ static class ConverterGapTests
         T.Run("converter gap: a second Play does not leave the first session's autoloads and scene in the tree", SecondSessionTree);
         T.Run("converter gap: a stopped session's tree, GUI, pointer and resources are gone before the next session's nodes enter", StoppedSessionSlate);
         T.Run("converter gap: custom Resource classes in a scene (an Array[WeaponSlot] of slots holding weapon data) are built as the script classes", CustomResourcesInScene);
+        T.Run("converter gap: a script's load() of a custom resource file builds its class from the value the converter wrote", CustomResourceLoadedByPath);
         T.Run("converter gap: a 3D node under a non-3D parent (a SubViewport's camera below a CanvasLayer of the moving player) is placed in the world directly", ThreeDUnderNonThreeD);
         T.Run("converter gap: an exported Array[Node3D] stored as NodePaths holds the nodes by _ready (bukkbeek's weapons_array)", NodeArrayExport);
         T.Run("converter gap: Godot 4.5 @abstract classes and functions, and BaseMaterial3D's flags and features by number (COGITO)", AbstractAndMaterialFlags);
@@ -451,6 +452,29 @@ static class ConverterGapTests
         holder.Free();
     }
 
+    // COGITO: cogito_globals.gd checks ResourceLoader.exists() on CogitoSettings.tres, then load()s it; a null result left every menu without its settings.
+    private static void CustomResourceLoadedByPath()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "aver-fabric-ocres-test-" + System.Environment.ProcessId);
+        Directory.CreateDirectory(Path.Combine(dir, "Resources", "data"));
+        string? before = ResourceLoader.ContentRootOverride;
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "Resources", "data", "kit.ocres"), "{\n\"__class\": \"GapWeaponData\",\n\"weapon_name\": \"blasterK\",\n\"magazine\": 12\n}\n");
+            ResourceLoader.ContentRootOverride = dir;
+            T.Check("exists() finds it", ResourceLoader.Exists("res://data/kit.tres"));
+            Resource? r = ResourceLoader.Load("res://data/kit.tres", (System.Type?)null, ResourceLoader.CacheMode.Ignore);
+            T.Check("load() builds the script class with its values", r is GapWeaponData { WeaponName: "blasterK", Magazine: 12 }, r?.GetType().Name ?? "null");
+            T.Check("and knows its path", r?.ResourcePath == "res://data/kit.tres");
+            T.Check("a path with no file behind it is still not there", !ResourceLoader.Exists("res://data/none.tres"));
+        }
+        finally
+        {
+            ResourceLoader.ContentRootOverride = before;
+            Directory.Delete(dir, true);
+        }
+    }
+
     // Godot4-FPS-Template copies the main camera's global transform onto a camera under CanvasLayer/SubViewportContainer/SubViewport every frame. The engine
     // composes an entity with all its parents, so that camera's entity keeps its parent (a path to it resolves after a level reload) and ignores the parent's
     // transform (Entity.SetTransformAbsolute, set when it enters the tree with the engine; SceneTest covers the engine side).
@@ -643,6 +667,14 @@ static class ConverterGapTests
         T.Check("key names as Godot writes them", OS.GetKeycodeString(Key.A | (Key)KeyModifierMask.Shift | (Key)KeyModifierMask.Ctrl) == "Shift+Ctrl+A" &&
                 OS.GetKeycodeString(Key.Kp5) == "Kp 5" && OS.GetKeycodeString(Key.Space) == "Space", OS.GetKeycodeString(Key.A | (Key)KeyModifierMask.Shift | (Key)KeyModifierMask.Ctrl));
         T.Check("and back, letter case ignored", OS.FindKeycodeFromString("ctrl+space") == (Key.Space | (Key)KeyModifierMask.Ctrl) && OS.FindKeycodeFromString("Escape") == Key.Escape);
+        var panel = new Control { AutoTranslateMode = Node.AutoTranslateModeEnum.Disabled, EditorDescription = "note" };
+        var title = new Label();
+        panel.AddChild(title);
+        T.Check("auto_translate_mode: Inherit takes the parent's, and the old auto_translate reads it", !title.CanAutoTranslate() && !panel.AutoTranslate && new Label().CanAutoTranslate());
+        title.AutoTranslate = true;
+        T.Check("setting auto_translate picks Always", title.AutoTranslateMode == Node.AutoTranslateModeEnum.Always && title.CanAutoTranslate());
+        T.Check("editor_description is kept", MemberAccess.TrySet(panel, "editor_description", "x") && panel.EditorDescription == "x");
+        panel.Free();
         ProjectSettings.SetSetting("gap/test/value", 7);
         T.Check("a setting a script sets is read back", ProjectSettings.HasSetting("gap/test/value") && ProjectSettings.GetSetting("gap/test/value").AsInt64() == 7);
         ProjectSettings.SetSetting("gap/test/value", default);

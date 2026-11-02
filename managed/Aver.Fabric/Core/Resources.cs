@@ -102,6 +102,7 @@ public static class ResourceLoader
             yield break;
         }
         yield return rel;
+        if (ext is ".tres" or ".res") yield return "Resources/" + rel[..^ext.Length] + ".ocres";   // a custom resource, as its value
         yield return "Textures/" + rel;
         yield return "Audio/" + rel;   // G5 S1: the converter copies sound files under Audio/
     }
@@ -149,7 +150,9 @@ public static class ResourceLoader
         {
             string? file = FindFile(path);
             string ext = System.IO.Path.GetExtension(path);
-            if (file != null && TypeForExtension(ext) == typeof(PackedScene) && type.IsAssignableFrom(typeof(PackedScene)))
+            if (file != null && file.EndsWith(".ocres", StringComparison.OrdinalIgnoreCase))
+                r = CustomResource(file, path, type);
+            else if (file != null && TypeForExtension(ext) == typeof(PackedScene) && type.IsAssignableFrom(typeof(PackedScene)))
                 r = PackedScene.FromFile(file, path);
             else
             {
@@ -178,6 +181,21 @@ public static class ResourceLoader
     }
 
     public static T? Load<T>(string path, CacheMode cacheMode = CacheMode.Reuse) where T : class => Load(path, typeof(T), cacheMode) as T;
+
+    // A custom resource (a .tres with a script) the converter wrote as its "__class" dictionary: built as that class.
+    private static Resource? CustomResource(string file, string path, System.Type type)
+    {
+        try
+        {
+            if (ClassDB.FromDictionary(VariantText.Parse(File.ReadAllText(file)).AsGodotDictionary(), type) is Resource r) return r;
+            Aver.Scripting.Log.Warn($"[Fabric] '{path}': its class is not among the built scripts, or is not a {type.Name}");
+        }
+        catch (Exception ex) when (ex is FormatException or IOException)
+        {
+            Aver.Scripting.Log.Warn($"[Fabric] cannot read the custom resource '{path}': {ex.Message}");
+        }
+        return null;
+    }
 
     /// <summary>Godot's load(path, type_hint, cache_mode): the hint only picks Godot's loader, and Aver has one per file kind, so it is not needed.</summary>
     public static Resource? Load(string path, string typeHint, CacheMode cacheMode = CacheMode.Reuse) => Load(path, (System.Type?)null, cacheMode);

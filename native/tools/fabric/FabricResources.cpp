@@ -1445,6 +1445,18 @@ Var Converter::genericResourceDict(const std::string& type, const std::vector<gd
     return makeDict(std::move(entries));
 }
 
+// A custom resource file is also written as its value, the "__class" dictionary a scene holds, to Resources/<path>.ocres, so a
+// script's load() of the path builds the class (ResourceLoader.Load reads it).
+void Converter::customResourceFile(const std::string& res, const std::string& type, const gd::GodotResource& r, const Where& w) {
+    std::string path = "Resources/" + (res.rfind("res://", 0) == 0 ? res.substr(6) : res);
+    if (const size_t dot = path.find_last_of('.'); dot != std::string::npos && path.find('/', dot) == std::string::npos) path.erase(dot);
+    path += ".ocres";
+    const Var value = genericResourceDict(type, r.props, r, w, "");
+    createDirectories(std::filesystem::path(contentDir_ + "/" + path).parent_path().string());
+    if (!writeFileText(contentDir_ + "/" + path, gd::godotVariantToText(value) + "\n"))
+        report_.add("resource", res, "", type, "", Rating::Unsupported, "the custom resource file " + path + " could not be written", 0);
+}
+
 Var Converter::shapeObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w) {
     if (isRuntimeShapeType(type)) {
         std::vector<std::pair<std::string, Var>> entries;
@@ -1767,9 +1779,8 @@ void Converter::convertStandaloneResources() {
                 report_.add("resource", res, "", t, "", Rating::Converted, "converted where a scene uses it", 0);
             else if (isOccluderType(t))
                 report_.add("resource", res, "", t, "", Rating::Approximated, "kept as Aver.Fabric's " + t + " where a scene uses it; occlusion culling is automatic", 0);
-            else if (const ScriptInfo* si = resourceScript(r->props, *r))
-                report_.add("resource", res, "", t, "", Rating::Converted,
-                            "a custom resource: built as " + si->className + " where a scene uses it (a script's load() of this file finds nothing yet)", 0);
+            else if (resourceScript(r->props, *r))
+                customResourceFile(res, t, *r, w);
             else
                 report_.add("resource", res, "", t, "", Rating::Unsupported, "a " + t + " resource has no Aver counterpart yet", 0);
         } else if (isModelExt(ext)) {

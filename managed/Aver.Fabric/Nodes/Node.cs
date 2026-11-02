@@ -65,6 +65,8 @@ public partial class Node : GodotObject
 
     public enum InternalMode { Disabled = 0, Front = 1, Back = 2 }
 
+    public enum AutoTranslateModeEnum { Inherit = 0, Always = 1, Disabled = 2 }
+
     [Flags]
     public enum DuplicateFlags { Signals = 1, Groups = 2, Scripts = 4, UseInstantiation = 8 }
 
@@ -162,6 +164,19 @@ public partial class Node : GodotObject
 
     /// <summary>The scene file this node was instanced from, if it is a scene root.</summary>
     public string SceneFilePath { get => _sceneFilePath; set => _sceneFilePath = value; }
+
+    /// <summary>Whether tr() applies to this node's text: Inherit takes the parent's answer, and the root's is Always.</summary>
+    public AutoTranslateModeEnum AutoTranslateMode { get; set; }
+
+    public bool CanAutoTranslate()
+    {
+        for (Node? n = this; n != null; n = n.GetParent())
+            if (n.AutoTranslateMode != AutoTranslateModeEnum.Inherit) return n.AutoTranslateMode == AutoTranslateModeEnum.Always;
+        return true;
+    }
+
+    /// <summary>The note Godot's editor shows for the node; kept, never shown.</summary>
+    public string EditorDescription { get; set; } = "";
 
     /// <summary>The node that owns this one (normally the root of the scene it was authored in).</summary>
     public Node? Owner

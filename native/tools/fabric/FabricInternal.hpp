@@ -363,6 +363,7 @@ public:
     Var shapeObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w);
     // Environment, Sky, the sky materials and CameraAttributes as `Object(Class, ...)` for Aver.Fabric's WorldEnvironment node (G4 R3).
     Var environmentObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w);
+    void customResourceFile(const std::string& res, const std::string& type, const gd::GodotResource& r, const Where& w);
     Var genericResourceDict(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc,
                             const Where& w, const char* why);
     // The converted script a resource's `script = ExtResource(...)` names (a custom Resource class: class_name WeaponSlot extends Resource), or null.
