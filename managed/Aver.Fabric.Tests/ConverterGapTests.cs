@@ -27,6 +27,7 @@ static class ConverterGapTests
         T.Run("converter gap: a second Play does not leave the first session's autoloads and scene in the tree", SecondSessionTree);
         T.Run("converter gap: a stopped session's tree, GUI, pointer and resources are gone before the next session's nodes enter", StoppedSessionSlate);
         T.Run("converter gap: custom Resource classes in a scene (an Array[WeaponSlot] of slots holding weapon data) are built as the script classes", CustomResourcesInScene);
+        T.Run("converter gap: a 3D node under a non-3D parent (a SubViewport's camera below a CanvasLayer of the moving player) is placed in the world directly", ThreeDUnderNonThreeD);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -441,6 +442,33 @@ static class ConverterGapTests
         Variant one = VariantText.Parse("{\"__class\": \"GapWeaponData\", \"weapon_name\": \"blasterQ\"}");
         T.Check("a single custom resource field is built too", one.As<GapWeaponData>() is { WeaponName: "blasterQ" });
         holder.Free();
+    }
+
+    // Godot4-FPS-Template copies the main camera's global transform onto a camera under CanvasLayer/SubViewportContainer/SubViewport every frame. The engine
+    // composes an entity with all its parents, so that camera's entity must hang under none, or the player's transform is applied twice.
+    private static void ThreeDUnderNonThreeD()
+    {
+        var player = new Node3D();
+        var layer = new CanvasLayer();
+        var container = new SubViewportContainer();
+        var view = new SubViewport();
+        var cam = new Camera3D();
+        var held = new Node3D();
+        var top = new Node3D { TopLevel = true };
+        player.AddChild(layer);
+        layer.AddChild(container);
+        container.AddChild(view);
+        view.AddChild(cam);
+        player.AddChild(held);
+        player.AddChild(top);
+        T.Check("a camera under a SubViewport hangs under no entity", NodeHost.EngineParent(cam) == null);
+        T.Check("a 3D child of a 3D node hangs under it", NodeHost.EngineParent(held) == player);
+        T.Check("a top-level node hangs under none, as before", NodeHost.EngineParent(top) == null);
+        T.Check("non-3D nodes keep their parent", NodeHost.EngineParent(container) == layer && NodeHost.EngineParent(view) == container);
+        player.Position = new Vector3(10, 0, 0);
+        cam.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(10, 2, 0));
+        T.Check("its global transform is its own, whatever the player above does", cam.GlobalTransform.Origin == new Vector3(10, 2, 0) && cam.Transform.Origin == new Vector3(10, 2, 0));
+        player.Free();
     }
 }
 

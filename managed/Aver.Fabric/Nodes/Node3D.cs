@@ -357,6 +357,13 @@ public partial class Node3D : Node
     internal override void OnEnteringTree()
     {
         base.OnEnteringTree();
+        // A level's placements hang under their file parent whatever its type; under a non-3D parent this node takes its own place in the world, as in Godot
+        // (NodeHost.EngineParent), with its local transform as the global one.
+        if (Backed && !_topLevel && GetParent() is { } parent && parent is not Node3D && parent is not Window)
+        {
+            HangEntity();
+            Push();
+        }
         if (!_visible || ParentNode3D is { _visible: false }) OnVisibilityApplied(IsVisibleInTree());
         ApplyInterpolation();
     }

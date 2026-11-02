@@ -35,9 +35,10 @@ internal static class NodeHost
         set => s_current = value;
     }
 
-    /// <summary>The node whose entity this node's entity hangs under in the engine: its parent, except that a top-level node hangs under none (the engine composes
-    /// an entity's world matrix with its parents', and a top-level node ignores its parent's transform).</summary>
-    internal static Node? EngineParent(Node n) => n is Node3D { TopLevel: true } ? null : n.GetParent();
+    /// <summary>The node whose entity this node's entity hangs under in the engine: its parent, except that a 3D node that ignores its parent's transform hangs
+    /// under none (the engine composes an entity's world matrix with all its parents'): a top-level node, and one whose parent is not a Node3D, which in Godot
+    /// is placed in the world directly (a camera under a SubViewport below a CanvasLayer below the moving player).</summary>
+    internal static Node? EngineParent(Node n) => n is Node3D n3 && (n3.TopLevel || n.GetParent() is not Node3D) ? null : n.GetParent();
 
     internal static IEnumerable<Node> PreOrder(Node n)
     {
@@ -126,15 +127,13 @@ internal sealed class EngineNodeHost : INodeHost
 
     public void Destroy(Node node)
     {
-        // A top-level node's entity is a root, so destroying its parent's entity does not end it: collect those first.
-        List<Node> detached = NodeHost.PreOrder(node).Skip(1).Where(IsTopLevel).ToList();
+        // A node whose entity is a root (top-level, or a 3D node under a non-3D parent) does not end with its parent's entity: collect those first.
+        List<Node> detached = NodeHost.PreOrder(node).Skip(1).Where(n => NodeHost.EngineParent(n) == null).ToList();
         if (node.Self.IsValid && node.Self.IsAlive) node.Self.Destroy();   // the framework ends every actor below, children first
         else NodeHost.ManagedExit(node);
         foreach (Node n in detached)
             if (n.Self.IsValid && n.Self.IsAlive) n.Self.Destroy();
     }
-
-    private static bool IsTopLevel(Node n) => n is Node3D { TopLevel: true };
 
     private static void SpawnOne(Node n)
     {
