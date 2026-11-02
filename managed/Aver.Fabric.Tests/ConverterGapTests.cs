@@ -28,6 +28,7 @@ static class ConverterGapTests
         T.Run("converter gap: a stopped session's tree, GUI, pointer and resources are gone before the next session's nodes enter", StoppedSessionSlate);
         T.Run("converter gap: custom Resource classes in a scene (an Array[WeaponSlot] of slots holding weapon data) are built as the script classes", CustomResourcesInScene);
         T.Run("converter gap: a 3D node under a non-3D parent (a SubViewport's camera below a CanvasLayer of the moving player) is placed in the world directly", ThreeDUnderNonThreeD);
+        T.Run("converter gap: an exported Array[Node3D] stored as NodePaths holds the nodes by _ready (bukkbeek's weapons_array)", NodeArrayExport);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -471,6 +472,29 @@ static class ConverterGapTests
         T.Check("its global transform is its own, whatever the player above does", cam.GlobalTransform.Origin == new Vector3(10, 2, 0) && cam.Transform.Origin == new Vector3(10, 2, 0));
         player.Free();
     }
+
+    // bukkbeek/GodotFPS-Template: weapons_array = [NodePath("Knife"), NodePath("Pistol")], its own children, which enter the tree after it.
+    private static void NodeArrayExport()
+    {
+        var manager = new GapWeaponsManager { Name = "WeaponsManager" };
+        var knife = new Node3D { Name = "Knife" };
+        var pistol = new Node3D { Name = "Pistol" };
+        manager.PendingValues = new List<(string, string)> { ("weapons_array", "[NodePath(\"Knife\"), NodePath(\"Pistol\"), NodePath(\"Missing\")]") };
+        manager.AddChild(knife);
+        manager.AddChild(pistol);
+        SceneTree.Instance.Root.AddChild(manager);
+        T.Check("the list holds the nodes when _Ready runs (a missing one is left out)", manager.SeenAtReady == 2, manager.SeenAtReady.ToString());
+        T.Check("in their order", manager.WeaponsArray.Count == 2 && ReferenceEquals(manager.WeaponsArray[0], knife) && ReferenceEquals(manager.WeaponsArray[1], pistol));
+        manager.Free();
+    }
+}
+
+// The weapons manager of NodeArrayExport: what its list holds when its _Ready runs.
+public class GapWeaponsManager : Node3D
+{
+    public Aver.Fabric.Collections.Array<Node3D> WeaponsArray { get; set; } = new();
+    public int SeenAtReady = -1;
+    public override void _Ready() => SeenAtReady = WeaponsArray.Count;
 }
 
 // The script classes of CustomResourcesInScene: a custom Resource holding another, and the node whose typed list holds them.

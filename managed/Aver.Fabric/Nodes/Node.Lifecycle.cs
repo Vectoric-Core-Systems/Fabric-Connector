@@ -386,6 +386,15 @@ public partial class Node
                     else (_pendingNodeRefs ??= new()).Add((key, path));
                     continue;
                 }
+                // An exported Array[Node3D] (node_paths) is stored as a list of NodePaths: each is looked up when this node becomes ready, when its
+                // targets (often its own children, which enter after it) are in the tree.
+                if (v.VariantType == Variant.Type.Array && MemberAccess.SettableType(GetType(), key) is { IsGenericType: true } at &&
+                    at.GetGenericTypeDefinition() == typeof(Collections.Array<>) && typeof(Node).IsAssignableFrom(at.GetGenericArguments()[0]) &&
+                    v.AsGodotArray() is { Count: > 0 } items && items.All(x => x.VariantType is Variant.Type.NodePath or Variant.Type.String))
+                {
+                    (_pendingNodeArrays ??= new()).Add((key, items.Select(x => x.AsString()).ToArray()));
+                    continue;
+                }
                 // A resource marked local_to_scene is not shared between instances: each node gets its own copy.
                 if (v.VariantType == Variant.Type.Object && v.AsGodotObject() is Resource { ResourceLocalToScene: true } shared)
                 {
@@ -427,9 +436,25 @@ public partial class Node
     // entered the tree and so can be found by path, and before any _Ready of the batch that does not belong to a descendant.
     private string? _pendingConnections;
     private List<(string Key, string Path)>? _pendingNodeRefs;
+    private List<(string Key, string[] Paths)>? _pendingNodeArrays;
 
     private void ResolvePendingNodeRefs()
     {
+        if (_pendingNodeArrays != null)
+        {
+            var lists = _pendingNodeArrays;
+            _pendingNodeArrays = null;
+            foreach ((string key, string[] paths) in lists)
+            {
+                var nodes = new Collections.Array();
+                foreach (string path in paths)
+                {
+                    if (GetNodeOrNull(path) is Node found) nodes.Add(found);
+                    else Log.Warn($"[Fabric] {GetClass()} '{_name}': '{key}' lists '{path}', which is not in the scene");
+                }
+                MemberAccess.TrySet(this, key, nodes);
+            }
+        }
         if (_pendingNodeRefs == null) return;
         var refs = _pendingNodeRefs;
         _pendingNodeRefs = null;
