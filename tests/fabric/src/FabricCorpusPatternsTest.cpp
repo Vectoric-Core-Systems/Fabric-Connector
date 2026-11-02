@@ -141,9 +141,9 @@ int main() {
     const int armature = find(w, {"Main", "Rig", "Armature"});
     const int skel = find(w, {"Main", "Rig", "Armature", "Skeleton3D"});
     const int body = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "Body"});
-    const int attach = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "BoneAttachment3D"});
-    const int hand = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "BoneAttachment3D", "Hand"});
-    const int tool = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "BoneAttachment3D", "Hand", "Tool"});
+    const int attach = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "Tip_001"});
+    const int hand = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "Tip_001", "Hand"});
+    const int tool = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "Tip_001", "Hand", "Tool"});
     const int muzzle = find(w, {"Main", "Rig", "Armature", "Muzzle"});
     const int sign = find(w, {"Main", "Rig", "Armature", "Muzzle", "Sign"});
     const int prop = find(w, {"Main", "Rig", "Prop"});
@@ -152,8 +152,13 @@ int main() {
     check(cls(armature) == "Node3D", "the model's root glTF node is a Node3D below the instance");
     check(cls(skel) == "Skeleton3D", "the skin's skeleton is a Skeleton3D below the node it hangs from (named Skeleton3D)");
     check(cls(body) == "MeshInstance3D" && propOf(w, body, "mesh") != nullptr, "the skinned mesh node moved below the Skeleton3D and shows its mesh");
-    check(cls(attach) == "BoneAttachment3D", "a node hung on a bone is held by a BoneAttachment3D below the skeleton");
+    check(cls(attach) == "BoneAttachment3D", "a node hung on a bone is held by a BoneAttachment3D below the skeleton, named for the bone (Godot importer)");
     check(cls(hand) == "Node3D" && cls(tool) == "Node3D", "the hung node and the child the scene added to it are found");
+    const int grip = find(w, {"Main", "Rig", "Armature", "Skeleton3D", "Tip_001", "Grip"});
+    const std::string* gripVisible = propOf(w, grip, "visible");
+    check(cls(grip) == "MeshInstance3D" && find(w, {"Main", "Rig", "Armature", "Skeleton3D", "Tip_0012"}) < 0,
+          "a second node on the same bone shares its BoneAttachment3D");
+    check(gripVisible && *gripVisible == "false", "the scene's override by that path (Tip_001/Grip visible = false) reaches the node");
     check(cls(muzzle) == "Marker3D" && cls(sign) == "Label3D", "a node added below the model's Armature, and its child, are kept");
     check(childOrder(w, armature, "Skeleton3D") == 0 && childOrder(w, armature, "Muzzle") == 1, "the model's Skeleton3D is the Armature's first child, the added node after it");
     check(cls(prop) == "MeshInstance3D" && propOf(w, prop, "mesh") != nullptr, "a plain mesh node of the model keeps its mesh");

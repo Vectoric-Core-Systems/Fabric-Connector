@@ -421,18 +421,18 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
                 T.nodes[at(sk)].bones = std::move(bones);
                 boneWorld[g] = std::move(world);
             }
+            // The nodes hung on a bone share one BoneAttachment3D below the skeleton, named for the bone as Godot's importer names it
+            // (scenes override them by that path: Skeleton3D/hand_R/pistol).
             const int sk = skelNode[g];
+            int att = -1;
             for (const int c : kids[at(n)]) {
-                if (boneGroup[at(c)] == g) {
-                    gen(c, sceneParent, depth + 1);
-                } else {   // a node hung on a bone is held by a BoneAttachment3D below the skeleton
-                    const int att = add(sk, siblingName(sk, "BoneAttachment3D"), "BoneAttachment3D");
-                    T.nodes[at(att)].boneName = nm[at(n)];
-                    const std::vector<Xform>& bw = boneWorld[g];
-                    if (boneIndex[at(n)] >= 0 && at(boneIndex[at(n)]) < bw.size()) T.nodes[at(att)].xf = bw[at(boneIndex[at(n)])];
-                    gen(c, att, depth + 1);
-                }
+                if (boneGroup[at(c)] == g || att >= 0) continue;
+                att = add(sk, siblingName(sk, nm[at(n)]), "BoneAttachment3D");
+                T.nodes[at(att)].boneName = nm[at(n)];
+                const std::vector<Xform>& bw = boneWorld[g];
+                if (boneIndex[at(n)] >= 0 && at(boneIndex[at(n)]) < bw.size()) T.nodes[at(att)].xf = bw[at(boneIndex[at(n)])];
             }
+            for (const int c : kids[at(n)]) gen(c, boneGroup[at(c)] == g ? sceneParent : att, depth + 1);
             return;
         }
         const JsonValue& jnode = jn[at(n)];
