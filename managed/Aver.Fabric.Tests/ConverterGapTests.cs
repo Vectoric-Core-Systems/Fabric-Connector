@@ -30,6 +30,7 @@ static class ConverterGapTests
         T.Run("converter gap: a 3D node under a non-3D parent (a SubViewport's camera below a CanvasLayer of the moving player) is placed in the world directly", ThreeDUnderNonThreeD);
         T.Run("converter gap: an exported Array[Node3D] stored as NodePaths holds the nodes by _ready (bukkbeek's weapons_array)", NodeArrayExport);
         T.Run("converter gap: Godot 4.5 @abstract classes and functions, and BaseMaterial3D's flags and features by number (COGITO)", AbstractAndMaterialFlags);
+        T.Run("converter gap: an addon's editor-only scripts (EditorPlugin, EditorInterface, and what loads them) are left out of the game (COGITO)", EditorOnlyScripts);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -509,6 +510,24 @@ static class ConverterGapTests
         sq.Free();
         BaseMaterial3D mat = (BaseMaterial3D)Activator.CreateInstance(s_loaded.GetValue(r, x => Assembly.Load(x.Assembly!)).GetType("GapMatFlags")!)!;
         T.Check("set_flag / set_feature reach the properties, a flag without one is kept: 1 + 2 + 4 + 8", (long)mat.GetType().GetMethod("Run")!.Invoke(mat, null)! == 15);
+    }
+
+    // COGITO's addons carry editor plugins (EditorPlugin, EditorInterface, EditorUndoRedoManager): about 200 of its compile errors. A project class whose
+    // own name starts with Editor (its EditorSidebar) is not Godot's.
+    private static void EditorOnlyScripts()
+    {
+        ConversionResult r = Many(
+            ("GapPlugin", "@tool\nclass_name GapPlugin\nextends EditorPlugin\n\nfunc _enter_tree():\n\tEditorInterface.get_selection()\n"),
+            ("GapDock", "@tool\nclass_name GapDock\nextends Control\n\nvar plugin: GapPlugin\n"),
+            ("GapLoader", "extends Node\n\nconst DOCK = preload(\"res://gapplugin.gd\")\n"),
+            ("EditorLikeThing", "class_name EditorLikeThing\nextends Node\n\nfunc value() -> int:\n\treturn 7\n"),
+            ("GapGame", "class_name GapGame\nextends Node\n\nvar thing: EditorLikeThing\n\nfunc run() -> int:\n\treturn 1\n"));
+        T.Check("it compiles (before: EditorPlugin and EditorInterface did not exist)", r.Success, Errors(r));
+        string[] kept = r.Scripts.Select(s => s.ClassName).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        T.Check("the game keeps its own scripts, a class named Editor... included", string.Join(",", kept) == "EditorLikeThing,GapGame", string.Join(",", kept));
+        string[] left = r.LeftOut.Select(i => i.File).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        T.Check("the plugin, the dock that names it and the script that preloads it are left out, each reported",
+            string.Join(",", left) == "res://gapdock.gd,res://gaploader.gd,res://gapplugin.gd" && r.Items.Count(i => i.Reason.StartsWith("left out of the game")) == 3, string.Join(",", left));
     }
 }
 

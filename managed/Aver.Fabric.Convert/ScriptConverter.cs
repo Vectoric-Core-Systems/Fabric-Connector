@@ -61,15 +61,25 @@ public static class ScriptConverter
         // GDScript first: it writes C# (against the same runtime), which then goes through the steps below like any other script.
         var gd = new Dictionary<string, GdConvertedFile>(StringComparer.Ordinal);
         List<ScriptSource> gdSources = sources.Where(s => s.Kind == "gdscript").ToList();
+        Dictionary<string, string> editorOnly = new(StringComparer.Ordinal);
         if (gdSources.Count > 0)
         {
             ApiModel? api = refs != null ? ApiModel.Create(refs, settings.ExtraSources) : null;
             var gdInput = gdSources.Select(s => new GdSource { ResPath = s.ResPath, Text = s.Text, ClassName = s.ClassName.Length > 0 ? s.ClassName : GdScript.Naming.ScriptClass(GdScript.Naming.Pascal(SyntaxUtil.StemOf(s.ResPath))), Output = s.Output }).ToList();
+            editorOnly = EditorOnly.Find(gdInput);
+            foreach ((string path, string why) in editorOnly)
+                result.LeftOut.Add(new ReportItem
+                {
+                    File = path, Type = "gdscript", Rating = Rating.Approximated,
+                    Reason = $"left out of the game: it uses '{why}', which only Godot's editor has, so an exported Godot game does not load it either",
+                });
+            gdInput.RemoveAll(s => editorOnly.ContainsKey(s.ResPath));
             foreach (GdConvertedFile f in GdScriptConverter.Convert(gdInput, api, settings.ProjectDir, settings.SceneNodes != null ? SceneIndex.Parse(settings.SceneNodes) : null)) gd[f.ResPath] = f;
         }
 
         foreach (ScriptSource src0 in sources)
         {
+            if (editorOnly.ContainsKey(src0.ResPath)) continue;
             if (src0.Kind == "gdscript")
             {
                 GdConvertedFile g = gd[src0.ResPath];

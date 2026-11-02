@@ -87,7 +87,9 @@ public sealed class ConversionResult
     /// <summary>The compiled assembly, when it compiled with no errors and the caller asked for it.</summary>
     public byte[]? Assembly { get; set; }
     public bool Success => Compiled && Errors.Count == 0 && GeneralErrors.Count == 0;
-    public IEnumerable<ReportItem> Items => Scripts.SelectMany(s => s.Items);
+    /// <summary>The scripts left out of the game, one item each (editor-only scripts: see GdScript.EditorOnly).</summary>
+    public List<ReportItem> LeftOut { get; } = new();
+    public IEnumerable<ReportItem> Items => Scripts.SelectMany(s => s.Items).Concat(LeftOut);
 }
 
 /// <summary>What a conversion needs besides the sources.</summary>
