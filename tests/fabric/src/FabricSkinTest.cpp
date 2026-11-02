@@ -118,7 +118,7 @@ int main() {
         check(fmt::loadOcAnim(content + "/Animations/models_skin_Rise.ocanim", rise, &err) && rise.propClip && rise.propTracks.size() == 1, "Rise is a property clip of one track: " + err);
         if (!rise.propTracks.empty()) {
             const fmt::OcPropTrack& t = rise.propTracks[0];
-            check(t.type == fmt::OcPropTrackType::Position3D && t.path == "Armature/Skeleton3D:Spine", "on the Spine bone, by its path from the model root: " + t.path);
+            check(t.type == fmt::OcPropTrackType::Position3D && t.path == "Armature/Skeleton3D:Spine.001", "on the Spine.001 bone (a bone name keeps its dot), by its path from the model root: " + t.path);
             check(t.keys.size() == 2 && near(t.keys[0].time, 0) && near(t.keys[1].time, 1) && t.interp == fmt::OcPropInterp::Linear, "with the file's own two keys, linear");
             check(near(t.keys[1].value.n[0], 0) && near(t.keys[1].value.n[1], 0) && near(t.keys[1].value.n[2], 200), "the last key is 2 m up, in the engine's centimetres and axes (0, 0, 200)");
             check(near(rise.duration, 1.0), "its length is the file's");
@@ -155,7 +155,7 @@ int main() {
         check(readFileText(content + "/Meshes/models/skin/models_skin.ocragdoll", text), "the skeleton has an .ocragdoll");
         check(text.find("bone Hips on") != std::string::npos && text.find("radius 20.0000") != std::string::npos, "the Hips part has the capsule's radius in centimetres");
         check(text.find("mass 12.0000") != std::string::npos && text.find("friction 0.5000") != std::string::npos && text.find("bounce 0.2500") != std::string::npos, "and its mass, friction and bounce");
-        check(text.find("bone Spine on") != std::string::npos && text.find("joint swingtwist limits 25.0000 25.0000 15.0000") != std::string::npos, "the Spine part is a cone joint with the scene's spans");
+        check(text.find("bone Spine.001 on") != std::string::npos && text.find("joint swingtwist limits 25.0000 25.0000 15.0000") != std::string::npos, "the Spine part is a cone joint with the scene's spans");
         check(text.find("joint ball") != std::string::npos, "a bone with no joint type is free to turn");
     }
 

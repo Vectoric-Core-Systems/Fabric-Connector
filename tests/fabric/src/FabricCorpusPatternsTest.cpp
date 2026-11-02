@@ -186,13 +186,13 @@ int main() {
         gd::GodotVariant v;
         check(propOf(w, skel, "bones/0/name") && propOf(w, skel, "bones/0/name")->find("Root") != std::string::npos, "bones/0 is the skeleton's root joint");
         const std::string* n1 = propOf(w, skel, "bones/1/name");
-        check(n1 && n1->find("Tip_001") != std::string::npos, "bones/1 is the next joint, its '.' made '_' as Godot's names are");
+        check(n1 && n1->find("Tip.001") != std::string::npos, "bones/1 is the next joint, named as the file names it (Godot's importer keeps '.' in a bone name)");
         const std::string* par = propOf(w, skel, "bones/1/parent");
         check(par && *par == "0", "bones/1/parent is bone 0");
         check(parsed(propOf(w, skel, "bones/1/position"), v) && v.type == gd::GodotVType::Vector3 && near(v.num(1), 3.0), "an override of bones/1/position wins over the model's rest pose");
         check(parsed(propOf(w, skel, "bones/0/rest"), v) && v.type == gd::GodotVType::Transform3D && near(v.num(10), 1.0), "bones/0/rest holds the joint's rest transform (1 m up)");
         const std::string* bn = propOf(w, attach, "bone_name");
-        check(bn && bn->find("Tip_001") != std::string::npos, "the attachment names the bone it follows");
+        check(bn && bn->find("Tip.001") != std::string::npos, "the attachment names the bone it follows (its node name is Tip_001)");
     }
 
     // ---- libraries/ and _limits ---------------------------------------------------------------------------------------------------------

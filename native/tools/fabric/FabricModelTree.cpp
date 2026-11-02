@@ -286,6 +286,22 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
                 boneGroup[at(n)] = g;
             }
     }
+    // A bone's name is not a node name: Godot's importer only replaces ':' and '/' ("Holder.R" stays), unique within its skeleton (a repeat
+    // gets _2, _3, ...). The engine's .ocskel keeps the file's names too, which is how the skeleton is bound to it.
+    std::vector<std::string> bn(at(N));
+    std::map<int, std::set<std::string>> boneNamesUsed;
+    for (int i = 0; i < N; ++i) {
+        if (boneGroup[at(i)] < 0) continue;
+        std::string base(jn[at(i)]["name"].asString());
+        if (base.empty()) base = "bone";
+        for (char& c : base)
+            if (c == ':' || c == '/') c = '_';
+        std::set<std::string>& used = boneNamesUsed[boneGroup[at(i)]];
+        std::string cand = base;
+        for (int k = 2; used.count(cand); ++k) cand = base + "_" + std::to_string(k);
+        used.insert(cand);
+        bn[at(i)] = cand;
+    }
 
     // ---- the tree ----
     ModelTree& T = out;
@@ -405,7 +421,7 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
                     if (boneGroup[at(b)] != g || boneIndex[at(b)] >= 0 || bones.size() >= 4096) return;   // a hostile file's chain must not run the stack out
                     bool has = false;
                     ModelBone mb;
-                    mb.name = nm[at(b)];
+                    mb.name = bn[at(b)];
                     mb.gltfNode = b;
                     mb.parent = pb;
                     mb.rest = nodeLocal(jn[at(b)], has);
@@ -427,8 +443,8 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
             int att = -1;
             for (const int c : kids[at(n)]) {
                 if (boneGroup[at(c)] == g || att >= 0) continue;
-                att = add(sk, siblingName(sk, nm[at(n)]), "BoneAttachment3D");
-                T.nodes[at(att)].boneName = nm[at(n)];
+                att = add(sk, siblingName(sk, validNodeName(bn[at(n)])), "BoneAttachment3D");
+                T.nodes[at(att)].boneName = bn[at(n)];
                 const std::vector<Xform>& bw = boneWorld[g];
                 if (boneIndex[at(n)] >= 0 && at(boneIndex[at(n)]) < bw.size()) T.nodes[at(att)].xf = bw[at(boneIndex[at(n)])];
             }
@@ -530,7 +546,7 @@ bool buildModelTree(const std::string& path, ModelTree& out, std::string& why) {
             if (K == 0 || vals.size() != K * static_cast<size_t>(comps) * (cubic ? 3 : 1)) { ++unreadChannels; continue; }
 
             ModelAnimTrack tr;
-            if (boneIndex[at(n)] >= 0 && boneGroup[at(n)] >= 0 && skelNode.count(boneGroup[at(n)])) tr.path = pathOf(skelNode[boneGroup[at(n)]]) + ":" + nm[at(n)];
+            if (boneIndex[at(n)] >= 0 && boneGroup[at(n)] >= 0 && skelNode.count(boneGroup[at(n)])) tr.path = pathOf(skelNode[boneGroup[at(n)]]) + ":" + bn[at(n)];
             else if (treeOf[at(n)] >= 0) tr.path = pathOf(treeOf[at(n)]);
             else continue;
             tr.type = type;

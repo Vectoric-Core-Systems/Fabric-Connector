@@ -40,7 +40,7 @@ bounce = 0.25
 shape = SubResource("Capsule_hips")
 
 [node name="Physical Bone Spine" type="PhysicalBone3D" parent="Hero/Armature/Skeleton3D/PhysicalBoneSimulator3D"]
-bone_name = &"Spine"
+bone_name = &"Spine.001"
 joint_type = 2
 joint_constraints/swing_span = 25.0
 joint_constraints/twist_span = 15.0
