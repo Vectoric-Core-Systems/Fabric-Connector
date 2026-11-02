@@ -425,6 +425,14 @@ internal sealed partial class GdEmitter
             return Wrap(e, P.Primary) + ".GetRid()";
         if (to.Kind == GK.String && from.Kind == GK.NodePath) return e.Code;
         if (to.Kind == GK.StringName && from.Kind == GK.NodePath) return "(string)" + Wrap(e, P.Unary);
+        // An untyped Array where an Array[T] is wanted (query.exclude = hit_list), or back: the wrappers' explicit conversions share the storage, as Godot's
+        // assignment does. Two different element types go through the untyped one.
+        if (to.Kind is GK.Array or GK.Dict && from.Kind == to.Kind && to.Cs != from.Cs)
+        {
+            string untyped = to.Kind == GK.Array ? "Collections.Array" : "Collections.Dictionary";
+            string inner = from.Cs == untyped || to.Cs == untyped ? Wrap(e, P.Unary) : "(" + untyped + ")" + Wrap(e, P.Unary);
+            return "(" + to.Cs + ")" + inner;
+        }
         if (to.IsGodotObject && from.IsGodotObject && !to.Accepts(from) && to.Cs != "GodotObject")
             return "(" + to.Cs + ")" + Wrap(e, P.Unary);
         return e.Code;

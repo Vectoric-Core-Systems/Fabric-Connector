@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-873 public types and 9411 public members, read from `managed/Aver.Fabric/` (169 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+876 public types and 9440 public members, read from `managed/Aver.Fabric/` (169 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -3528,6 +3528,32 @@ Values: `Union = 0`, `Intersection = 1`, `Subtraction = 2`
 `public enum TangentMode`
 
 Values: `Free = 0`, `Linear = 1`
+
+### Curve2D
+
+`public class Curve2D : Resource` - One curve in 2D: bezier points with in and out handles, baked into a polyline spaced BakeInterval apart (Godot's Curve2D).
+
+- `public float BakeInterval { get; set; }`
+- `public int PointCount { get; set; }`
+- `public void AddPoint(Vector2 position, Vector2 inHandle = default, Vector2 outHandle = default, int index = -1)` - Adds a point (the handles are relative to the position); index -1 appends.
+- `public void RemovePoint(int index)`
+- `public void ClearPoints()`
+- `public Vector2 GetPointPosition(int index)`
+- `public Vector2 GetPointIn(int index)`
+- `public Vector2 GetPointOut(int index)`
+- `public void SetPointPosition(int index, Vector2 position)`
+- `public void SetPointIn(int index, Vector2 position)`
+- `public void SetPointOut(int index, Vector2 position)`
+- `public Collections.Dictionary Data { get; set; }` - The points as a scene stores them: "points" (in, out and position of each point).
+- `public Vector2 Sample(int idx, float t)` - The point on the bezier segment starting at idx, at t in 0..1.
+- `public Vector2 Samplef(float fofs)` - The point at fofs: the integer part is the segment, the fraction the place along it.
+- `public Vector2[] Tessellate(int maxStages = 5, float toleranceDegrees = 4f)` - The curve cut into straight pieces: each segment split evenly into 2^maxStages steps, keeping the points where it bends by more than toleranceDegrees.
+- `public float GetBakedLength()`
+- `public Vector2[] GetBakedPoints()`
+- `public Vector2 SampleBaked(float offset, bool cubic = false)` - The point offset units along the baked curve (clamped to its ends).
+- `public Transform2D SampleBakedWithRotation(float offset, bool cubic = false)` - The position at offset, rotated so its X axis runs along the curve.
+- `public Vector2 GetClosestPoint(Vector2 toPoint)`
+- `public float GetClosestOffset(Vector2 toPoint)`
 
 ### Curve3D
 
@@ -7582,6 +7608,12 @@ Values: `AlignYToVelocity = 0`, `RotateY = 1`, `DisableZ = 2`, `DampingAsFrictio
 
 Values: `Disabled = 0`, `Constant = 1`, `AtEnd = 2`, `AtCollision = 3`, `AtStart = 4`, `Max = 5`
 
+### Path2D
+
+`public class Path2D : Node2D` - A node holding a curve in 2D (Godot's Path2D).
+
+- `public Curve2D? Curve { get; set; }`
+
 ### Path3D
 
 `public class Path3D : Node3D` - A node holding a curve in 3D (Godot's Path3D).
@@ -7600,6 +7632,18 @@ Values: `Disabled = 0`, `Constant = 1`, `AtEnd = 2`, `AtCollision = 3`, `AtStart
 `public enum PathfindingAlgorithm` - Which pathfinding algorithm a query uses (Godot's NavigationPathQueryParameters3D.PathfindingAlgorithm).
 
 Values: `Astar = 0`
+
+### PathFollow2D
+
+`public class PathFollow2D : Node2D` - Rides the curve of the Path2D it is a child of (Godot's PathFollow2D): Position and Rotation follow Progress along the baked curve.
+
+- `public float Progress { get; set; }`
+- `public float ProgressRatio { get; set; }`
+- `public float HOffset { get; set; }`
+- `public float VOffset { get; set; }`
+- `public bool Rotates { get; set; }`
+- `public bool CubicInterp { get; set; }`
+- `public bool Loop { get; set; }`
 
 ### PathFollow3D
 

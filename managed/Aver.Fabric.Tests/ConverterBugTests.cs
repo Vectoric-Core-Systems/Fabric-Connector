@@ -18,6 +18,7 @@ static class ConverterBugTests
         T.Run("converter C4: AABB and other acronym spellings reach the Aver.Fabric type", AcronymNames);
         T.Run("converter C5: value type, integer and bool coercions", Coercions);
         T.Run("converter C5b: Basis(), Transform3D(), Quaternion() are GDScript's identity and Color() opaque black, not C#'s zeros", IdentityConstructors);
+        T.Run("converter C5c: an untyped Array where an Array[T] is wanted (query.exclude = list), and back", UntypedToTypedArrays);
         T.Run("converter C6: a member only a subclass has is reached through a cast", BaseTypedReceivers);
         T.Run("converter C7: an autoload names its script as a type, its enum travels in a signal", AutoloadAsType);
         T.Run("converter C8: a static function that needs an instance is written as an instance method", StaticNeedsInstance);
@@ -174,6 +175,21 @@ static class ConverterBugTests
         T.Check("Vector3() stays zero", (Vector3)Call(r, "Sample", "V")! == Vector3.Zero);
         var fwd = (Vector3)Call(r, "Sample", "Turned", 0.0)!;
         T.Check("a node reset to Basis() still turns and points forward", T.Near(fwd, new Vector3(0, 0, -1), 1e-5f), fwd.ToString());
+    }
+
+    // ---- C5c ----
+
+    private static void UntypedToTypedArrays()
+    {
+        ConversionResult r = One(
+            "extends Node3D\n\nvar hit_objects: Array = []\n\nfunc query() -> int:\n\thit_objects.append(RID())\n" +
+            "\tvar q := PhysicsRayQueryParameters3D.create(Vector3.ZERO, Vector3.FORWARD)\n\tq.set_exclude(hit_objects)\n\tq.exclude = hit_objects\n" +
+            "\tvar typed: Array[int] = [1, 2]\n\tvar back: Array = typed\n\treturn q.exclude.size() + back.size()\n", keep: true);
+        string t = Text(r);
+        T.Check("it compiles", r.Success, Errors(r));
+        T.Check("an untyped Array reaches an Array[RID] through the wrapper's conversion", Has(t, "(Collections.Array<Rid>)HitObjects"), t);
+        if (!r.Success) return;
+        T.Check("the exclude list is the script's array (shared, one RID) and the typed array reads back untyped", System.Convert.ToInt64(Call(r, "Sample", "Query")) == 3);
     }
 
     // ---- C6 ----

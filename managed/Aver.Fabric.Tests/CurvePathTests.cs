@@ -35,6 +35,7 @@ static class CurvePathTests
             T.Run("Expression: literals, operators, inputs, the base object, functions, errors", ExpressionEval);
             T.Run("Curve: cubic segments against reference values, tangent modes, domain, baked table, scene data", CurveSampling);
             T.Run("Curve3D: baked lengths, sampling, closest point, tilt and up vectors, rotation, closed curves, scene data", Curve3DBaking);
+            T.Run("Curve2D, Path2D and PathFollow2D: scene data, baking, sampling, following", Curve2DData);
             T.Run("Gradient: linear, constant and cubic sampling, ordering", GradientSampling);
             T.Run("PathFollow3D: progress, ratio, loop, offsets, the rotation modes, curve changes", PathFollowing);
             T.Run("blend-space geometry: barycentric weights, edge snapping, Delaunay triangles", BlendSpaceGeometry);
@@ -256,6 +257,37 @@ static class CurvePathTests
         T.Check("remove_point", e.PointCount == 1 && e.GetBakedLength() == 0 && e.GetBakedPoints().Length == 1);
         e.ClearPoints();
         T.Check("clear_points, and an empty curve has nothing baked", e.PointCount == 0 && e.GetBakedPoints().Length == 0 && e.SampleBaked(1f) == Vector3.Zero);
+    }
+
+    // ---- Curve2D, Path2D, PathFollow2D (3D games read them as data: spray and recoil patterns) ----
+
+    private static void Curve2DData()
+    {
+        // As the converter writes a Path2D's curve: in, out and position of each point.
+        Variant v = VariantText.Parse("Object(Curve2D, \"_data\": {\"points\": PackedVector2Array(0, 0, 0, 0, 7, 3, 0, 0, 0, 0, -30, -11, 0, 0, 0, 0, -8, -18)}, \"point_count\": 3)");
+        var c = v.AsGodotObject() as Curve2D;
+        T.Check("Object(Curve2D, _data) builds a Curve2D with its points", c != null && c.PointCount == 3 && c.GetPointPosition(0) == new Vector2(7, 3) &&
+                c.GetPointPosition(1) == new Vector2(-30, -11) && c.GetPointPosition(2) == new Vector2(-8, -18));
+        var path = new Path2D { Curve = c };
+        T.Check("Path2D holds it (get_curve)", ReferenceEquals(path.Curve, c));
+
+        var line = new Curve2D { BakeInterval = 1f };
+        line.AddPoint(new Vector2(0, 0));
+        line.AddPoint(new Vector2(10, 0));
+        T.CheckNum("baked length of a straight 10-unit line", 10f, line.GetBakedLength(), 1e-3f);
+        T.Check("sample_baked halfway", (line.SampleBaked(5f) - new Vector2(5, 0)).Length() < 1e-3f);
+        T.Check("sample_baked clamps past the end", line.SampleBaked(50f) == new Vector2(10, 0));
+        T.CheckNum("closest offset", 3f, line.GetClosestOffset(new Vector2(3, 4)), 1e-3f);
+        var copy = new Curve2D { Data = line.Data };
+        T.Check("_data round-trips", copy.PointCount == 2 && copy.GetPointPosition(1) == new Vector2(10, 0));
+
+        var follow = new PathFollow2D();
+        var holder = new Path2D { Curve = line };
+        holder.AddChild(follow);
+        follow.Progress = 4f;
+        T.Check("PathFollow2D rides the curve", (follow.Position - new Vector2(4, 0)).Length() < 1e-3f && T.Near(follow.ProgressRatio, 0.4f), $"{follow.Position} {follow.ProgressRatio}");
+        follow.Progress = 14f;
+        T.Check("and loops by default", (follow.Position - new Vector2(4, 0)).Length() < 1e-3f, follow.Position.ToString());
     }
 
     // ---- Gradient ----

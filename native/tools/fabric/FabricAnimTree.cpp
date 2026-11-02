@@ -58,6 +58,7 @@ const std::vector<Family>& families() {
         {"AnimationNodeSync", {"sync", "filter_enabled", "filters"}, {}},
         {"Curve", {"_data", "point_count", "min_value", "max_value", "min_domain", "max_domain", "bake_resolution"}, {}},
         {"Curve3D", {"_data", "point_count", "closed", "bake_interval", "up_vector_enabled"}, {}},
+        {"Curve2D", {"_data", "point_count", "bake_interval"}, {}},
         {"Gradient", {"offsets", "colors", "interpolation_mode"},
          {{"interpolation_color_space", "stored; colours are blended in sRGB"}}},
         // ---- the nodes ----
@@ -103,6 +104,8 @@ const std::vector<Family>& families() {
           {"angular_damp", "stored; the engine's ragdoll uses its own damping"}}},
         {"Path3D", {"curve"}, {}},
         {"PathFollow3D", {"progress", "progress_ratio", "h_offset", "v_offset", "rotation_mode", "cubic_interp", "loop", "tilt_enabled"}, {}},
+        {"Path2D", {"curve"}, {}},
+        {"PathFollow2D", {"progress", "progress_ratio", "h_offset", "v_offset", "rotates", "cubic_interp", "loop"}, {}},
         {"SpringArm3D", {"shape", "spring_length", "margin", "collision_mask"}, {}},
         {"RemoteTransform3D", {"remote_path", "use_global_coordinates", "update_position", "update_rotation", "update_scale"}, {}},
         {"VisibleOnScreenNotifier3D", {"aabb"}, {}},
@@ -123,7 +126,7 @@ bool ignorable(const std::string& n) {
 }  // namespace
 
 bool isAnimTreeResourceType(const std::string& t) {
-    return t.rfind("AnimationNode", 0) == 0 || t == "Curve" || t == "Curve3D" || t == "Gradient";
+    return t.rfind("AnimationNode", 0) == 0 || t == "Curve" || t == "Curve3D" || t == "Curve2D" || t == "Gradient";
 }
 
 Var Converter::animTreeObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line) {

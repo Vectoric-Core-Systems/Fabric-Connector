@@ -52,6 +52,8 @@ const std::set<std::string>& supportedClasses() {
                                             "AnimationPlayer",
                                             // G5 A2: animation trees, skeletons, paths and helper nodes
                                             "AnimationTree", "Skeleton3D", "BoneAttachment3D", "SkeletonIK3D", "Path3D", "PathFollow3D", "SpringArm3D",
+                                            // 2D curves that 3D games read as data (spray and recoil patterns); nothing of them is drawn
+                                            "Path2D", "PathFollow2D",
                                             // wave 7: the ragdoll nodes
                                             "PhysicalBone3D", "PhysicalBoneSimulator3D",
                                             "LookAtModifier3D", "CopyTransformModifier3D", "AimModifier3D", "ConvertTransformModifier3D",

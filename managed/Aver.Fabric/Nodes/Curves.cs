@@ -707,6 +707,231 @@ public class Curve3D : Resource
     }
 }
 
+/// <summary>One curve in 2D: bezier points with in and out handles, baked into a polyline spaced <see cref="BakeInterval"/> apart (Godot's Curve2D).
+/// Scripts read it as data (a spray pattern, waypoints); nothing draws it.</summary>
+public class Curve2D : Resource
+{
+    private struct Pt
+    {
+        public Vector2 Position, In, Out;
+    }
+
+    private readonly List<Pt> _pts = new();
+    private float _bakeInterval = 5f;
+    private bool _dirty = true;
+    private Vector2[] _bakedPoints = System.Array.Empty<Vector2>();
+    private float[] _bakedDist = System.Array.Empty<float>();
+    private float _bakedLength;
+
+    public float BakeInterval { get => _bakeInterval; set { _bakeInterval = Math.Max(value, 0.001f); MarkDirty(); } }
+
+    public int PointCount
+    {
+        get => _pts.Count;
+        set
+        {
+            value = Math.Max(value, 0);
+            while (_pts.Count > value) _pts.RemoveAt(_pts.Count - 1);
+            while (_pts.Count < value) _pts.Add(default);
+            MarkDirty();
+        }
+    }
+
+    private void MarkDirty()
+    {
+        _dirty = true;
+        EmitSignal(Resource.SignalName.Changed);
+    }
+
+    /// <summary>Adds a point (the handles are relative to the position); <paramref name="index"/> -1 appends.</summary>
+    public void AddPoint(Vector2 position, Vector2 inHandle = default, Vector2 outHandle = default, int index = -1)
+    {
+        var p = new Pt { Position = position, In = inHandle, Out = outHandle };
+        if (index < 0 || index >= _pts.Count) _pts.Add(p);
+        else _pts.Insert(index, p);
+        MarkDirty();
+    }
+
+    public void RemovePoint(int index) { if (index >= 0 && index < _pts.Count) { _pts.RemoveAt(index); MarkDirty(); } }
+    public void ClearPoints() { _pts.Clear(); MarkDirty(); }
+
+    public Vector2 GetPointPosition(int index) => index >= 0 && index < _pts.Count ? _pts[index].Position : default;
+    public Vector2 GetPointIn(int index) => index >= 0 && index < _pts.Count ? _pts[index].In : default;
+    public Vector2 GetPointOut(int index) => index >= 0 && index < _pts.Count ? _pts[index].Out : default;
+
+    public void SetPointPosition(int index, Vector2 position) { if (index >= 0 && index < _pts.Count) { _pts[index] = _pts[index] with { Position = position }; MarkDirty(); } }
+    public void SetPointIn(int index, Vector2 position) { if (index >= 0 && index < _pts.Count) { _pts[index] = _pts[index] with { In = position }; MarkDirty(); } }
+    public void SetPointOut(int index, Vector2 position) { if (index >= 0 && index < _pts.Count) { _pts[index] = _pts[index] with { Out = position }; MarkDirty(); } }
+
+    /// <summary>The points as a scene stores them: "points" (in, out and position of each point).</summary>
+    public Collections.Dictionary Data
+    {
+        get
+        {
+            var pts = new Vector2[_pts.Count * 3];
+            for (int i = 0; i < _pts.Count; i++) { pts[i * 3] = _pts[i].In; pts[i * 3 + 1] = _pts[i].Out; pts[i * 3 + 2] = _pts[i].Position; }
+            var d = new Collections.Dictionary();
+            d["points"] = pts;
+            return d;
+        }
+        set
+        {
+            _pts.Clear();
+            Vector2[] pts = value.Get("points").AsVector2Array();
+            for (int i = 0; i + 2 < pts.Length; i += 3) _pts.Add(new Pt { In = pts[i], Out = pts[i + 1], Position = pts[i + 2] });
+            MarkDirty();
+        }
+    }
+
+    private static Vector2 BezierAt(float t, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
+    {
+        float omt = 1f - t;
+        return p0 * (omt * omt * omt) + p1 * (omt * omt * t * 3f) + p2 * (omt * t * t * 3f) + p3 * (t * t * t);
+    }
+
+    /// <summary>The point on the bezier segment starting at <paramref name="idx"/>, at <paramref name="t"/> in 0..1.</summary>
+    public Vector2 Sample(int idx, float t)
+    {
+        if (_pts.Count == 0) return default;
+        if (idx < 0) return _pts[0].Position;
+        if (idx >= _pts.Count - 1) return _pts[^1].Position;
+        Pt a = _pts[idx], b = _pts[idx + 1];
+        return BezierAt(Math.Clamp(t, 0f, 1f), a.Position, a.Position + a.Out, b.Position + b.In, b.Position);
+    }
+
+    /// <summary>The point at <paramref name="fofs"/>: the integer part is the segment, the fraction the place along it.</summary>
+    public Vector2 Samplef(float fofs)
+    {
+        if (fofs < 0) fofs = 0;
+        int i = (int)MathF.Floor(fofs);
+        return Sample(i, fofs - i);
+    }
+
+    /// <summary>The curve cut into straight pieces: each segment split evenly into <c>2^maxStages</c> steps, keeping the points where it bends by more than <paramref name="toleranceDegrees"/>.</summary>
+    public Vector2[] Tessellate(int maxStages = 5, float toleranceDegrees = 4f)
+    {
+        if (_pts.Count < 2) return _pts.Select(p => p.Position).ToArray();
+        float tol = Mathf.DegToRad(toleranceDegrees);
+        int steps = 1 << Math.Clamp(maxStages, 1, 8);
+        var res = new List<Vector2> { _pts[0].Position };
+        for (int i = 0; i + 1 < _pts.Count; i++)
+        {
+            Vector2 prev = _pts[i].Position;
+            for (int s = 1; s < steps; s++)
+            {
+                Vector2 p = Sample(i, (float)s / steps), next = Sample(i, (float)(s + 1) / steps);
+                if (MathF.Abs((p - prev).AngleTo(next - p)) > tol) { res.Add(p); prev = p; }
+            }
+            res.Add(_pts[i + 1].Position);
+        }
+        return res.ToArray();
+    }
+
+    private void EnsureBaked()
+    {
+        if (!_dirty) return;
+        _dirty = false;
+        _bakedLength = 0;
+        if (_pts.Count < 2)
+        {
+            _bakedPoints = _pts.Select(p => p.Position).ToArray();
+            _bakedDist = new float[_bakedPoints.Length];
+            return;
+        }
+        // As Curve3D: a point exactly one interval (straight-line) from the last, found by bisection, then each segment's end point.
+        var pos = new List<Vector2> { _pts[0].Position };
+        Vector2 position = _pts[0].Position;
+        for (int i = 0; i + 1 < _pts.Count; i++)
+        {
+            Pt a = _pts[i], b = _pts[i + 1];
+            Vector2 p0 = a.Position, p1 = a.Position + a.Out, p2 = b.Position + b.In, p3 = b.Position;
+            const float step = 0.1f;
+            float p = 0f;
+            while (p < 1f)
+            {
+                float np = Math.Min(p + step, 1f);
+                Vector2 npp = BezierAt(np, p0, p1, p2, p3);
+                if (position.DistanceTo(npp) > _bakeInterval)
+                {
+                    float low = p, hi = np, mid = low + (hi - low) * 0.5f;
+                    for (int j = 0; j < 10; j++)
+                    {
+                        npp = BezierAt(mid, p0, p1, p2, p3);
+                        if (_bakeInterval < position.DistanceTo(npp)) hi = mid; else low = mid;
+                        mid = low + (hi - low) * 0.5f;
+                    }
+                    position = npp;
+                    p = mid;
+                    pos.Add(position);
+                }
+                else p = np;
+            }
+            position = p3;
+            pos.Add(position);
+        }
+        _bakedPoints = pos.ToArray();
+        _bakedDist = new float[_bakedPoints.Length];
+        for (int i = 1; i < _bakedPoints.Length; i++) _bakedDist[i] = _bakedDist[i - 1] + _bakedPoints[i - 1].DistanceTo(_bakedPoints[i]);
+        _bakedLength = _bakedDist[^1];
+    }
+
+    public float GetBakedLength() { EnsureBaked(); return _bakedLength; }
+
+    public Vector2[] GetBakedPoints() { EnsureBaked(); return (Vector2[])_bakedPoints.Clone(); }
+
+    /// <summary>The point <paramref name="offset"/> units along the baked curve (clamped to its ends).</summary>
+    public Vector2 SampleBaked(float offset, bool cubic = false)
+    {
+        EnsureBaked();
+        int pc = _bakedPoints.Length;
+        if (pc == 0) return default;
+        if (pc == 1 || offset <= 0) return _bakedPoints[0];
+        if (offset >= _bakedLength) return _bakedPoints[pc - 1];
+        int idx = System.Array.BinarySearch(_bakedDist, offset);
+        if (idx < 0) idx = ~idx - 1;
+        idx = Math.Clamp(idx, 0, pc - 2);
+        float interval = _bakedDist[idx + 1] - _bakedDist[idx];
+        float frac = interval > 0 ? (offset - _bakedDist[idx]) / interval : 0f;
+        Vector2 a = _bakedPoints[idx], b = _bakedPoints[idx + 1];
+        if (!cubic) return a.Lerp(b, frac);
+        return a.CubicInterpolate(b, idx > 0 ? _bakedPoints[idx - 1] : a, idx < pc - 2 ? _bakedPoints[idx + 2] : b, frac);
+    }
+
+    /// <summary>The position at <paramref name="offset"/>, rotated so its X axis runs along the curve.</summary>
+    public Transform2D SampleBakedWithRotation(float offset, bool cubic = false)
+    {
+        EnsureBaked();
+        Vector2 p = SampleBaked(offset, cubic);
+        float e = Math.Max(_bakeInterval * 0.5f, 1e-4f);
+        Vector2 d = SampleBaked(Math.Min(_bakedLength, offset + e)) - SampleBaked(Math.Max(0f, offset - e));
+        return new Transform2D(d.LengthSquared() > 1e-12f ? MathF.Atan2(d.Y, d.X) : 0f, p);
+    }
+
+    public Vector2 GetClosestPoint(Vector2 toPoint) { Closest(toPoint, out Vector2 best, out _); return best; }
+
+    public float GetClosestOffset(Vector2 toPoint) { Closest(toPoint, out _, out float off); return off; }
+
+    private void Closest(Vector2 q, out Vector2 best, out float offset)
+    {
+        EnsureBaked();
+        best = default;
+        offset = 0;
+        int pc = _bakedPoints.Length;
+        if (pc == 0) return;
+        best = _bakedPoints[0];
+        float bestD = float.MaxValue;
+        for (int i = 0; i + 1 < pc; i++)
+        {
+            Vector2 a = _bakedPoints[i], ab = _bakedPoints[i + 1] - a;
+            float len2 = ab.LengthSquared();
+            float t = len2 > 1e-12f ? Math.Clamp((q - a).Dot(ab) / len2, 0f, 1f) : 0f;
+            Vector2 c = a + ab * t;
+            float d = c.DistanceSquaredTo(q);
+            if (d < bestD) { bestD = d; best = c; offset = _bakedDist[i] + MathF.Sqrt(len2) * t; }
+        }
+    }
+}
+
 /// <summary>Colours along 0..1 (Godot's Gradient).</summary>
 public class Gradient : Resource
 {
