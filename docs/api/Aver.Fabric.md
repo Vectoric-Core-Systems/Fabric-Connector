@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-826 public types and 8847 public members, read from `managed/Aver.Fabric/` (162 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+849 public types and 9137 public members, read from `managed/Aver.Fabric/` (162 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -97,6 +97,7 @@
 
 `public class AnimatedSprite3D : SpriteBase3D` - A sprite in the world that plays a SpriteFrames animation (Godot's AnimatedSprite3D).
 
+- `public string[] FrameAssets { get; set; }` - One entry per frame texture, texture path|mesh asset|material asset, written by the converter.
 - `public event Action SpriteFramesChanged`
 - `public event Action AnimationChanged`
 - `public event Action FrameChanged`
@@ -3108,6 +3109,115 @@ Values: `Position = 0`, `Rotation = 1`, `Scale = 2`
 
 Values: `TopLeft = 0`, `TopRight = 1`, `BottomRight = 2`, `BottomLeft = 3`
 
+### CPUParticles3D
+
+`public class CPUParticles3D : GeometryInstance3D` - Godot's CPUParticles3D under its names.
+
+- `public CPUParticles3D()`
+- `public bool Emitting { get; set; }`
+- `public int Amount { get; set; }`
+- `public double Lifetime { get; set; }`
+- `public bool OneShot { get; set; }`
+- `public double Preprocess { get; set; }`
+- `public double SpeedScale { get; set; }`
+- `public double Explosiveness { get; set; }`
+- `public double Randomness { get; set; }`
+- `public double LifetimeRandomness { get; set; }`
+- `public bool LocalCoords { get; set; }`
+- `public int FixedFps { get; set; }`
+- `public bool FractDelta { get; set; }`
+- `public DrawOrderEnum DrawOrder { get; set; }`
+- `public Mesh? Mesh { get; set; }`
+- `public Aabb VisibilityAabb { get; set; }`
+- `public EmissionShapeEnum EmissionShape { get; set; }`
+- `public float EmissionSphereRadius { get; set; }`
+- `public Vector3 EmissionBoxExtents { get; set; }`
+- `public Vector3[] EmissionPoints { get; set; }`
+- `public Vector3[] EmissionNormals { get; set; }`
+- `public Color[] EmissionColors { get; set; }`
+- `public Vector3 EmissionRingAxis { get; set; }`
+- `public float EmissionRingHeight { get; set; }`
+- `public float EmissionRingRadius { get; set; }`
+- `public float EmissionRingInnerRadius { get; set; }`
+- `public Vector3 Direction { get; set; }`
+- `public float Spread { get; set; }`
+- `public float Flatness { get; set; }`
+- `public Vector3 Gravity { get; set; }`
+- `public Color Color { get; set; }`
+- `public Gradient? ColorRamp { get; set; }`
+- `public Gradient? ColorInitialRamp { get; set; }`
+- `public float InitialVelocityMin { get; set; }`
+- `public float InitialVelocityMax { get; set; }`
+- `public float AngularVelocityMin { get; set; }`
+- `public float AngularVelocityMax { get; set; }`
+- `public Curve? AngularVelocityCurve { get; set; }`
+- `public float OrbitVelocityMin { get; set; }`
+- `public float OrbitVelocityMax { get; set; }`
+- `public Curve? OrbitVelocityCurve { get; set; }`
+- `public float LinearAccelMin { get; set; }`
+- `public float LinearAccelMax { get; set; }`
+- `public Curve? LinearAccelCurve { get; set; }`
+- `public float RadialAccelMin { get; set; }`
+- `public float RadialAccelMax { get; set; }`
+- `public Curve? RadialAccelCurve { get; set; }`
+- `public float TangentialAccelMin { get; set; }`
+- `public float TangentialAccelMax { get; set; }`
+- `public Curve? TangentialAccelCurve { get; set; }`
+- `public float DampingMin { get; set; }`
+- `public float DampingMax { get; set; }`
+- `public Curve? DampingCurve { get; set; }`
+- `public float AngleMin { get; set; }`
+- `public float AngleMax { get; set; }`
+- `public Curve? AngleCurve { get; set; }`
+- `public float ScaleAmountMin { get; set; }`
+- `public float ScaleAmountMax { get; set; }`
+- `public Curve? ScaleAmountCurve { get; set; }`
+- `public float HueVariationMin { get; set; }`
+- `public float HueVariationMax { get; set; }`
+- `public Curve? HueVariationCurve { get; set; }`
+- `public float AnimSpeedMin { get; set; }`
+- `public float AnimSpeedMax { get; set; }`
+- `public Curve? AnimSpeedCurve { get; set; }`
+- `public float AnimOffsetMin { get; set; }`
+- `public float AnimOffsetMax { get; set; }`
+- `public Curve? AnimOffsetCurve { get; set; }`
+- `public bool ParticleFlagAlignY { get; set; }`
+- `public bool ParticleFlagRotateY { get; set; }`
+- `public bool ParticleFlagDisableZ { get; set; }`
+- `public void SetParamMin(ParameterEnum param, float value)`
+- `public float GetParamMin(ParameterEnum param)`
+- `public void SetParamMax(ParameterEnum param, float value)`
+- `public float GetParamMax(ParameterEnum param)`
+- `public void SetParamCurve(ParameterEnum param, Curve? curve)`
+- `public Curve? GetParamCurve(ParameterEnum param)`
+- `public void SetParticleFlag(ParticleFlagsEnum particleFlag, bool enable)`
+- `public bool GetParticleFlag(ParticleFlagsEnum particleFlag)`
+- `public void Restart()` - Restarts the emission (a burst of Amount for a one-shot emitter).
+
+### CPUParticles3D.DrawOrderEnum
+
+`public enum DrawOrderEnum`
+
+Values: `Index = 0`, `Lifetime = 1`, `ViewDepth = 2`
+
+### CPUParticles3D.EmissionShapeEnum
+
+`public enum EmissionShapeEnum`
+
+Values: `Point = 0`, `Sphere = 1`, `SphereSurface = 2`, `Box = 3`, `Points = 4`, `DirectedPoints = 5`, `Ring = 6`, `Max = 7`
+
+### CPUParticles3D.ParameterEnum
+
+`public enum ParameterEnum`
+
+Values: `InitialLinearVelocity = 0`, `AngularVelocity = 1`, `OrbitVelocity = 2`, `LinearAccel = 3`, `RadialAccel = 4`, `TangentialAccel = 5`, `Damping = 6`, `Angle = 7`, `Scale = 8`, `HueVariation = 9`, `AnimSpeed = 10`, `AnimOffset = 11`, `Max = 12`
+
+### CPUParticles3D.ParticleFlagsEnum
+
+`public enum ParticleFlagsEnum`
+
+Values: `AlignYToVelocity = 0`, `RotateY = 1`, `DisableZ = 2`, `Max = 3`
+
 ### CSGBox3D
 
 `public class CSGBox3D : CSGPrimitive3D`
@@ -4595,8 +4705,19 @@ Values: `Deferred = 1`, `Persist = 2`, `OneShot = 4`, `ReferenceCounted = 8`
 - `public TransformAlignEnum TransformAlign { get; set; }`
 - `public Aabb VisibilityAabb { get; set; }`
 - `public Mesh? DrawPass1 { get; set; }`
+- `public Mesh? DrawPass2 { get; set; }`
+- `public Mesh? DrawPass3 { get; set; }`
+- `public Mesh? DrawPass4 { get; set; }`
 - `public int DrawPasses { get; set; }`
-- `public Material? ProcessMaterial { get; set; }` - A ShaderMaterial over a particles shader (G6 SH3).
+- `public double AmountRatio { get; set; }` - The fraction of Amount that is emitted (kept; the converter bakes it into the effect).
+- `public bool TrailEnabled { get; set; }`
+- `public double TrailLifetime { get; set; }`
+- `public float CollisionBaseSize { get; set; }`
+- `public NodePath SubEmitter { get; set; }`
+- `public uint Seed { get; set; }`
+- `public bool UseFixedSeed { get; set; }`
+- `public double InterpToEnd { get; set; }`
+- `public Material? ProcessMaterial { get; set; }` - A ShaderMaterial over a particles shader (G6 SH3) drives the emitter's custom stage and its uniforms.
 - `public void Restart()` - Restarts the emission (a burst of Amount for a one-shot emitter).
 
 ### GPUParticles3D.DrawOrderEnum
@@ -4610,6 +4731,90 @@ Values: `Index = 0`, `Lifetime = 1`, `ReverseLifetime = 2`, `ViewDepth = 3`
 `public enum TransformAlignEnum`
 
 Values: `Disabled = 0`, `ZBillboard = 1`, `YToVelocity = 2`, `ZBillboardYToVelocity = 3`
+
+### GPUParticlesAttractor3D
+
+`public class GPUParticlesAttractor3D : VisualInstance3D` - Godot's GPUParticlesAttractor3D (the base of the three attractors), baked into the emitters' effects at convert time like the colliders.
+
+- `public float Strength { get; set; }`
+- `public float Attenuation { get; set; }`
+- `public float Directionality { get; set; }`
+- `public uint CullMask { get; set; }`
+
+### GPUParticlesAttractorBox3D
+
+`public class GPUParticlesAttractorBox3D : GPUParticlesAttractor3D`
+
+- `public Vector3 Size { get; set; }`
+
+### GPUParticlesAttractorSphere3D
+
+`public class GPUParticlesAttractorSphere3D : GPUParticlesAttractor3D`
+
+- `public float Radius { get; set; }`
+
+### GPUParticlesAttractorVectorField3D
+
+`public class GPUParticlesAttractorVectorField3D : GPUParticlesAttractor3D`
+
+- `public Vector3 Size { get; set; }`
+- `public Texture3D? Texture { get; set; }`
+
+### GPUParticlesCollision3D
+
+`public class GPUParticlesCollision3D : VisualInstance3D` - Godot's GPUParticlesCollision3D (the base of the four colliders).
+
+- `public uint CullMask { get; set; }`
+
+### GPUParticlesCollisionBox3D
+
+`public class GPUParticlesCollisionBox3D : GPUParticlesCollision3D`
+
+- `public Vector3 Size { get; set; }`
+
+### GPUParticlesCollisionHeightField3D
+
+`public class GPUParticlesCollisionHeightField3D : GPUParticlesCollision3D`
+
+- `public Vector3 Size { get; set; }`
+- `public ResolutionEnum Resolution { get; set; }`
+- `public UpdateModeEnum UpdateMode { get; set; }`
+- `public bool FollowCameraEnabled { get; set; }`
+- `public uint HeightfieldMask { get; set; }`
+
+### GPUParticlesCollisionHeightField3D.ResolutionEnum
+
+`public enum ResolutionEnum`
+
+Values: `Resolution256 = 0`, `Resolution512 = 1`, `Resolution1024 = 2`, `Resolution2048 = 3`, `Resolution4096 = 4`, `Resolution8192 = 5`, `Max = 6`
+
+### GPUParticlesCollisionHeightField3D.UpdateModeEnum
+
+`public enum UpdateModeEnum`
+
+Values: `WhenMoved = 0`, `Always = 1`
+
+### GPUParticlesCollisionSDF3D
+
+`public class GPUParticlesCollisionSDF3D : GPUParticlesCollision3D`
+
+- `public Vector3 Size { get; set; }`
+- `public ResolutionEnum Resolution { get; set; }`
+- `public float Thickness { get; set; }`
+- `public uint BakeMask { get; set; }`
+- `public Texture3D? Texture { get; set; }`
+
+### GPUParticlesCollisionSDF3D.ResolutionEnum
+
+`public enum ResolutionEnum`
+
+Values: `Resolution16 = 0`, `Resolution32 = 1`, `Resolution64 = 2`, `Resolution128 = 3`, `Resolution256 = 4`, `Resolution512 = 5`, `Max = 6`
+
+### GPUParticlesCollisionSphere3D
+
+`public class GPUParticlesCollisionSphere3D : GPUParticlesCollision3D`
+
+- `public float Radius { get; set; }`
 
 ### Gradient
 
@@ -7009,6 +7214,134 @@ Values: `Disabled = 0`, `Instance = 1`, `Main = 2`, `MainInherited = 3`
 - `public bool Filter { get; set; }`
 - `public float EnergyMultiplier { get; set; }`
 
+### ParticleProcessMaterial
+
+`public class ParticleProcessMaterial : Material` - Godot's ParticleProcessMaterial: the motion, size and colour of a GPUParticles3D's particles.
+
+- `public ParticleProcessMaterial()`
+- `public double LifetimeRandomness { get; set; }`
+- `public EmissionShapeEnum EmissionShape { get; set; }`
+- `public Vector3 EmissionShapeOffset { get; set; }`
+- `public Vector3 EmissionShapeScale { get; set; }`
+- `public float EmissionSphereRadius { get; set; }`
+- `public Vector3 EmissionBoxExtents { get; set; }`
+- `public Texture2D? EmissionPointTexture { get; set; }`
+- `public Texture2D? EmissionNormalTexture { get; set; }`
+- `public Texture2D? EmissionColorTexture { get; set; }`
+- `public int EmissionPointCount { get; set; }`
+- `public Vector3 EmissionRingAxis { get; set; }`
+- `public float EmissionRingHeight { get; set; }`
+- `public float EmissionRingRadius { get; set; }`
+- `public float EmissionRingInnerRadius { get; set; }`
+- `public float EmissionRingConeAngle { get; set; }`
+- `public Vector3 Direction { get; set; }`
+- `public float Spread { get; set; }`
+- `public float Flatness { get; set; }`
+- `public Vector3 Gravity { get; set; }`
+- `public Color Color { get; set; }`
+- `public Texture2D? ColorRamp { get; set; }`
+- `public Texture2D? ColorInitialRamp { get; set; }`
+- `public Texture2D? AlphaCurve { get; set; }`
+- `public Texture2D? EmissionCurve { get; set; }`
+- `public bool AttractorInteractionEnabled { get; set; }`
+- `public CollisionModeEnum CollisionMode { get; set; }`
+- `public float CollisionFriction { get; set; }`
+- `public float CollisionBounce { get; set; }`
+- `public bool CollisionUseScale { get; set; }`
+- `public SubEmitterModeEnum SubEmitterMode { get; set; }`
+- `public double SubEmitterFrequency { get; set; }`
+- `public int SubEmitterAmountAtEnd { get; set; }`
+- `public int SubEmitterAmountAtCollision { get; set; }`
+- `public int SubEmitterAmountAtStart { get; set; }`
+- `public bool SubEmitterKeepVelocity { get; set; }`
+- `public bool TurbulenceEnabled { get; set; }`
+- `public float TurbulenceNoiseStrength { get; set; }`
+- `public float TurbulenceNoiseScale { get; set; }`
+- `public float TurbulenceNoiseSpeedRandom { get; set; }`
+- `public Vector3 TurbulenceNoiseSpeed { get; set; }`
+- `public float TurbulenceInfluenceMin { get; set; }`
+- `public float TurbulenceInfluenceMax { get; set; }`
+- `public float TurbulenceInitialDisplacementMin { get; set; }`
+- `public float TurbulenceInitialDisplacementMax { get; set; }`
+- `public Texture2D? TurbulenceInfluenceOverLife { get; set; }`
+- `public float InitialVelocityMin { get; set; }`
+- `public float InitialVelocityMax { get; set; }`
+- `public float AngularVelocityMin { get; set; }`
+- `public float AngularVelocityMax { get; set; }`
+- `public Texture2D? AngularVelocityCurve { get; set; }`
+- `public float OrbitVelocityMin { get; set; }`
+- `public float OrbitVelocityMax { get; set; }`
+- `public Texture2D? OrbitVelocityCurve { get; set; }`
+- `public float LinearAccelMin { get; set; }`
+- `public float LinearAccelMax { get; set; }`
+- `public Texture2D? LinearAccelCurve { get; set; }`
+- `public float RadialAccelMin { get; set; }`
+- `public float RadialAccelMax { get; set; }`
+- `public Texture2D? RadialAccelCurve { get; set; }`
+- `public float TangentialAccelMin { get; set; }`
+- `public float TangentialAccelMax { get; set; }`
+- `public Texture2D? TangentialAccelCurve { get; set; }`
+- `public float DampingMin { get; set; }`
+- `public float DampingMax { get; set; }`
+- `public Texture2D? DampingCurve { get; set; }`
+- `public float AngleMin { get; set; }`
+- `public float AngleMax { get; set; }`
+- `public Texture2D? AngleCurve { get; set; }`
+- `public float ScaleMin { get; set; }`
+- `public float ScaleMax { get; set; }`
+- `public Texture2D? ScaleCurve { get; set; }`
+- `public float HueVariationMin { get; set; }`
+- `public float HueVariationMax { get; set; }`
+- `public Texture2D? HueVariationCurve { get; set; }`
+- `public float AnimSpeedMin { get; set; }`
+- `public float AnimSpeedMax { get; set; }`
+- `public Texture2D? AnimSpeedCurve { get; set; }`
+- `public float AnimOffsetMin { get; set; }`
+- `public float AnimOffsetMax { get; set; }`
+- `public Texture2D? AnimOffsetCurve { get; set; }`
+- `public bool ParticleFlagAlignY { get; set; }`
+- `public bool ParticleFlagRotateY { get; set; }`
+- `public bool ParticleFlagDisableZ { get; set; }`
+- `public bool ParticleFlagDampingAsFriction { get; set; }`
+- `public void SetParamMin(ParameterEnum param, float value)`
+- `public float GetParamMin(ParameterEnum param)`
+- `public void SetParamMax(ParameterEnum param, float value)`
+- `public float GetParamMax(ParameterEnum param)`
+- `public void SetParamTexture(ParameterEnum param, Texture2D? texture)`
+- `public Texture2D? GetParamTexture(ParameterEnum param)`
+- `public void SetParticleFlag(ParticleFlagsEnum particleFlag, bool enable)`
+- `public bool GetParticleFlag(ParticleFlagsEnum particleFlag)`
+
+### ParticleProcessMaterial.CollisionModeEnum
+
+`public enum CollisionModeEnum`
+
+Values: `Disabled = 0`, `Rigid = 1`, `HideOnContact = 2`, `Max = 3`
+
+### ParticleProcessMaterial.EmissionShapeEnum
+
+`public enum EmissionShapeEnum`
+
+Values: `Point = 0`, `Sphere = 1`, `SphereSurface = 2`, `Box = 3`, `Points = 4`, `DirectedPoints = 5`, `Ring = 6`, `Max = 7`
+
+### ParticleProcessMaterial.ParameterEnum
+
+`public enum ParameterEnum`
+
+Values: `InitialLinearVelocity = 0`, `AngularVelocity = 1`, `OrbitVelocity = 2`, `LinearAccel = 3`, `RadialAccel = 4`, `TangentialAccel = 5`, `Damping = 6`, `Angle = 7`, `Scale = 8`, `HueVariation = 9`, `AnimSpeed = 10`, `AnimOffset = 11`, `TurbVelInfluence = 12`, `TurbInitDisplacement = 13`, `TurbInfluenceOverLife = 14`, `Max = 15`
+
+### ParticleProcessMaterial.ParticleFlagsEnum
+
+`public enum ParticleFlagsEnum`
+
+Values: `AlignYToVelocity = 0`, `RotateY = 1`, `DisableZ = 2`, `DampingAsFriction = 3`, `Max = 4`
+
+### ParticleProcessMaterial.SubEmitterModeEnum
+
+`public enum SubEmitterModeEnum`
+
+Values: `Disabled = 0`, `Constant = 1`, `AtEnd = 2`, `AtCollision = 3`, `AtStart = 4`, `Max = 5`
+
 ### Path3D
 
 `public class Path3D : Node3D` - A node holding a curve in 3D (Godot's Path3D).
@@ -9021,6 +9354,7 @@ Values: `Disabled = 0`, `Discard = 1`, `OpaquePrepass = 2`, `Hash = 3`
 - `public void RemoveAnimation(StringName anim)`
 - `public void RenameAnimation(StringName anim, StringName newName)`
 - `public string[] GetAnimationNames()` - The names of the animations, in the order they were added.
+- `public Collections.Array Animations { get; set; }` - Godot's stored form: an array of dictionaries {frames: [{duration, texture}], loop, name, speed}.
 - `public void SetAnimationSpeed(StringName anim, double fps)`
 - `public double GetAnimationSpeed(StringName anim)`
 - `public void SetAnimationLoop(StringName anim, bool loop)`
