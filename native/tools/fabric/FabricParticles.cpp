@@ -579,7 +579,7 @@ void Converter::emitParticles(const FNode& fn, const std::vector<std::pair<std::
     pe.kv.emplace_back("playing", emitting ? "1" : "0");
     pe.kv.emplace_back("sim", "auto");
     p.components.push_back(std::move(pe));
-    note(cpu ? "emitting" : "process_material", Rating::Converted, "written as Particles/" + file + " (" + std::string(cpu ? "the node's own parameters" : "a ParticleProcessMaterial") + ")");
+    note(cpu ? "_effect" : "process_material", Rating::Converted, "written as Particles/" + file + " (" + std::string(cpu ? "the node's own parameters" : "a ParticleProcessMaterial") + ")");
 }
 
 }  // namespace aver::fabric

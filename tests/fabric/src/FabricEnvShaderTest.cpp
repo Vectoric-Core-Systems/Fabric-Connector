@@ -138,7 +138,13 @@ int main() {
         // gravity_and_drag vec4 reg 0, emit_dir vec3 reg 1, spin reg 1.w
         check(loaded && p.defaults.size() >= 8 && near(p.defaults[0], 0.0f) && near(p.defaults[1], -9.8f) && near(p.defaults[5], 2.0f) && near(p.defaults[7], 4.0f),
               "emit_dir (0, 2, 0) and spin 4 are the material's, gravity_and_drag keeps the shader's default");
-        const std::string pf = findFile(content + "/Particles", ".ocparticle");
+        // The scene has two emitters now: the shader one (Sparks) and, since wave 6, one with a ParticleProcessMaterial (Plain).
+        std::string pf;
+        {
+            std::error_code ecp;
+            for (const auto& e : fs::directory_iterator(content + "/Particles", ecp))
+                if (e.path().filename().string().find("_Sparks") != std::string::npos && e.path().extension() == ".ocparticle") pf = e.path().string();
+        }
         check(!pf.empty(), "an .ocparticle was written for the emitter");
         particles::ParticleSystemDef def;
         std::string err;
@@ -193,7 +199,7 @@ int main() {
         check(has("\"type\":\"Environment\"", "sky_material", "\"rating\":\"approximated\""), "the environment's sky_material is rated approximated");
         check(has("\"type\":\"ShaderMaterial\"", ".fog.ocgraph", "\"rating\":\"converted\""), "the fog ShaderMaterial is converted");
         check(has("\"type\":\"GPUParticles3D\"", "\"property\":\"process_material\"", "\"rating\":\"converted\""), "the shader process material is converted");
-        check(has("\"type\":\"GPUParticles3D\"", "\"property\":\"process_material\"", "\"rating\":\"unsupported\""), "the ParticleProcessMaterial one is unsupported");
+        check(has("\"type\":\"GPUParticles3D\"", "\"property\":\"process_material\"", "a ParticleProcessMaterial"), "the ParticleProcessMaterial one is converted too (wave 6)");
         check(has("\"type\":\"Shader\"", "\"property\":\"TRANSFORM\"", "\"rating\":\"approximated\""), "TRANSFORM is approximated");
         check(has("\"type\":\"VisualShader\"", "VisualShaderNodeCurveTexture", "\"rating\":\"unsupported\""), "an unknown VisualShader node is unsupported per node");
         check(has("\"type\":\"VisualShader\"", "VisualShaderNodeTexture", "\"rating\":\"approximated\""), "an embedded-texture node is approximated");
