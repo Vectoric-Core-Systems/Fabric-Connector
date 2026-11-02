@@ -147,6 +147,7 @@ internal static class Gui
         c.Notification(Control.NotificationFocusEnter);
         c.EmitSignal(Control.SignalName.FocusEntered);
         c.QueueRedraw();
+        c.GetViewport()?.EmitSignal(Viewport.SignalName.GuiFocusChanged, c);
     }
 
     internal static void ReleaseFocus(Control c)
@@ -274,6 +275,12 @@ internal static class Gui
         InputEvent.Current = e;
         try
         {
+            // The open popup is the window that has the input (Godot's window_input, before its controls see the event).
+            if (s_popups.Count > 0 && s_popups[^1] is { IsAlive: true } top)
+            {
+                top.EmitSignal(PopupWindow.SignalName.WindowInput, e);
+                if (e.IsHandled) return true;
+            }
             bool handled = e switch
             {
                 InputEventMouseMotion m => OnMotion(m),

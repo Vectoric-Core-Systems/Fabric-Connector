@@ -194,6 +194,9 @@ public partial class Control : CanvasItem
     /// <summary>The size of the parent area the anchors refer to.</summary>
     public Vector2 GetParentAreaSize() => ParentAnchorableRect().Size;
 
+    /// <summary>The parent when it is a Control, else null (Godot's get_parent_control).</summary>
+    public Control? GetParentControl() => GetParent() as Control;
+
     private static float Pr(Rect2 r, int side) => side % 2 == 0 ? r.Size.X : r.Size.Y;
 
     private void ComputeOffsets(Rect2 rect, float[] offsets)

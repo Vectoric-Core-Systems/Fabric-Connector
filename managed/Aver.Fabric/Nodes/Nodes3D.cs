@@ -25,6 +25,9 @@ public class VisualInstance3D : Node3D
 
     private uint _layers = 1;
 
+    /// <summary>The box the instance occupies, in its own space (empty for one that draws nothing).</summary>
+    public virtual Aabb GetAabb() => default;
+
     /// <summary>The render layers this instance is on (default layer 1). A camera draws it when the camera's <c>CullMask</c> shares a layer.</summary>
     public uint Layers { get => _layers; set { _layers = value; ApplyRenderMasks(); } }
     public bool GetLayerMaskValue(int layerNumber) => (Layers & (1u << (layerNumber - 1))) != 0;
@@ -68,6 +71,18 @@ internal readonly struct InstanceFlags
 public class GeometryInstance3D : VisualInstance3D
 {
     public enum ShadowCastingSetting { Off = 0, On = 1, DoubleSided = 2, ShadowsOnly = 3 }
+
+    // Per-instance shader uniforms (Godot's instance uniforms): kept for scripts to read back; the engine's materials have no per-instance values to give them to.
+    private Dictionary<StringName, Variant>? _instanceParams;
+
+    public void SetInstanceShaderParameter(StringName name, Variant value)
+    {
+        _instanceParams ??= new Dictionary<StringName, Variant>();
+        if (value.IsNil) _instanceParams.Remove(name); else _instanceParams[name] = value;
+        Approximated.Once("GeometryInstance3D.SetInstanceShaderParameter", "instance shader parameters are kept for get_instance_shader_parameter; the material does not see them");
+    }
+
+    public Variant GetInstanceShaderParameter(StringName name) => _instanceParams != null && _instanceParams.TryGetValue(name, out Variant v) ? v : default;
     public enum VisibilityRangeFadeModeEnum { Disabled = 0, Self = 1, Dependencies = 2 }
 
     private float _visBegin, _visEnd, _visBeginMargin, _visEndMargin;
@@ -292,6 +307,8 @@ public class GeometryInstance3D : VisualInstance3D
 public partial class MeshInstance3D : GeometryInstance3D
 {
     private Mesh? _mesh;
+
+    public override Aabb GetAabb() => _mesh?.GetAabb() ?? default;
 
     public Mesh? Mesh
     {

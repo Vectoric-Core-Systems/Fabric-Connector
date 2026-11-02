@@ -161,6 +161,8 @@ public partial class BaseMaterial3D : Material
     public Color Backlight { get; set; } = new(0, 0, 0, 1);
     public bool RefractionEnabled { get; set; }
     public float RefractionScale { get; set; } = 0.05f;
+    public Texture2D? RefractionTexture { get; set; }
+    public TextureChannel RefractionTextureChannel { get; set; } = TextureChannel.Red;
     public bool DetailEnabled { get; set; }
     public BlendModeEnum DetailBlendMode { get; set; } = BlendModeEnum.Mix;
     public DetailUVEnum DetailUvLayer { get; set; } = DetailUVEnum.DetailUv1;

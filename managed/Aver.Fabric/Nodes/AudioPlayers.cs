@@ -200,6 +200,78 @@ public class AudioStreamPlayer : Node, IAnimationAudioTarget
     }
 }
 
+/// <summary>Godot's AudioStreamPlayer2D. Aver has no 2D listener to pan against, so it plays like an <see cref="AudioStreamPlayer"/> (unpanned, at its volume);
+/// the distance settings are kept for scripts. 3D games use it for UI sounds.</summary>
+public class AudioStreamPlayer2D : Node2D
+{
+    public new class SignalName : Node2D.SignalName
+    {
+        public static readonly StringName Finished = "finished";
+    }
+
+    public event Action Finished { add => Connect(SignalName.Finished, Callable.From(value)); remove => Disconnect(SignalName.Finished, Callable.From(value)); }
+
+    private readonly AudioPlayerCore _core;
+
+    public AudioStreamPlayer2D()
+    {
+        _core = new AudioPlayerCore(() => { PlayCtx c = _core!.Base(); return c; }, () => EmitSignal(SignalName.Finished));
+    }
+
+    public AudioStream? Stream { get => _core.Stream; set { _core.Stream = value; } }
+    public float VolumeDb { get => _core.VolumeDb; set => _core.VolumeDb = value; }
+    public float PitchScale { get => _core.PitchScale; set => _core.PitchScale = value; }
+    public StringName Bus { get => _core.Bus; set => _core.Bus = value; }
+    public bool Autoplay { get; set; }
+    public int MaxPolyphony { get => _core.MaxPolyphony; set => _core.MaxPolyphony = Math.Max(1, value); }
+    public float MaxDistance { get; set; } = 2000f;
+    public float Attenuation { get; set; } = 1f;
+    public uint AreaMask { get; set; } = 1;
+    public float PanningStrength { get; set; } = 1f;
+    public AudioServer.PlaybackType PlaybackType { get; set; } = AudioServer.PlaybackType.Default;
+    public bool StreamPaused { get => _core.StreamPaused; set { _core.StreamPaused = value; _core.Refresh(); } }
+
+    public bool Playing
+    {
+        get => _core.IsPlaying;
+        set
+        {
+            if (value) { if (IsInsideTree()) Play(); else _playOnReady = true; }
+            else { _playOnReady = false; Stop(); }
+        }
+    }
+    private bool _playOnReady;
+
+    public void Play(double fromPosition = 0.0) => _core.Play(fromPosition);
+    public void Seek(double toPosition) => _core.Seek(toPosition);
+    public void Stop() => _core.Stop();
+    public double GetPlaybackPosition() => _core.Position();
+    public bool HasStreamPlayback() => _core.Latest != null;
+    public AudioStreamPlayback? GetStreamPlayback() => _core.Latest;
+
+    internal override bool UsesInternalProcess => true;
+    internal override void InternalProcess(double delta) => _core.Tick(delta);
+
+    internal override void OnReadying()
+    {
+        base.OnReadying();
+        if ((Autoplay || _playOnReady) && Stream != null) Play();
+    }
+
+    internal override void OnExitingTree()
+    {
+        _core.Stop();
+        base.OnExitingTree();
+    }
+
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+        if (what == NotificationPaused) _core.SetTreePaused(true);
+        else if (what == NotificationUnpaused) _core.SetTreePaused(false);
+    }
+}
+
 /// <summary>Plays an audio stream from a point in the world (Godot's AudioStreamPlayer3D). The mixer applies Godot's distance models, the
 /// stereo panning law, the emission cone, the attenuation filter and the Doppler shift to it.</summary>
 public class AudioStreamPlayer3D : Node3D, IAnimationAudioTarget

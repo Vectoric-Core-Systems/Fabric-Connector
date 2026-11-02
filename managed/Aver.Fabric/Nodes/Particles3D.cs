@@ -43,7 +43,7 @@ public class GPUParticles3D : GeometryInstance3D
 
 
     /// <summary>Whether the emitter is playing.</summary>
-    public bool Emitting { get => _emitting; set { _emitting = value; PushState(); } }
+    public bool Emitting { get => _emitting; set { _emitting = value; PushState(); ArmFinish(); } }
     public int Amount { get; set; } = 8;
     public double Lifetime { get; set; } = 1.0;
     public bool OneShot { get; set; }
@@ -116,10 +116,41 @@ public class GPUParticles3D : GeometryInstance3D
         if (_process != null) { _process.RegisterWithEngine(); PushRegisters(); }
     }
 
+    public new class SignalName : GeometryInstance3D.SignalName
+    {
+        public static readonly StringName Finished = "finished";
+    }
+
+    // A one-shot emission ends when its last particle dies (the emission cycle, then one lifetime): Godot then clears emitting and sends finished.
+    private double _finishIn = -1;
+
+    private void ArmFinish() =>
+        _finishIn = _emitting && OneShot && IsInsideTree() ? Lifetime * (2.0 - Math.Clamp(Explosiveness, 0.0, 1.0)) / Math.Max(SpeedScale, 1e-6) : -1;
+
+    internal override bool UsesInternalProcess => true;
+
+    internal override void InternalProcess(double delta)
+    {
+        if (_finishIn < 0) return;
+        _finishIn -= delta;
+        if (_finishIn > 0) return;
+        _finishIn = -1;
+        _emitting = false;
+        EmitSignal(SignalName.Finished);
+    }
+
+    internal override void OnReadying()
+    {
+        base.OnReadying();
+        ArmFinish();
+    }
+
     /// <summary>Restarts the emission (a burst of <see cref="Amount"/> for a one-shot emitter).</summary>
     public void Restart()
     {
         if (!IsInsideTree()) return;
+        _emitting = true;
+        ArmFinish();
         try { Self.BurstEmitter(OneShot ? Amount : 1); }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { }
     }
@@ -265,7 +296,7 @@ public class CPUParticles3D : GeometryInstance3D
         _min[(int)ParameterEnum.Scale] = _max[(int)ParameterEnum.Scale] = 1f;
     }
 
-    public bool Emitting { get => _emitting; set { _emitting = value; PushState(); } }
+    public bool Emitting { get => _emitting; set { _emitting = value; PushState(); ArmFinish(); } }
     public int Amount { get; set; } = 8;
     public double Lifetime { get; set; } = 1.0;
     public bool OneShot { get; set; }
@@ -355,10 +386,41 @@ public class CPUParticles3D : GeometryInstance3D
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { }
     }
 
+    public new class SignalName : GeometryInstance3D.SignalName
+    {
+        public static readonly StringName Finished = "finished";
+    }
+
+    // A one-shot emission ends when its last particle dies (the emission cycle, then one lifetime): Godot then clears emitting and sends finished.
+    private double _finishIn = -1;
+
+    private void ArmFinish() =>
+        _finishIn = _emitting && OneShot && IsInsideTree() ? Lifetime * (2.0 - Math.Clamp(Explosiveness, 0.0, 1.0)) / Math.Max(SpeedScale, 1e-6) : -1;
+
+    internal override bool UsesInternalProcess => true;
+
+    internal override void InternalProcess(double delta)
+    {
+        if (_finishIn < 0) return;
+        _finishIn -= delta;
+        if (_finishIn > 0) return;
+        _finishIn = -1;
+        _emitting = false;
+        EmitSignal(SignalName.Finished);
+    }
+
+    internal override void OnReadying()
+    {
+        base.OnReadying();
+        ArmFinish();
+    }
+
     /// <summary>Restarts the emission (a burst of <see cref="Amount"/> for a one-shot emitter).</summary>
     public void Restart()
     {
         if (!IsInsideTree()) return;
+        _emitting = true;
+        ArmFinish();
         try { Self.BurstEmitter(OneShot ? Amount : 1); }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { }
     }

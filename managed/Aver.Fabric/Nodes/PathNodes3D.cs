@@ -18,6 +18,9 @@ public class Path3D : Node3D
 
     private Curve3D? _curve;
 
+    /// <summary>The colour Godot draws the path's debug line in; Aver draws no debug paths, so it is kept for scripts.</summary>
+    public Color DebugCustomColor { get; set; } = new(0, 0, 0, 0);
+
     /// <summary>The path. Anything that changes it (points, handles) emits <c>curve_changed</c>.</summary>
     public Curve3D? Curve
     {

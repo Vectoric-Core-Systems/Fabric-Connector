@@ -32,6 +32,8 @@ internal static class MemberAccess
     {
         yield return name;
         string pascal = SnakeToPascal(name);
+        // _debug_node is _DebugNode when the script also has debug_node (DebugNode), and a Godot virtual (_ready) is _Ready.
+        if (name.StartsWith('_') && pascal.Length > 0) yield return "_" + pascal;
         if (pascal != name) yield return pascal;
         if (pascal.Length > 0)
         {

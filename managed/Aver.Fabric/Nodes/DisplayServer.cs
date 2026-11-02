@@ -32,6 +32,20 @@ public static class DisplayServer
     /// <summary>The display server's name: Aver draws and reads input through its own window layer.</summary>
     public static string GetName() => "Aver";
 
+    // The clipboard the text controls share (UiClipboard).
+    public static void ClipboardSet(string clipboard) => UiClipboard.Text = clipboard;
+    public static string ClipboardGet() => UiClipboard.Text;
+    public static bool ClipboardHas() => UiClipboard.Text.Length > 0;
+
+    // Keyboard layouts: the engine reports keys by their US-layout code (Key), so there is one layout and a physical key is its own key.
+    public static int KeyboardGetLayoutCount() => 1;
+    public static int KeyboardGetCurrentLayout() => 0;
+    public static void KeyboardSetCurrentLayout(int index) { }
+    public static string KeyboardGetLayoutLanguage(int index) => "en";
+    public static string KeyboardGetLayoutName(int index) => "English (US)";
+    public static Key KeyboardGetKeycodeFromPhysical(Key keycode) => keycode;
+    public static Key KeyboardGetLabelFromPhysical(Key keycode) => keycode;
+
     /// <summary>Whether the device has a touch screen: the window layer has reported a finger (SDL), or touch emulation from the mouse is on.</summary>
     public static bool IsTouchscreenAvailable()
     {

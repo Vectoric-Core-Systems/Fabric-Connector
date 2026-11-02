@@ -15,6 +15,7 @@ public class PopupWindow : Control
         public static readonly StringName PopupHide = "popup_hide";
         public static readonly StringName AboutToPopup = "about_to_popup";
         public static readonly StringName CloseRequested = "close_requested";
+        public static readonly StringName WindowInput = "window_input";
     }
 
     public event Action PopupHide { add => Connect(SignalName.PopupHide, Callable.From(value)); remove => Disconnect(SignalName.PopupHide, Callable.From(value)); }

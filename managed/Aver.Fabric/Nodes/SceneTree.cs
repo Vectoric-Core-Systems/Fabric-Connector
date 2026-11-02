@@ -15,6 +15,7 @@ public partial class Viewport : Node
     public new class SignalName : Node.SignalName
     {
         public static readonly StringName SizeChanged = "size_changed";
+        public static readonly StringName GuiFocusChanged = "gui_focus_changed";
     }
 
     /// <summary>Raised when the viewport's size changes (Godot's size_changed): a window the player resizes, or a script setting <see cref="Size"/>.</summary>
@@ -101,6 +102,9 @@ public partial class Viewport : Node
 /// <summary>The window at the top of the tree; its name is "root" (Godot's Window).</summary>
 public class Window : Viewport
 {
+    /// <summary>The window's size: the engine's window has no decorations it reports apart.</summary>
+    public Vector2I GetSizeWithDecorations() => Size;
+
     public enum ContentScaleModeEnum { Disabled = 0, CanvasItems = 1, Viewport = 2 }
 
     public enum ContentScaleAspectEnum { Ignore = 0, Keep = 1, KeepWidth = 2, KeepHeight = 3, Expand = 4 }
@@ -439,6 +443,8 @@ public partial class SceneTree : GodotObject
         s_instance = null;
         Node.EntityGoneProbe = null;
         ProjectSettings.ResetForTests();
+        ProjectSettings.ResetSetForTests();
+        Engine.ResetSingletons();
         Node.ResetGroups();
         Gui.ResetForTests();
         UiImages.ResetForTests();
@@ -448,6 +454,9 @@ public partial class SceneTree : GodotObject
         Camera3D.ResetCurrent();
         DirectionalLight3D.ResetSun();
     }
+
+    /// <summary>The scene open in Godot's editor: a game has none, so null (a script's editor-only tool code then does nothing).</summary>
+    public Node? EditedSceneRoot => null;
 
     /// <summary>The window every scene hangs from. Always in the tree; it has no entity.</summary>
     public Window Root

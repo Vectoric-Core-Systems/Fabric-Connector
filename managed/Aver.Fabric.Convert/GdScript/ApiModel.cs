@@ -288,7 +288,7 @@ internal sealed class ApiModel
         return false;
     }
 
-    private static readonly string[] s_globalEnums = { "Key", "MouseButton", "JoyButton", "JoyAxis", "Error", "Side", "Corner", "Orientation", "HorizontalAlignment", "VerticalAlignment", "KeyModifierMask", "MouseButtonMask", "PropertyHint" };
+    private static readonly string[] s_globalEnums = { "Key", "MouseButton", "JoyButton", "JoyAxis", "Error", "Side", "Corner", "Orientation", "ClockDirection", "HorizontalAlignment", "VerticalAlignment", "KeyModifierMask", "MouseButtonMask", "PropertyHint" };
 
     public bool FindGlobalEnumConstant(string gd, out INamedTypeSymbol? enumType, out string member)
     {
@@ -334,12 +334,34 @@ internal sealed class ApiModel
             // RenderingServer's ENV_SSAO_QUALITY_* are EnvironmentSsaoQuality: the prefix may abbreviate the enum's "environment".
             if (prefix.StartsWith("env", StringComparison.Ordinal) && !prefix.StartsWith("environment", StringComparison.Ordinal) && enumName.StartsWith("environment", StringComparison.Ordinal))
                 prefix = "environment" + prefix[3..];
-            if (prefix.Length < 2 || !enumName.StartsWith(prefix, StringComparison.Ordinal) && !prefix.StartsWith(enumName, StringComparison.Ordinal)) continue;
+            if (prefix.Length < 2 || !enumName.StartsWith(prefix, StringComparison.Ordinal) && !prefix.StartsWith(enumName, StringComparison.Ordinal) &&
+                !PrefixNamesEnum(prefix, enumName)) continue;
             if (best == null || fm.Length > Fold(best.Name).Length) best = f;
         }
         if (best == null) return false;
         member = best.Name;
         return true;
+    }
+
+    /// <summary>The member of one enum a GDScript constant names (MOUSE_MODE_VISIBLE is MouseModeEnum.Visible).</summary>
+    public static bool EnumMember(INamedTypeSymbol e, string gd, out string member) => MatchEnum(e, gd, out member, wholeName: true);
+
+    /// <summary>A nested type of the class or a base, by GDScript's name (Input.MouseMode is Input.MouseModeEnum, Node.ProcessMode is ProcessModeEnum).</summary>
+    public INamedTypeSymbol? NestedType(INamedTypeSymbol? type, string name)
+    {
+        foreach (INamedTypeSymbol t in Chain(type))
+            if ((t.GetTypeMembers(name).FirstOrDefault() ?? t.GetTypeMembers(name + "Enum").FirstOrDefault()) is { } n) return n;
+        return null;
+    }
+
+    // Two more of GodotSharp's prefixes: one that ends the enum's name (Control.PRESET_FULL_RECT is LayoutPreset.FullRect) and one that differs from
+    // it in the word's ending only (Image.INTERPOLATE_LANCZOS is Interpolation.Lanczos).
+    private static bool PrefixNamesEnum(string prefix, string enumName)
+    {
+        if (prefix.Length >= 4 && enumName.EndsWith(prefix, StringComparison.Ordinal)) return true;
+        int common = 0;
+        while (common < prefix.Length && common < enumName.Length && prefix[common] == enumName[common]) common++;
+        return common >= 5 && common >= prefix.Length - 1;
     }
 
     /// <summary>The virtual a GDScript function of that name overrides in the API base chain: the C# name and the method.</summary>

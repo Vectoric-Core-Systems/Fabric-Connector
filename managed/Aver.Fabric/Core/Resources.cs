@@ -179,6 +179,9 @@ public static class ResourceLoader
 
     public static T? Load<T>(string path, CacheMode cacheMode = CacheMode.Reuse) where T : class => Load(path, typeof(T), cacheMode) as T;
 
+    /// <summary>Godot's load(path, type_hint, cache_mode): the hint only picks Godot's loader, and Aver has one per file kind, so it is not needed.</summary>
+    public static Resource? Load(string path, string typeHint, CacheMode cacheMode = CacheMode.Reuse) => Load(path, (System.Type?)null, cacheMode);
+
     // A scene, mesh or material that was just loaded is about to be shown: the engine's workers start on its textures now, before the first draw.
     private static void PreloadContent(Resource r, string path)
     {
@@ -216,7 +219,7 @@ public static class ResourceLoader
     private static void FinishThreaded(string path, CacheMode cacheMode)
     {
         if (!s_threaded.TryGetValue(path, out ThreadLoadStatus st) || st != ThreadLoadStatus.InProgress) return;
-        Resource? r = Load(path, null, cacheMode);
+        Resource? r = Load(path, (System.Type?)null, cacheMode);
         s_threaded[path] = r != null ? ThreadLoadStatus.Loaded : ThreadLoadStatus.Failed;
     }
 

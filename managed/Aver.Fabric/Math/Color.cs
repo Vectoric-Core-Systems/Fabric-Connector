@@ -240,6 +240,29 @@ public static class Colors
         ["silver"] = new(0.75f, 0.75f, 0.75f), ["skyblue"] = new(0.53f, 0.81f, 0.92f), ["tan"] = new(0.82f, 0.71f, 0.55f), ["teal"] = new(0f, 0.5f, 0.5f),
         ["tomato"] = new(1f, 0.39f, 0.28f), ["transparent"] = new(1f, 1f, 1f, 0f), ["turquoise"] = new(0.25f, 0.88f, 0.82f), ["violet"] = new(0.93f, 0.51f, 0.93f),
         ["webgray"] = new(0.5f, 0.5f, 0.5f), ["webgreen"] = new(0f, 0.5f, 0f), ["webmaroon"] = new(0.5f, 0f, 0f), ["webpurple"] = new(0.5f, 0f, 0.5f),
+        ["antiquewhite"] = new(0.98f, 0.92f, 0.84f), ["aquamarine"] = new(0.5f, 1f, 0.83f), ["bisque"] = new(1f, 0.89f, 0.77f), ["blanchedalmond"] = new(1f, 0.92f, 0.8f),
+        ["blueviolet"] = new(0.54f, 0.17f, 0.89f), ["burlywood"] = new(0.87f, 0.72f, 0.53f), ["cadetblue"] = new(0.37f, 0.62f, 0.63f), ["chartreuse"] = new(0.5f, 1f, 0f),
+        ["cornflowerblue"] = new(0.39f, 0.58f, 0.93f), ["cornsilk"] = new(1f, 0.97f, 0.86f), ["darkcyan"] = new(0f, 0.55f, 0.55f), ["darkgoldenrod"] = new(0.72f, 0.53f, 0.04f),
+        ["darkkhaki"] = new(0.74f, 0.72f, 0.42f), ["darkmagenta"] = new(0.55f, 0f, 0.55f), ["darkolivegreen"] = new(0.33f, 0.42f, 0.18f), ["darkorchid"] = new(0.6f, 0.2f, 0.8f),
+        ["darksalmon"] = new(0.91f, 0.59f, 0.48f), ["darkseagreen"] = new(0.56f, 0.74f, 0.56f), ["darkslateblue"] = new(0.28f, 0.24f, 0.55f), ["darkslategray"] = new(0.18f, 0.31f, 0.31f),
+        ["darkturquoise"] = new(0f, 0.81f, 0.82f), ["darkviolet"] = new(0.58f, 0f, 0.83f), ["deepskyblue"] = new(0f, 0.75f, 1f), ["firebrick"] = new(0.7f, 0.13f, 0.13f),
+        ["floralwhite"] = new(1f, 0.98f, 0.94f), ["gainsboro"] = new(0.86f, 0.86f, 0.86f), ["ghostwhite"] = new(0.97f, 0.97f, 1f), ["goldenrod"] = new(0.85f, 0.65f, 0.13f),
+        ["greenyellow"] = new(0.68f, 1f, 0.18f), ["honeydew"] = new(0.94f, 1f, 0.94f), ["indianred"] = new(0.8f, 0.36f, 0.36f), ["lavenderblush"] = new(1f, 0.94f, 0.96f),
+        ["lawngreen"] = new(0.49f, 0.99f, 0f), ["lemonchiffon"] = new(1f, 0.98f, 0.8f), ["lightcoral"] = new(0.94f, 0.5f, 0.5f), ["lightcyan"] = new(0.88f, 1f, 1f),
+        ["lightgoldenrod"] = new(0.98f, 0.98f, 0.82f), ["lightpink"] = new(1f, 0.71f, 0.76f), ["lightsalmon"] = new(1f, 0.63f, 0.48f), ["lightseagreen"] = new(0.13f, 0.7f, 0.67f),
+        ["lightskyblue"] = new(0.53f, 0.81f, 0.98f), ["lightslategray"] = new(0.47f, 0.53f, 0.6f), ["lightsteelblue"] = new(0.69f, 0.77f, 0.87f), ["lightyellow"] = new(1f, 1f, 0.88f),
+        ["limegreen"] = new(0.2f, 0.8f, 0.2f), ["linen"] = new(0.98f, 0.94f, 0.9f), ["mediumaquamarine"] = new(0.4f, 0.8f, 0.67f), ["mediumblue"] = new(0f, 0f, 0.8f),
+        ["mediumorchid"] = new(0.73f, 0.33f, 0.83f), ["mediumpurple"] = new(0.58f, 0.44f, 0.86f), ["mediumseagreen"] = new(0.24f, 0.7f, 0.44f), ["mediumslateblue"] = new(0.48f, 0.41f, 0.93f),
+        ["mediumspringgreen"] = new(0f, 0.98f, 0.6f), ["mediumturquoise"] = new(0.28f, 0.82f, 0.8f), ["mediumvioletred"] = new(0.78f, 0.08f, 0.52f), ["midnightblue"] = new(0.1f, 0.1f, 0.44f),
+        ["mintcream"] = new(0.96f, 1f, 0.98f), ["mistyrose"] = new(1f, 0.89f, 0.88f), ["moccasin"] = new(1f, 0.89f, 0.71f), ["navajowhite"] = new(1f, 0.87f, 0.68f),
+        ["oldlace"] = new(0.99f, 0.96f, 0.9f), ["olivedrab"] = new(0.42f, 0.56f, 0.14f), ["orangered"] = new(1f, 0.27f, 0f), ["palegoldenrod"] = new(0.93f, 0.91f, 0.67f),
+        ["palegreen"] = new(0.6f, 0.98f, 0.6f), ["paleturquoise"] = new(0.69f, 0.93f, 0.93f), ["palevioletred"] = new(0.86f, 0.44f, 0.58f), ["papayawhip"] = new(1f, 0.94f, 0.84f),
+        ["peachpuff"] = new(1f, 0.85f, 0.73f), ["peru"] = new(0.8f, 0.52f, 0.25f), ["plum"] = new(0.87f, 0.63f, 0.87f), ["powderblue"] = new(0.69f, 0.88f, 0.9f),
+        ["rebeccapurple"] = new(0.4f, 0.2f, 0.6f), ["rosybrown"] = new(0.74f, 0.56f, 0.56f), ["royalblue"] = new(0.25f, 0.41f, 0.88f), ["saddlebrown"] = new(0.55f, 0.27f, 0.07f),
+        ["sandybrown"] = new(0.96f, 0.64f, 0.38f), ["seagreen"] = new(0.18f, 0.55f, 0.34f), ["seashell"] = new(1f, 0.96f, 0.93f), ["sienna"] = new(0.63f, 0.32f, 0.18f),
+        ["slateblue"] = new(0.42f, 0.35f, 0.8f), ["slategray"] = new(0.44f, 0.5f, 0.56f), ["snow"] = new(1f, 0.98f, 0.98f), ["springgreen"] = new(0f, 1f, 0.5f),
+        ["steelblue"] = new(0.27f, 0.51f, 0.71f), ["thistle"] = new(0.85f, 0.75f, 0.85f), ["wheat"] = new(0.96f, 0.87f, 0.7f), ["whitesmoke"] = new(0.96f, 0.96f, 0.96f),
+        ["yellowgreen"] = new(0.6f, 0.8f, 0.2f),
         ["white"] = new(1f, 1f, 1f), ["yellow"] = new(1f, 1f, 0f),
     };
 
@@ -303,4 +326,93 @@ public static class Colors
     public static Color WebPurple => s_named["webpurple"];
     public static Color White => s_named["white"];
     public static Color Yellow => s_named["yellow"];
+    public static Color AntiqueWhite => s_named["antiquewhite"];
+    public static Color Aquamarine => s_named["aquamarine"];
+    public static Color Bisque => s_named["bisque"];
+    public static Color BlanchedAlmond => s_named["blanchedalmond"];
+    public static Color BlueViolet => s_named["blueviolet"];
+    public static Color Burlywood => s_named["burlywood"];
+    public static Color CadetBlue => s_named["cadetblue"];
+    public static Color Chartreuse => s_named["chartreuse"];
+    public static Color CornflowerBlue => s_named["cornflowerblue"];
+    public static Color Cornsilk => s_named["cornsilk"];
+    public static Color DarkCyan => s_named["darkcyan"];
+    public static Color DarkGoldenrod => s_named["darkgoldenrod"];
+    public static Color DarkKhaki => s_named["darkkhaki"];
+    public static Color DarkMagenta => s_named["darkmagenta"];
+    public static Color DarkOliveGreen => s_named["darkolivegreen"];
+    public static Color DarkOrchid => s_named["darkorchid"];
+    public static Color DarkSalmon => s_named["darksalmon"];
+    public static Color DarkSeaGreen => s_named["darkseagreen"];
+    public static Color DarkSlateBlue => s_named["darkslateblue"];
+    public static Color DarkSlateGray => s_named["darkslategray"];
+    public static Color DarkTurquoise => s_named["darkturquoise"];
+    public static Color DarkViolet => s_named["darkviolet"];
+    public static Color DeepSkyBlue => s_named["deepskyblue"];
+    public static Color Firebrick => s_named["firebrick"];
+    public static Color FloralWhite => s_named["floralwhite"];
+    public static Color Gainsboro => s_named["gainsboro"];
+    public static Color GhostWhite => s_named["ghostwhite"];
+    public static Color Goldenrod => s_named["goldenrod"];
+    public static Color GreenYellow => s_named["greenyellow"];
+    public static Color Honeydew => s_named["honeydew"];
+    public static Color IndianRed => s_named["indianred"];
+    public static Color LavenderBlush => s_named["lavenderblush"];
+    public static Color LawnGreen => s_named["lawngreen"];
+    public static Color LemonChiffon => s_named["lemonchiffon"];
+    public static Color LightCoral => s_named["lightcoral"];
+    public static Color LightCyan => s_named["lightcyan"];
+    public static Color LightGoldenrod => s_named["lightgoldenrod"];
+    public static Color LightPink => s_named["lightpink"];
+    public static Color LightSalmon => s_named["lightsalmon"];
+    public static Color LightSeaGreen => s_named["lightseagreen"];
+    public static Color LightSkyBlue => s_named["lightskyblue"];
+    public static Color LightSlateGray => s_named["lightslategray"];
+    public static Color LightSteelBlue => s_named["lightsteelblue"];
+    public static Color LightYellow => s_named["lightyellow"];
+    public static Color LimeGreen => s_named["limegreen"];
+    public static Color Linen => s_named["linen"];
+    public static Color MediumAquamarine => s_named["mediumaquamarine"];
+    public static Color MediumBlue => s_named["mediumblue"];
+    public static Color MediumOrchid => s_named["mediumorchid"];
+    public static Color MediumPurple => s_named["mediumpurple"];
+    public static Color MediumSeaGreen => s_named["mediumseagreen"];
+    public static Color MediumSlateBlue => s_named["mediumslateblue"];
+    public static Color MediumSpringGreen => s_named["mediumspringgreen"];
+    public static Color MediumTurquoise => s_named["mediumturquoise"];
+    public static Color MediumVioletRed => s_named["mediumvioletred"];
+    public static Color MidnightBlue => s_named["midnightblue"];
+    public static Color MintCream => s_named["mintcream"];
+    public static Color MistyRose => s_named["mistyrose"];
+    public static Color Moccasin => s_named["moccasin"];
+    public static Color NavajoWhite => s_named["navajowhite"];
+    public static Color OldLace => s_named["oldlace"];
+    public static Color OliveDrab => s_named["olivedrab"];
+    public static Color OrangeRed => s_named["orangered"];
+    public static Color PaleGoldenrod => s_named["palegoldenrod"];
+    public static Color PaleGreen => s_named["palegreen"];
+    public static Color PaleTurquoise => s_named["paleturquoise"];
+    public static Color PaleVioletRed => s_named["palevioletred"];
+    public static Color PapayaWhip => s_named["papayawhip"];
+    public static Color PeachPuff => s_named["peachpuff"];
+    public static Color Peru => s_named["peru"];
+    public static Color Plum => s_named["plum"];
+    public static Color PowderBlue => s_named["powderblue"];
+    public static Color RebeccaPurple => s_named["rebeccapurple"];
+    public static Color RosyBrown => s_named["rosybrown"];
+    public static Color RoyalBlue => s_named["royalblue"];
+    public static Color SaddleBrown => s_named["saddlebrown"];
+    public static Color SandyBrown => s_named["sandybrown"];
+    public static Color SeaGreen => s_named["seagreen"];
+    public static Color Seashell => s_named["seashell"];
+    public static Color Sienna => s_named["sienna"];
+    public static Color SlateBlue => s_named["slateblue"];
+    public static Color SlateGray => s_named["slategray"];
+    public static Color Snow => s_named["snow"];
+    public static Color SpringGreen => s_named["springgreen"];
+    public static Color SteelBlue => s_named["steelblue"];
+    public static Color Thistle => s_named["thistle"];
+    public static Color Wheat => s_named["wheat"];
+    public static Color WhiteSmoke => s_named["whitesmoke"];
+    public static Color YellowGreen => s_named["yellowgreen"];
 }

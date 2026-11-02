@@ -12,6 +12,12 @@ public static class PackedArrays
 {
     private static long Index(long i, int length) => i < 0 ? i + length : i;
 
+    /// <summary>An Array where a packed array is wanted (Expression.parse(text, names), a function returning PackedStringArray): each element converted, as Godot does.</summary>
+    public static T[] FromArray<T>(Collections.Array array) => array.Select(v => v.As<T>()).ToArray();
+
+    /// <summary>A packed array where an Array is wanted.</summary>
+    public static Collections.Array ToArray<T>(T[] packed) => new(packed.Select(x => Variant.From(x)));
+
     /// <summary>The array with <paramref name="value"/> added at the end (<c>push_back</c>, <c>append</c>).</summary>
     public static T[] Append<T>(T[] array, T value)
     {

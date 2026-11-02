@@ -179,6 +179,9 @@ internal sealed partial class GdEmitter
             // Vector3i(a_vector3), Vector3(a_vector3i): the conversion the math types declare, not a constructor.
             if (t.Kind == GK.Struct && args.Count == 1 && TypeOf(args[0], null) is { Kind: GK.Struct, Sym: { } from } && !Rs.SymbolEqualityComparer.Default.Equals(from, sym) && Api.HasConversion(from, sym))
                 return new Ex($"({typeRef.Code}){Wrap(Expr(args[0], null), P.Unary)}", GdType.Obj(sym), P.Unary);
+            // Vector2i(an_untyped_value): GDScript converts what the value holds.
+            if (t.Kind == GK.Struct && args.Count == 1 && TypeOf(args[0], null).IsVariant)
+                return new Ex(FromVariant(Wrap(Expr(args[0], null), P.Primary), GdType.Obj(sym)), GdType.Obj(sym));
             List<Rs.IMethodSymbol> ctors = Api.Constructors(sym);
             if (ctors.Count > 0)
             {
@@ -244,6 +247,7 @@ internal sealed partial class GdEmitter
         if (from.Kind is GK.String or GK.StringName or GK.NodePath && to.Kind is GK.String or GK.StringName or GK.NodePath) return from.Kind == to.Kind ? 4 : 3;
         if (from.Kind == GK.Array && to.Kind == GK.Array) return 3;
         if (from.Kind == GK.Dict && to.Kind == GK.Dict) return 3;
+        if (from.Kind == GK.Array && to.Kind == GK.Packed || from.Kind == GK.Packed && to.Kind == GK.Array) return 1;   // Godot converts them on the call
         int s = ScoreArg(from, to);
         if (s >= 0) return s;
         // Anything converts to a Variant parameter; objects reach each other by a downcast.
@@ -352,7 +356,7 @@ internal sealed partial class GdEmitter
         if (setter)
         {
             Ex v = Expr(args[0], member.Type);
-            return new Ex($"{prefix}{prop} = {Adapt(v, member.Type)}", GdType.Void, P.Assign);
+            return new Ex($"{prefix}{prop} = {NarrowToMember(new Ex(prop, member.Type) { Api = member }, Adapt(v, member.Type))}", GdType.Void, P.Assign);
         }
         return new Ex($"{prefix}{prop}", member.Type);
     }
@@ -402,7 +406,33 @@ internal sealed partial class GdEmitter
             case GK.Callable or GK.Lambda:
                 return CallableCall(t, name, c.Args);
             case GK.Signal:
+            {
+                // A Signal held in a value (a parameter `sig: Signal`): Godot's Signal methods are the struct's.
+                string recv = Wrap(t, P.Primary);
+                string Arg(int i, GdType ty) => Adapt(Expr(c.Args[i], ty), ty);
+                switch (name)
+                {
+                    case "emit":
+                        return new Ex($"{recv}.Emit({string.Join(", ", c.Args.Select(a => VariantFromTyped(Expr(a, null))))})", Obj("Error"));
+                    case "connect" when c.Args.Count is 1 or 2:
+                        return new Ex($"{recv}.Connect({Arg(0, GdType.Callable)}{(c.Args.Count == 2 ? ", (uint)" + Wrap(Expr(c.Args[1], GdType.Int), P.Unary) : "")})", Obj("Error"));
+                    case "disconnect" when c.Args.Count == 1:
+                        return new Ex($"{recv}.Disconnect({Arg(0, GdType.Callable)})", GdType.Void);
+                    case "is_connected" when c.Args.Count == 1:
+                        return new Ex($"{recv}.IsConnected({Arg(0, GdType.Callable)})", GdType.Bool);
+                    case "is_null" when c.Args.Count == 0:
+                        return new Ex($"{recv}.IsNull", GdType.Bool);
+                    case "get_name" when c.Args.Count == 0:
+                        return new Ex($"{recv}.Name", GdType.StringName);
+                    case "get_object" when c.Args.Count == 0:
+                        return new Ex($"{recv}.Owner", Obj("GodotObject"));
+                    case "get_connections" when c.Args.Count == 0:
+                        return new Ex($"{recv}.GetConnections()", GdType.UntypedArray);
+                    case "has_connections" when c.Args.Count == 0:
+                        return new Ex($"{recv}.HasConnections()", GdType.Bool);
+                }
                 break;
+            }
             case GK.ScriptClass:
             {
                 MemberInfo? mi = tt.Script!.Find(name);
@@ -443,6 +473,8 @@ internal sealed partial class GdEmitter
                 // The declared class lacks the method and no single subclass has it: GDScript finds it on the object when the code runs (a script method, or a method of
                 // a subclass such as RigidBody3D.apply_impulse), so the call is by name. Godot only warns here (UNSAFE_METHOD_ACCESS).
                 if (MayExistBelow(tt, name)) return DynamicCall(t, name, c);
+                // Godot 4 lacks it too (a Godot 3 name): Godot fails the call when it runs, so it is made by name.
+                if (sym != null && GodotApi.Has(sym.Name, name) == false) return DynamicCall(t, name, c);
                 // A member nothing below has: keep the name, let the compiler say so.
                 string args = string.Join(", ", c.Args.Select(a => VariantFromTyped(Expr(a, null))));
                 Note(c, "call", name, Rating.Unsupported, $"Aver.Fabric has no method '{name}' on {tt.Cs}");

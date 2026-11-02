@@ -518,6 +518,9 @@ public class CSGShape3D : MeshInstance3D
 
     /// <summary>True for a shape that is not below another CSG node (the one that carries the baked mesh).</summary>
     public bool IsRootShape() => GetParent() is not CSGShape3D;
+
+    /// <summary>The root shape's baked result as [transform, mesh] (Godot's get_meshes); empty below the root or before the mesh is known.</summary>
+    public Collections.Array GetMeshes() => IsRootShape() && Mesh != null ? new Collections.Array { Transform3D.Identity, Mesh } : new Collections.Array();
 }
 
 public class CSGPrimitive3D : CSGShape3D

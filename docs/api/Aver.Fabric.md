@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-878 public types and 9484 public members, read from `managed/Aver.Fabric/` (170 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+896 public types and 9738 public members, read from `managed/Aver.Fabric/` (173 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -1578,6 +1578,39 @@ Values: `Stereo = 0`, `Surround = 1`, `Center = 2`
 
 - `public static readonly StringName Finished`
 
+### AudioStreamPlayer2D
+
+`public class AudioStreamPlayer2D : Node2D` - Godot's AudioStreamPlayer2D.
+
+- `public event Action Finished`
+- `public AudioStreamPlayer2D()`
+- `public AudioStream? Stream { get; set; }`
+- `public float VolumeDb { get; set; }`
+- `public float PitchScale { get; set; }`
+- `public StringName Bus { get; set; }`
+- `public bool Autoplay { get; set; }`
+- `public int MaxPolyphony { get; set; }`
+- `public float MaxDistance { get; set; }`
+- `public float Attenuation { get; set; }`
+- `public uint AreaMask { get; set; }`
+- `public float PanningStrength { get; set; }`
+- `public AudioServer.PlaybackType PlaybackType { get; set; }`
+- `public bool StreamPaused { get; set; }`
+- `public bool Playing { get; set; }`
+- `public void Play(double fromPosition = 0.0)`
+- `public void Seek(double toPosition)`
+- `public void Stop()`
+- `public double GetPlaybackPosition()`
+- `public bool HasStreamPlayback()`
+- `public AudioStreamPlayback? GetStreamPlayback()`
+- `public override void _Notification(int what)`
+
+### AudioStreamPlayer2D.SignalName
+
+`public new class SignalName : Node2D.SignalName`
+
+- `public static readonly StringName Finished`
+
 ### AudioStreamPlayer3D
 
 `public class AudioStreamPlayer3D : Node3D, IAnimationAudioTarget` - Plays an audio stream from a point in the world (Godot's AudioStreamPlayer3D).
@@ -1733,6 +1766,7 @@ Values: `Disabled = 0`, `Forward = 1`, `PingPong = 2`, `Backward = 3`
 - `public bool Disabled { get; set; }`
 - `public bool ToggleMode { get; set; }`
 - `public bool ButtonPressed { get; set; }` - Whether a toggle button is pressed.
+- `public void SetPressed(bool pressed)`
 - `public void SetPressedNoSignal(bool pressed)` - Sets the pressed state without any signal.
 - `public ButtonGroup? ButtonGroup { get; set; }`
 - `public Shortcut? Shortcut { get; set; }`
@@ -1858,6 +1892,8 @@ Values: `Normal = 0`, `Pressed = 1`, `Hover = 2`, `Disabled = 3`, `HoverPressed 
 - `public Color Backlight { get; set; }`
 - `public bool RefractionEnabled { get; set; }`
 - `public float RefractionScale { get; set; }`
+- `public Texture2D? RefractionTexture { get; set; }`
+- `public TextureChannel RefractionTextureChannel { get; set; }`
 - `public bool DetailEnabled { get; set; }`
 - `public BlendModeEnum DetailBlendMode { get; set; }`
 - `public DetailUVEnum DetailUvLayer { get; set; }`
@@ -2558,6 +2594,22 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public static string[] GetClassList()` - Every known class, in no particular order.
 - `public static string[] GetInheritersFromClass(StringName @class)` - Every known class that extends class (not including it).
 
+### ClassValue
+
+`public sealed class ClassValue : RefCounted` - The object standing for one class (Godot's Script or GDScriptNativeClass when used as a value).
+
+- `public Type ClassType { get; }` - The C# class it stands for.
+- `public Variant New()` - A new instance of the class, as `Class.new()` makes one.
+- `public string GetGlobalName()`
+- `public bool CanInstantiate()`
+- `public override string ToString()`
+
+### ClockDirection
+
+`public enum ClockDirection`
+
+Values: `Clockwise = 0`, `Counterclockwise = 1`
+
 ### CodeEdit
 
 `public class CodeEdit : TextEdit` - A text editor for code (Godot's CodeEdit).
@@ -2922,6 +2974,95 @@ Values: `HsvRectangle = 0`, `HsvWheel = 1`, `VhsCircle = 2`, `OkhslCircle = 3`, 
 - `public static Color WebPurple { get; }`
 - `public static Color White { get; }`
 - `public static Color Yellow { get; }`
+- `public static Color AntiqueWhite { get; }`
+- `public static Color Aquamarine { get; }`
+- `public static Color Bisque { get; }`
+- `public static Color BlanchedAlmond { get; }`
+- `public static Color BlueViolet { get; }`
+- `public static Color Burlywood { get; }`
+- `public static Color CadetBlue { get; }`
+- `public static Color Chartreuse { get; }`
+- `public static Color CornflowerBlue { get; }`
+- `public static Color Cornsilk { get; }`
+- `public static Color DarkCyan { get; }`
+- `public static Color DarkGoldenrod { get; }`
+- `public static Color DarkKhaki { get; }`
+- `public static Color DarkMagenta { get; }`
+- `public static Color DarkOliveGreen { get; }`
+- `public static Color DarkOrchid { get; }`
+- `public static Color DarkSalmon { get; }`
+- `public static Color DarkSeaGreen { get; }`
+- `public static Color DarkSlateBlue { get; }`
+- `public static Color DarkSlateGray { get; }`
+- `public static Color DarkTurquoise { get; }`
+- `public static Color DarkViolet { get; }`
+- `public static Color DeepSkyBlue { get; }`
+- `public static Color Firebrick { get; }`
+- `public static Color FloralWhite { get; }`
+- `public static Color Gainsboro { get; }`
+- `public static Color GhostWhite { get; }`
+- `public static Color Goldenrod { get; }`
+- `public static Color GreenYellow { get; }`
+- `public static Color Honeydew { get; }`
+- `public static Color IndianRed { get; }`
+- `public static Color LavenderBlush { get; }`
+- `public static Color LawnGreen { get; }`
+- `public static Color LemonChiffon { get; }`
+- `public static Color LightCoral { get; }`
+- `public static Color LightCyan { get; }`
+- `public static Color LightGoldenrod { get; }`
+- `public static Color LightPink { get; }`
+- `public static Color LightSalmon { get; }`
+- `public static Color LightSeaGreen { get; }`
+- `public static Color LightSkyBlue { get; }`
+- `public static Color LightSlateGray { get; }`
+- `public static Color LightSteelBlue { get; }`
+- `public static Color LightYellow { get; }`
+- `public static Color LimeGreen { get; }`
+- `public static Color Linen { get; }`
+- `public static Color MediumAquamarine { get; }`
+- `public static Color MediumBlue { get; }`
+- `public static Color MediumOrchid { get; }`
+- `public static Color MediumPurple { get; }`
+- `public static Color MediumSeaGreen { get; }`
+- `public static Color MediumSlateBlue { get; }`
+- `public static Color MediumSpringGreen { get; }`
+- `public static Color MediumTurquoise { get; }`
+- `public static Color MediumVioletRed { get; }`
+- `public static Color MidnightBlue { get; }`
+- `public static Color MintCream { get; }`
+- `public static Color MistyRose { get; }`
+- `public static Color Moccasin { get; }`
+- `public static Color NavajoWhite { get; }`
+- `public static Color OldLace { get; }`
+- `public static Color OliveDrab { get; }`
+- `public static Color OrangeRed { get; }`
+- `public static Color PaleGoldenrod { get; }`
+- `public static Color PaleGreen { get; }`
+- `public static Color PaleTurquoise { get; }`
+- `public static Color PaleVioletRed { get; }`
+- `public static Color PapayaWhip { get; }`
+- `public static Color PeachPuff { get; }`
+- `public static Color Peru { get; }`
+- `public static Color Plum { get; }`
+- `public static Color PowderBlue { get; }`
+- `public static Color RebeccaPurple { get; }`
+- `public static Color RosyBrown { get; }`
+- `public static Color RoyalBlue { get; }`
+- `public static Color SaddleBrown { get; }`
+- `public static Color SandyBrown { get; }`
+- `public static Color SeaGreen { get; }`
+- `public static Color Seashell { get; }`
+- `public static Color Sienna { get; }`
+- `public static Color SlateBlue { get; }`
+- `public static Color SlateGray { get; }`
+- `public static Color Snow { get; }`
+- `public static Color SpringGreen { get; }`
+- `public static Color SteelBlue { get; }`
+- `public static Color Thistle { get; }`
+- `public static Color Wheat { get; }`
+- `public static Color WhiteSmoke { get; }`
+- `public static Color YellowGreen { get; }`
 
 ### CompressedTexture2D
 
@@ -3116,6 +3257,7 @@ Values: `SwingSpan = 0`, `TwistSpan = 1`, `Bias = 2`, `Softness = 3`, `Relaxatio
 - `public int LayoutMode { get; set; }` - Godot stores the layout form the editor used (0 position, 1 anchors, 2 container, 3 uncontrolled).
 - `public int AnchorsPreset { get; set; }` - The anchor preset the scene recorded.
 - `public Vector2 GetParentAreaSize()` - The size of the parent area the anchors refer to.
+- `public Control? GetParentControl()` - The parent when it is a Control, else null (Godot's get_parent_control).
 - `public void SetPosition(Vector2 position, bool keepOffsets = false)`
 - `public void SetSize(Vector2 size, bool keepOffsets = false)`
 - `public void ResetSize()` - Resets the size to the minimum size.
@@ -3400,6 +3542,12 @@ Values: `InitialLinearVelocity = 0`, `AngularVelocity = 1`, `OrbitVelocity = 2`,
 
 Values: `AlignYToVelocity = 0`, `RotateY = 1`, `DisableZ = 2`, `Max = 3`
 
+### CPUParticles3D.SignalName
+
+`public new class SignalName : GeometryInstance3D.SignalName`
+
+- `public static readonly StringName Finished`
+
 ### CSGBox3D
 
 `public class CSGBox3D : CSGPrimitive3D`
@@ -3474,6 +3622,7 @@ Values: `Depth = 0`, `Spin = 1`, `Path = 2`
 - `public float CollisionPriority { get; set; }`
 - `public bool InvertFaces { get; set; }`
 - `public bool IsRootShape()` - True for a shape that is not below another CSG node (the one that carries the baked mesh).
+- `public Collections.Array GetMeshes()` - The root shape's baked result as [transform, mesh] (Godot's get_meshes); empty below the root or before the mesh is known.
 
 ### CSGShape3D.OperationEnum
 
@@ -3756,6 +3905,16 @@ Values: `LightAndSky = 0`, `LightOnly = 1`, `SkyOnly = 2`
 - `public const int ScreenOfMainWindow = -1`
 - `public const int ScreenPrimary = -2`
 - `public static string GetName()` - The display server's name: Aver draws and reads input through its own window layer.
+- `public static void ClipboardSet(string clipboard)`
+- `public static string ClipboardGet()`
+- `public static bool ClipboardHas()`
+- `public static int KeyboardGetLayoutCount()`
+- `public static int KeyboardGetCurrentLayout()`
+- `public static void KeyboardSetCurrentLayout(int index)`
+- `public static string KeyboardGetLayoutLanguage(int index)`
+- `public static string KeyboardGetLayoutName(int index)`
+- `public static Key KeyboardGetKeycodeFromPhysical(Key keycode)`
+- `public static Key KeyboardGetLabelFromPhysical(Key keycode)`
 - `public static bool IsTouchscreenAvailable()` - Whether the device has a touch screen: the window layer has reported a finger (SDL), or touch emulation from the mouse is on.
 - `public static int[] GetWindowList()`
 - `public static int GetScreenCount()`
@@ -3943,6 +4102,11 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 `public static class Engine` - Godot's Engine singleton.
 
 - `public static bool IsEditorHint()` - Always false: Aver runs no editor scripts, so a script's is_editor_hint() branch never runs.
+- `public static void RegisterSingleton(StringName name, GodotObject instance)`
+- `public static void UnregisterSingleton(StringName name)`
+- `public static bool HasSingleton(StringName name)`
+- `public static GodotObject? GetSingleton(StringName name)`
+- `public static string[] GetSingletonList()`
 - `public static double GetFramesPerSecond()`
 - `public static long GetProcessFrames()`
 - `public static long GetPhysicsFrames()`
@@ -3956,6 +4120,21 @@ Values: `PacketLoss = 0`, `PacketLossVariance = 1`, `PacketThrottle = 2`, `Round
 - `public static double GetPhysicsInterpolationFraction()` - How far the physics clock is into the current step, 0 to 1: what a renderer blends the last two physics states by (Godot's get_physics_interpolation_fraction).
 - `public static Collections.Dictionary GetVersionInfo()` - The Godot version whose API this runtime follows, as Godot's get_version_info gives it: major, minor, patch, hex, status, build, hash, timestamp and string.
 - `public static string GetArchitectureName()` - The processor architecture in Godot's spelling ("x86_64", "arm64" ...).
+
+### EngineDebugger
+
+`public static class EngineDebugger` - Godot's EngineDebugger.
+
+- `public static bool IsActive()`
+- `public static bool IsProfiling(StringName name)`
+- `public static bool HasProfiler(StringName name)`
+- `public static void ProfilerEnable(StringName name, bool enable, Collections.Array? arguments = null)`
+- `public static void SendMessage(string message, Collections.Array data)`
+- `public static void RegisterMessageCapture(StringName name, Callable callable)`
+- `public static void UnregisterMessageCapture(StringName name)`
+- `public static bool HasCapture(StringName name)`
+- `public static void Debug(bool canContinue = true, bool isErrorBreakpoint = false)`
+- `public static void LinePoll()`
 
 ### Environment
 
@@ -4573,6 +4752,7 @@ Values: `None = 0`, `Light = 1`, `Normal = 2`
 
 `public static class GDScript` - GDScript's operators, conversions, dynamic access and built-in functions, over Variant.
 
+- `public static ClassValue ClassObject(Type type)` - The object for a class used as a value: the same one each time for one class.
 - `public static double RotateToward(double from, double to, double delta)` - GDScript's rotate_toward(from, to, delta): moves the angle from toward to by delta radians along the shorter way round, without passing to.
 - `public static Variant TypeConvert(Variant value, long type)` - GDScript's type_convert(value, type): the value as the Variant type (TYPE_INT and so on) by the rules of that type's constructor.
 - `public static Variant Add(Variant a, Variant b)`
@@ -4715,6 +4895,8 @@ Values: `LinearLowerLimit = 0`, `LinearUpperLimit = 1`, `LinearLimitSoftness = 2
 
 `public class GeometryInstance3D : VisualInstance3D`
 
+- `public void SetInstanceShaderParameter(StringName name, Variant value)`
+- `public Variant GetInstanceShaderParameter(StringName name)`
 - `public float VisibilityRangeBegin { get; set; }` - Metres from the camera at which the instance appears (0: no lower bound).
 - `public float VisibilityRangeEnd { get; set; }` - Metres from the camera at which the instance disappears (0: no upper bound).
 - `public float VisibilityRangeBeginMargin { get; set; }` - The distance past the begin threshold the instance must cross to change state (hysteresis).
@@ -4981,6 +5163,12 @@ Values: `Deferred = 1`, `Persist = 2`, `OneShot = 4`, `ReferenceCounted = 8`
 
 Values: `Index = 0`, `Lifetime = 1`, `ReverseLifetime = 2`, `ViewDepth = 3`
 
+### GPUParticles3D.SignalName
+
+`public new class SignalName : GeometryInstance3D.SignalName`
+
+- `public static readonly StringName Finished`
+
 ### GPUParticles3D.TransformAlignEnum
 
 `public enum TransformAlignEnum`
@@ -5238,6 +5426,50 @@ Values: `Left = 0`, `Center = 1`, `Right = 2`, `Fill = 3`
 
 `public class HSplitContainer : SplitContainer`
 
+### HttpClient
+
+`public class HttpClient : RefCounted` - Godot's HTTPClient: only its Method enum, which Request takes.
+
+### HttpClient.Method
+
+`public enum Method`
+
+Values: `Get = 0`, `Head = 1`, `Post = 2`, `Put = 3`, `Delete = 4`, `Options = 5`, `Trace = 6`, `Connect = 7`, `Patch = 8`, `Max = 9`
+
+### HttpRequest
+
+`public class HttpRequest : Node` - Sends one HTTP request at a time and reports it with request_completed(result, response_code, headers, body).
+
+- `public string DownloadFile { get; set; }`
+- `public int BodySizeLimit { get; set; }`
+- `public int MaxRedirects { get; set; }`
+- `public double Timeout { get; set; }`
+- `public bool UseThreads { get; set; }`
+- `public bool AcceptGzip { get; set; }`
+- `public int DownloadChunkSize { get; set; }`
+- `public Error Request(string url, string[]? customHeaders = null, HttpClient.Method method = HttpClient.Method.Get, string requestData = "")` - Starts the request; Busy while another is running, InvalidParameter for an address that is not http(s).
+- `public Error RequestRaw(string url, string[]? customHeaders = null, HttpClient.Method method = HttpClient.Method.Get, byte[]? requestDataRaw = null)`
+- `public void CancelRequest()`
+- `public HttpClientStatus GetHttpClientStatus()`
+
+### HttpRequest.HttpClientStatus
+
+`public enum HttpClientStatus`
+
+Values: `Disconnected = 0`, `Resolving = 1`, `CantResolve = 2`, `Connecting = 3`, `CantConnect = 4`, `Connected = 5`, `Requesting = 6`, `Body = 7`, `ConnectionError = 8`, `TlsHandshakeError = 9`
+
+### HttpRequest.Result
+
+`public enum Result`
+
+Values: `Success = 0`, `ChunkedBodySizeMismatch = 1`, `CantConnect = 2`, `CantResolve = 3`, `ConnectionError = 4`, `TlsHandshakeError = 5`, `NoResponse = 6`, `BodySizeLimitExceeded = 7`, `BodyDecompressFailed = 8`, `RequestFailed = 9`, `DownloadFileCantOpen = 10`, `DownloadFileWriteError = 11`, `RedirectLimitReached = 12`, `Timeout = 13`
+
+### HttpRequest.SignalName
+
+`public new class SignalName : Node.SignalName`
+
+- `public static readonly StringName RequestCompleted`
+
 ### IAnimationAudioTarget
 
 `public interface IAnimationAudioTarget` - A node an animation's audio track can start and stop (the contract with the audio package).
@@ -5288,6 +5520,8 @@ Values: `Left = 0`, `Center = 1`, `Right = 2`, `Fill = 3`
 - `public void Convert(Format format)` - Changes the pixel format, keeping the picture.
 - `public void FlipX()`
 - `public void FlipY()`
+- `public void Rotate90(ClockDirection direction)` - Turns the picture a quarter turn (its width and height swap).
+- `public void Rotate180()`
 - `public override Resource Duplicate(bool subresources = false)`
 - `public byte[] SavePngToBuffer()` - The image as a PNG file (8-bit RGBA, or grey for L8/R8).
 - `public Error SavePng(string path)`
@@ -5357,6 +5591,7 @@ Values: `TopTo = 0`, `CenterTo = 1`, `BaselineTo = 3`, `BottomTo = 2`, `ToTop = 
 - `public static void ActionPress(StringName action, float strength = 1f)` - Presses an action as if an event had (Godot's action_press).
 - `public static void ActionRelease(StringName action)`
 - `public static bool IsAnythingPressed()`
+- `public static void FlushBufferedEvents()` - Godot delivers accumulated input at once here; Aver hands every event to the scripts as it arrives, so nothing is waiting.
 - `public static bool IsKeyPressed(Key keycode)`
 - `public static bool IsPhysicalKeyPressed(Key keycode)`
 - `public static bool IsKeyLabelPressed(Key keycode)`
@@ -5404,6 +5639,12 @@ Values: `Arrow = 0`, `Ibeam = 1`, `PointingHand = 2`, `Cross = 3`, `Wait = 4`, `
 `public enum MouseModeEnum`
 
 Values: `Visible = 0`, `Hidden = 1`, `Captured = 2`, `Confined = 3`, `ConfinedHidden = 4`
+
+### Input.SignalName
+
+`public static class SignalName` - The names of Input's signals, carried by Singleton (GDScript's Input.joy_connection_changed.connect(...)).
+
+- `public static readonly StringName JoyConnectionChanged`
 
 ### InputEvent
 
@@ -5553,6 +5794,7 @@ Values: `Visible = 0`, `Hidden = 1`, `Captured = 2`, `Confined = 3`, `ConfinedHi
 
 `public static class InputMap` - The project's actions and the events that trigger them (Godot's InputMap).
 
+- `public static void LoadFromProjectSettings()` - Back to the project's actions: what scripts added, changed or erased is dropped (the project's bindings and Godot's ui_* defaults remain).
 - `public static bool HasAction(StringName action)`
 - `public static void AddAction(StringName action, float deadzone = 0.5f)` - Adds an action with no events.
 - `public static void EraseAction(StringName action)` - Removes an action: one script added, or one of Godot's built-in ui_* actions.
@@ -6284,6 +6526,7 @@ Values: `Points = 0`, `Lines = 1`, `LineStrip = 2`, `Triangles = 3`, `TriangleSt
 
 `public class MeshInstance3D : GeometryInstance3D` - A node that draws a mesh (Godot's MeshInstance3D).
 
+- `public override Aabb GetAabb()`
 - `public Mesh? Mesh { get; set; }`
 - `public void SetBlendShapeValueByName(string name, float value)`
 - `public float GetBlendShapeValueByName(string name)`
@@ -7392,6 +7635,11 @@ Values: `Vertical = 1`, `Horizontal = 0`
 - `public static void SetEnvironment(string variable, string value)`
 - `public static void UnsetEnvironment(string variable)`
 - `public static int GetProcessorCount()` - The number of logical processors.
+- `public static string GetProcessorName()` - The CPU's model name (the registry on Windows, /proc/cpuinfo on Linux), or "" when the system does not say.
+- `public static string GetKeycodeString(Key code)` - The name of a key, with its modifiers ("Ctrl+Shift+A", "Space", "Kp 5"), as Godot writes it.
+- `public static Key FindKeycodeFromString(string @string)` - The key a name stands for (the inverse of GetKeycodeString, letter case ignored); None when none does.
+- `public static bool IsKeycodeUnicode(long code)` - True when the code is a character key (a Unicode code point), not one of the named special keys.
+- `public static Error MoveToTrash(string path)` - Moves a file or folder (an operating-system path) to the recycle bin.
 - `public static ulong GetStaticMemoryUsage()` - The bytes of managed memory in use: Godot's "static" memory is the engine's own allocations, and the managed heap is what this runtime holds.
 - `public static ulong GetStaticMemoryPeakUsage()` - The most GetStaticMemoryUsage has reported so far.
 - `public static string GetUserDataDir()` - The folder user:// names: the player's writable folder for this project, created on first use.
@@ -7414,6 +7662,8 @@ Values: `Vertical = 1`, `Horizontal = 0`
 
 `public static class PackedArrays` - The methods of GDScript's packed arrays (PackedByteArray, PackedInt32Array, PackedStringArray, PackedVector3Array ...) for the arrays Aver.Fabric uses for them.
 
+- `public static T[] FromArray<T>(Collections.Array array)` - An Array where a packed array is wanted (Expression.parse(text, names), a function returning PackedStringArray): each element converted, as Godot does.
+- `public static Collections.Array ToArray<T>(T[] packed)` - A packed array where an Array is wanted.
 - `public static T[] Append<T>(T[] array, T value)` - The array with value added at the end (push_back, append).
 - `public static T[] AppendArray<T>(T[] array, T[] other)` - The array with all of other added at the end (append_array).
 - `public static T[] Insert<T>(T[] array, long at, T value)` - The array with value inserted before at (insert); an index outside the array leaves it unchanged.
@@ -7635,6 +7885,7 @@ Values: `Disabled = 0`, `Constant = 1`, `AtEnd = 2`, `AtCollision = 3`, `AtStart
 `public class Path3D : Node3D` - A node holding a curve in 3D (Godot's Path3D).
 
 - `public event Action CurveChanged`
+- `public Color DebugCustomColor { get; set; }` - The colour Godot draws the path's debug line in; Aver draws no debug paths, so it is kept for scripts.
 - `public Curve3D? Curve { get; set; }` - The path.
 
 ### Path3D.SignalName
@@ -8175,6 +8426,7 @@ Values: `FaceX = 0`, `FaceY = 1`, `FaceZ = 2`
 - `public static readonly StringName PopupHide`
 - `public static readonly StringName AboutToPopup`
 - `public static readonly StringName CloseRequested`
+- `public static readonly StringName WindowInput`
 
 ### PrimBuilder
 
@@ -8278,6 +8530,13 @@ Values: `BeginToEnd = 0`, `EndToBegin = 1`, `TopToBottom = 2`, `BottomToTop = 3`
 
 `public static class ProjectSettings` - Godot's ProjectSettings singleton.
 
+- `public static void SetSetting(string name, Variant value)`
+- `public static void Clear(string name)`
+- `public static void SetInitialValue(string name, Variant value)`
+- `public static void SetAsBasic(string name, bool basic)`
+- `public static void SetAsInternal(string name, bool @internal)`
+- `public static void SetRestartIfChanged(string name, bool restart)`
+- `public static Error Save()`
 - `public static Variant GetSetting(string name, Variant @default = default)`
 - `public static bool HasSetting(string name)`
 - `public static string GlobalizePath(string path)` - The operating-system path for a res:// or user:// path (res:// is the project's content folder, user:// the player's writable folder); any other path is returned unchanged.
@@ -8374,6 +8633,7 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public float Randfn(float mean = 0f, float deviation = 1f)`
 - `public uint Randi()`
 - `public int RandiRange(int from, int to)`
+- `public long RandWeighted(float[] weights)` - An index picked with the odds the weights give it (Godot's rand_weighted); -1 when there are none or they add up to nothing.
 
 ### Range
 
@@ -8562,6 +8822,13 @@ Values: `Once = 0`, `Always = 1`
 - `public bool UpdateScale { get; set; }`
 - `public void ForceUpdateCache()` - Looks the remote node up again (after the scene changed) and copies the transform to it now.
 
+### RenderingDevice
+
+`public class RenderingDevice : GodotObject` - Godot's RenderingDevice, the low-level GPU interface.
+
+- `public string GetDeviceName()`
+- `public string GetDeviceVendorName()`
+
 ### RenderingServer
 
 `public static class RenderingServer` - Godot's RenderingServer enums that the environment nodes use.
@@ -8579,6 +8846,8 @@ Values: `Once = 0`, `Always = 1`
 - `public static void DirectionalShadowAtlasSetSize(int size, bool is16Bits)` - Approximated, kept as set: the sun's cascade size (RENDER.SHADOWRES) is read when the renderer starts, so a size set while the game runs changes nothing that is drawn.
 - `public static Color GetDefaultClearColor()` - The colour behind everything when nothing else is drawn there (Godot's default clear colour, 0.3 grey unless the project sets it).
 - `public static void SetDefaultClearColor(Color color)` - Approximated, kept as set: a level's background is its sky, which the converter writes from the Environment (or the project's default clear colour) at conversion; a colour set here later does not repaint it.
+- `public static RenderingDevice? GetRenderingDevice()`
+- `public static RenderingDevice? CreateLocalRenderingDevice()`
 - `public static string GetCurrentRenderingMethod()` - The rendering method in Godot's spelling.
 - `public static string GetCurrentRenderingDriverName()` - The graphics API name in Godot's spelling ("vulkan", "d3d12" or "metal"); Aver picks by platform.
 - `public static void DirectionalSoftShadowFilterSetQuality(ShadowQuality quality)` - Kept as set.
@@ -8711,6 +8980,7 @@ Values: `Directional`, `Omni`, `Spot`
 - `public static bool Exists(string path, string typeHint = "")` - True when the resource is loaded already, a loader provides it, or its file is in the content folder.
 - `public static Resource? Load(string path, System.Type? type = null, CacheMode cacheMode = CacheMode.Reuse)`
 - `public static T? Load<T>(string path, CacheMode cacheMode = CacheMode.Reuse) where T : class`
+- `public static Resource? Load(string path, string typeHint, CacheMode cacheMode = CacheMode.Reuse)` - Godot's load(path, type_hint, cache_mode): the hint only picks Godot's loader, and Aver has one per file kind, so it is not needed.
 - `public static Resource? GetCachedRef(string path)` - The resource if it is loaded already, else null.
 - `public static bool HasCached(string path)`
 - `public static Error LoadThreadedRequest(string path, string typeHint = "", bool useSubThreads = false, CacheMode cacheMode = CacheMode.Reuse)`
@@ -9037,6 +9307,7 @@ Values: `Never = 0`, `Always = 1`, `OnChange = 2`
 - `public event Action<Node> NodeRenamed`
 - `public event Action TreeChanged`
 - `public static SceneTree Instance { get; }` - The one tree.
+- `public Node? EditedSceneRoot { get; }` - The scene open in Godot's editor: a game has none, so null (a script's editor-only tool code then does nothing).
 - `public Window Root { get; }` - The window every scene hangs from.
 - `public Node? CurrentScene { get; set; }` - The scene's root node (Godot's current_scene): the one a scene change set, else the first node under the window that is not an autoload.
 - `public static Func<string, string> ScenePathMapper { get; set; }` - Maps a scene path to the level file the converter wrote for it ("res://levels/a.tscn" to "Maps/levels/a.ocworld").
@@ -9262,6 +9533,8 @@ Values: `Left = 0`, `Top = 1`, `Right = 2`, `Bottom = 3`
 - `public void Disconnect(Callable callable)`
 - `public bool IsConnected(Callable callable)`
 - `public Error Emit(params Variant[] args)`
+- `public bool HasConnections()`
+- `public Collections.Array GetConnections()` - One dictionary per connection, as Godot's get_connections gives: signal, callable, flags.
 - `public bool Equals(Signal other)`
 - `public override bool Equals(object? obj)`
 - `public override int GetHashCode()`
@@ -9615,6 +9888,30 @@ Values: `Visible = 0`, `Hidden = 1`, `HiddenCollapsed = 2`
 - `public bool RemoveExcludedObject(Rid rid)`
 - `public void ClearExcludedObjects()`
 - `public void ForceUpdate()` - Runs one pass now (for a script that moves the arm and wants the children placed before the next physics step).
+
+### Sprite2D
+
+`public class Sprite2D : Node2D` - A 2D image node (Godot's Sprite2D).
+
+- `public Texture2D? Texture { get; set; }`
+- `public bool Centered { get; set; }`
+- `public Vector2 Offset { get; set; }`
+- `public bool FlipH { get; set; }`
+- `public bool FlipV { get; set; }`
+- `public int Hframes { get; set; }`
+- `public int Vframes { get; set; }`
+- `public int Frame { get; set; }`
+- `public Vector2I FrameCoords { get; set; }`
+- `public bool RegionEnabled { get; set; }`
+- `public Rect2 RegionRect { get; set; }`
+- `public bool RegionFilterClipEnabled { get; set; }`
+
+### Sprite2D.SignalName
+
+`public new class SignalName : Node2D.SignalName`
+
+- `public static readonly StringName FrameChanged`
+- `public static readonly StringName TextureChanged`
 
 ### Sprite3D
 
@@ -11928,6 +12225,7 @@ Values: `Disabled = 0`, `Fxaa = 1`, `Smaa = 2`, `Max = 3`
 `public new class SignalName : Node.SignalName`
 
 - `public static readonly StringName SizeChanged`
+- `public static readonly StringName GuiFocusChanged`
 
 ### Viewport.VrsModeEnum
 
@@ -11986,6 +12284,7 @@ Values: `Inherit = 0`, `Always = 1`, `WhenPaused = 2`
 
 `public class VisualInstance3D : Node3D` - Anything drawn in 3D (Godot's VisualInstance3D).
 
+- `public virtual Aabb GetAabb()` - The box the instance occupies, in its own space (empty for one that draws nothing).
 - `public uint Layers { get; set; }` - The render layers this instance is on (default layer 1).
 - `public bool GetLayerMaskValue(int layerNumber)`
 - `public void SetLayerMaskValue(int layerNumber, bool value)`
@@ -12040,6 +12339,7 @@ Values: `Subdiv64 = 0`, `Subdiv128 = 1`, `Subdiv256 = 2`, `Subdiv512 = 3`, `Max 
 
 `public class Window : Viewport` - The window at the top of the tree; its name is "root" (Godot's Window).
 
+- `public Vector2I GetSizeWithDecorations()` - The window's size: the engine's window has no decorations it reports apart.
 - `public string Title { get; set; }` - The window's title bar text.
 - `public ModeEnum Mode { get; set; }` - The window's mode: windowed, minimized, maximized or fullscreen.
 - `public Vector2I Position { get; set; }` - The window's top-left in screen pixels.
@@ -12197,6 +12497,16 @@ Values: `Unknown = 0`, `Left = 1`, `Right = 2`, `Max = 3`
 - `public static Collections.Array<Collections.Dictionary> GetInterfaces()`
 - `public static XRPositionalTracker? GetTracker(StringName name)`
 
+### ZipReader
+
+`public class ZipReader : RefCounted` - Reads the files of a .zip archive (Godot's ZIPReader).
+
+- `public Error Open(string path)`
+- `public Error Close()`
+- `public string[] GetFiles()`
+- `public bool FileExists(string path, bool caseSensitive = true)`
+- `public byte[] ReadFile(string path, bool caseSensitive = true)`
+
 ## namespace Aver.Fabric.Collections
 
 ### Array
@@ -12257,6 +12567,7 @@ Values: `Unknown = 0`, `Left = 1`, `Right = 2`, `Max = 3`
 - `public void Reverse()`
 - `public void Sort()`
 - `public Array<T> Duplicate(bool deep = false)`
+- `public Array<T> Slice(long begin, long end = int.MaxValue)` - The elements from begin to end (exclusive; negative counts from the end), still typed (GDScript's slice).
 - `public override string ToString()`
 
 ### Dictionary

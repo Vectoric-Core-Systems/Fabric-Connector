@@ -149,4 +149,20 @@ public class RandomNumberGenerator : RefCounted
     public float Randfn(float mean = 0f, float deviation = 1f) => _g.Randfn(mean, deviation);
     public uint Randi() => _g.Randi();
     public int RandiRange(int from, int to) => _g.RandiRange(from, to);
+
+    /// <summary>An index picked with the odds the weights give it (Godot's rand_weighted); -1 when there are none or they add up to nothing.</summary>
+    public long RandWeighted(float[] weights)
+    {
+        double total = 0;
+        foreach (float w in weights) if (w > 0) total += w;
+        if (total <= 0) return -1;
+        double pick = Randf() * total;
+        for (int i = 0; i < weights.Length; i++)
+        {
+            if (weights[i] <= 0) continue;
+            pick -= weights[i];
+            if (pick < 0) return i;
+        }
+        return weights.Length - 1;
+    }
 }

@@ -57,6 +57,8 @@ public static class ProjectConverter
 
         var sources = new List<ScriptSource>();
         var handled = new HashSet<string>(StringComparer.Ordinal);
+        // Godot builds a project's C# scripts from its .csproj; a GDScript project that ships an addon's C# wrappers without one never compiles them.
+        bool buildsCSharp = !File.Exists(Path.Combine(projectDir, "project.godot")) || Directory.EnumerateFiles(projectDir, "*.csproj", SearchOption.TopDirectoryOnly).Any();
         foreach (ManifestScript e in entries.Where(e => e.Kind is "csharp" or "gdscript"))
         {
             handled.Add(e.Path);
@@ -65,6 +67,15 @@ public static class ProjectConverter
             if (!e.Exists || !File.Exists(disk))
             {
                 res.Items.Add(new ReportItem { File = e.Path, Node = e.ClassName, Type = type, Rating = Rating.Unsupported, Reason = "the script file does not exist in the Godot project" });
+                continue;
+            }
+            if (type == "csharp" && !buildsCSharp)
+            {
+                res.Items.Add(new ReportItem
+                {
+                    File = e.Path, Node = e.ClassName, Type = type, Rating = Rating.Approximated,
+                    Reason = "left out of the game: the project has no .csproj, so Godot does not build its C# scripts either",
+                });
                 continue;
             }
             sources.Add(new ScriptSource
@@ -91,6 +102,7 @@ public static class ProjectConverter
             Manifest.Utf8NoBom(target, s.Text);
             res.Written.Add(target);
         }
+        RemoveStaleScripts(Path.Combine(outDir, "Content", "Scripts"), res.Written);
         if (o.EnginePath != null && sources.Count > 0) WriteScriptsProject(outDir, o.EnginePath, refs, res.Written);
 
         res.Items.AddRange(conv.Items);
@@ -169,6 +181,25 @@ public static class ProjectConverter
     {
         string[] parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
         for (int i = parts.Length - 1; i >= 0; --i) stack.Push(parts[i]);
+    }
+
+    // A script an earlier run wrote and this one did not (one now left out of the game, or removed from the project) would still be compiled with
+    // the rest. Only files that carry the converter's own header are removed; anything else in the folder is the user's.
+    private static void RemoveStaleScripts(string scriptsDir, List<string> written)
+    {
+        if (!Directory.Exists(scriptsDir)) return;
+        var keep = new HashSet<string>(written.Select(Path.GetFullPath), StringComparer.OrdinalIgnoreCase);
+        foreach (string file in Directory.EnumerateFiles(scriptsDir, "*.cs", SearchOption.AllDirectories))
+        {
+            if (keep.Contains(Path.GetFullPath(file))) continue;
+            try
+            {
+                using var reader = new StreamReader(file);
+                if (reader.ReadLine()?.StartsWith("// FABRIC: converted from ", StringComparison.Ordinal) != true) continue;
+            }
+            catch (IOException) { continue; }
+            try { File.Delete(file); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
 
     private static void WriteScriptsProject(string outDir, string engine, string refs, List<string> written)

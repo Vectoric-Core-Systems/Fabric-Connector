@@ -271,6 +271,9 @@ internal sealed partial class GdEmitter
         // Script classes, inner classes and enums: the dotted path.
         GdType? script = ResolveScriptPath(t.Parts, from);
         if (script != null) return script;
+        // An enum of the script's base class named bare (var mode: ProcessMode in a Node script).
+        if (t.Parts.Count == 1 && Api?.Fabric(t.Parts[0]) == null && Api?.NestedType(from.Root.ApiRoot, t.Parts[0]) is { TypeKind: Rs.TypeKind.Enum } inherited)
+            return GdType.Obj(inherited);
         string full = string.Join(".", t.Parts);
         if (s_placeholder2D.Contains(full) && _noted2D.Add(t))
             Note(t, "type", full, Rating.Unsupported, $"2D is not supported: {full} is an empty placeholder type that lets the script compile; it is not drawn or simulated");
@@ -278,7 +281,7 @@ internal sealed partial class GdEmitter
     }
 
     // The 2D classes Aver.Fabric has as placeholders (Nodes2D.cs): a type hint that names one is reported unsupported.
-    private static readonly HashSet<string> s_placeholder2D = new(StringComparer.Ordinal) { "Node2D", "CollisionObject2D", "PhysicsBody2D", "StaticBody2D" };
+    private static readonly HashSet<string> s_placeholder2D = new(StringComparer.Ordinal) { "Node2D", "CollisionObject2D", "PhysicsBody2D", "StaticBody2D", "Sprite2D" };
     private readonly HashSet<TypeRef> _noted2D = new();
 
     private GdType Obj(string apiName)
@@ -348,9 +351,17 @@ internal sealed partial class GdEmitter
 
     private string VariantFromTyped(Ex e)
     {
+        // A class used as a value: GDScript's script or native-class object; a script enum used as a value is the Dictionary GDScript makes of it.
+        if (e.Type.IsClassRef)
+        {
+            if (e.Type.Kind == GK.Enum && e.Type.EnumDef is { } def)
+                return "new Collections.Dictionary { " + string.Join(", ", def.Values.Select(v => $"[{Naming.Quote(v.Key)}] = (long){e.Code}.{v.Value}")) + " }";
+            if (e.Type.Kind is GK.ScriptClass or GK.Object) return $"(Variant)GDScript.ClassObject(typeof({e.Code}))";
+        }
         switch (e.Type.Kind)
         {
             case GK.Enum: return "(long)" + Wrap(e, P.Unary);
+            case GK.Object when e.Type.Sym?.TypeKind == Rs.TypeKind.Enum && !e.Type.IsClassRef: return "(long)" + Wrap(e, P.Unary);
             case GK.Array when e.Type.Typed:
             case GK.Dict when e.Type.Typed:
                 return "Variant.From(" + e.Code + ")";
@@ -429,6 +440,8 @@ internal sealed partial class GdEmitter
         if (to.Sym?.Name == "Rid" && from.IsGodotObject && Api != null &&
             (from.Kind == GK.ScriptClass ? from.Script!.ApiRoot : from.Sym) is { } ridOwner && Api.Lookup(ridOwner, "get_rid") is { Kind: MemberKind.Method })
             return Wrap(e, P.Primary) + ".GetRid()";
+        // An object with no RID where one is wanted: Godot refuses the element when the line runs; here it is an empty RID, which excludes nothing.
+        if (to.Sym?.Name == "Rid" && from.IsGodotObject) return "default(Rid)";
         if (to.Kind == GK.String && from.Kind == GK.NodePath) return e.Code;
         if (to.Kind == GK.StringName && from.Kind == GK.NodePath) return "(string)" + Wrap(e, P.Unary);
         // An untyped Array where an Array[T] is wanted (query.exclude = hit_list), or back: the wrappers' explicit conversions share the storage, as Godot's
@@ -441,6 +454,15 @@ internal sealed partial class GdEmitter
         }
         if (to.IsGodotObject && from.IsGodotObject && !to.Accepts(from) && to.Cs != "GodotObject")
             return "(" + to.Cs + ")" + Wrap(e, P.Unary);
+        // A bool, number or string where an object is wanted (`var m = a or b` is a bool in Godot 4): GDScript only finds out when the line runs, and
+        // so does this conversion.
+        if (to.IsGodotObject && from.Kind is GK.Bool or GK.Int or GK.Float or GK.String)
+            return FromVariant("((Variant)" + Wrap(e, P.Unary) + ")", to);
+        // Arrays and packed arrays convert into each other on assignment in Godot, element by element.
+        if (to.Kind == GK.Packed && from.Kind == GK.Array && to.Cs.TrimEnd('?').EndsWith("[]", StringComparison.Ordinal))
+            return $"PackedArrays.FromArray<{to.Cs.TrimEnd('?')[..^2]}>({(from.Typed ? "(Collections.Array)" + Wrap(e, P.Unary) : e.Code)})";
+        if (to.Kind == GK.Array && from.Kind == GK.Packed)
+            return to.Typed ? $"({to.Cs})PackedArrays.ToArray({e.Code})" : $"PackedArrays.ToArray({e.Code})";
         return e.Code;
     }
 

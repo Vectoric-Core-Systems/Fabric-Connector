@@ -125,6 +125,9 @@ public sealed class Array<T> : IList<T>, IReadOnlyList<T>
     public void Reverse() => _a.Reverse();
     public void Sort() => _a.Sort();
     public Array<T> Duplicate(bool deep = false) => new(_a.Duplicate(deep));
+
+    /// <summary>The elements from begin to end (exclusive; negative counts from the end), still typed (GDScript's slice).</summary>
+    public Array<T> Slice(long begin, long end = int.MaxValue) => new(_a.Slice((int)begin, (int)Math.Min(end, int.MaxValue)));
     public override string ToString() => _a.ToString();
 }
 

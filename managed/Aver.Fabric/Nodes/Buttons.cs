@@ -104,6 +104,8 @@ public class BaseButton : Control
         }
     }
 
+    public void SetPressed(bool pressed) => ButtonPressed = pressed;
+
     /// <summary>Sets the pressed state without any signal.</summary>
     public void SetPressedNoSignal(bool pressed)
     {

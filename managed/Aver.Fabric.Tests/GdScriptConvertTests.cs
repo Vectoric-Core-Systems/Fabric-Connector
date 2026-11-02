@@ -450,10 +450,10 @@ static class GdScriptConvertTests
 
     private static void MapMissingApi()
     {
-        ConversionResult r = One("extends Node3D\n\nvar mesh: MeshInstance3D\n\nfunc f():\n\tmesh.get_aabb()\n\tvar n: NoSuchClass = null\n\tmesh.also_missing = 1\n");
-        T.Check("what Aver.Fabric lacks does not compile and is not hidden", !r.Success && r.Errors.Any(e => e.Id == "CS1061" && e.Member == "GetAabb") && r.Errors.Any(e => e.Id == "CS0246" && e.Member == "NoSuchClass"), Errors(r));
-        T.Check("the line carries a FABRIC comment naming the member", Text(r).Split('\n').Any(l => l.Contains("mesh.GetAabb()") && l.Contains("FABRIC") && l.Contains("GetAabb")));
-        T.Check("the report has the unsupported entry from the converter and from the compiler", r.Items.Any(i => i.Type == "call" && i.Property == "get_aabb" && i.Rating == Rating.Unsupported) &&
+        ConversionResult r = One("extends Node3D\n\nvar mesh: MeshInstance3D\n\nfunc f():\n\tmesh.get_imaginary_box()\n\tvar n: NoSuchClass = null\n\tmesh.also_missing = 1\n");
+        T.Check("what Aver.Fabric lacks does not compile and is not hidden", !r.Success && r.Errors.Any(e => e.Id == "CS1061" && e.Member == "GetImaginaryBox") && r.Errors.Any(e => e.Id == "CS0246" && e.Member == "NoSuchClass"), Errors(r));
+        T.Check("the line carries a FABRIC comment naming the member", Text(r).Split('\n').Any(l => l.Contains("mesh.GetImaginaryBox()") && l.Contains("FABRIC") && l.Contains("GetImaginaryBox")));
+        T.Check("the report has the unsupported entry from the converter and from the compiler", r.Items.Any(i => i.Type == "call" && i.Property == "get_imaginary_box" && i.Rating == Rating.Unsupported) &&
                 r.Items.Any(i => i.Type == "CS1061" && i.Rating == Rating.Unsupported && i.Line > 0));
         T.Check("the script as a whole is unsupported (it does not compile)", r.Items.First(i => i.Type == "gdscript").Rating == Rating.Unsupported);
     }

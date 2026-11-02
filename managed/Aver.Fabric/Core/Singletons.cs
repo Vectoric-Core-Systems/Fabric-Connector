@@ -13,6 +13,17 @@ public static class Engine
     /// <summary>Always false: Aver runs no editor scripts, so a script's <c>is_editor_hint()</c> branch never runs.</summary>
     public static bool IsEditorHint() => false;
 
+    // The objects scripts register by name (Engine.register_singleton). Godot's own singletons are static classes here, so get_singleton("Input")
+    // has no object to give and answers null, as Godot does for a name it does not know.
+    private static readonly Dictionary<string, GodotObject> s_singletons = new(StringComparer.Ordinal);
+
+    public static void RegisterSingleton(StringName name, GodotObject instance) => s_singletons[name] = instance;
+    public static void UnregisterSingleton(StringName name) => s_singletons.Remove(name);
+    public static bool HasSingleton(StringName name) => s_singletons.ContainsKey(name);
+    public static GodotObject? GetSingleton(StringName name) => s_singletons.TryGetValue(name, out GodotObject? o) ? o : null;
+    public static string[] GetSingletonList() => s_singletons.Keys.ToArray();
+    internal static void ResetSingletons() => s_singletons.Clear();
+
     public static double GetFramesPerSecond() => Aver.Framework.Engine.FramesPerSecond;
     public static long GetProcessFrames() => Aver.Framework.Engine.ProcessFrames;
     public static long GetPhysicsFrames() => Aver.Framework.Engine.PhysicsFrames;
@@ -150,6 +161,46 @@ public static class OS
 
     /// <summary>The number of logical processors.</summary>
     public static int GetProcessorCount() => System.Environment.ProcessorCount;
+
+    /// <summary>The CPU's model name (the registry on Windows, /proc/cpuinfo on Linux), or "" when the system does not say.</summary>
+    public static string GetProcessorName()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                return (Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString", "") as string ?? "").Trim();
+            if (OperatingSystem.IsLinux() && File.Exists("/proc/cpuinfo"))
+                foreach (string line in File.ReadLines("/proc/cpuinfo"))
+                    if (line.StartsWith("model name", StringComparison.Ordinal) && line.IndexOf(':') is int c and > 0) return line[(c + 1)..].Trim();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { }
+        return "";
+    }
+
+    /// <summary>The name of a key, with its modifiers ("Ctrl+Shift+A", "Space", "Kp 5"), as Godot writes it.</summary>
+    public static string GetKeycodeString(Key code) => KeyNames.Name(code);
+
+    /// <summary>The key a name stands for (the inverse of <see cref="GetKeycodeString"/>, letter case ignored); <see cref="Key.None"/> when none does.</summary>
+    public static Key FindKeycodeFromString(string @string) => KeyNames.Find(@string);
+
+    /// <summary>True when the code is a character key (a Unicode code point), not one of the named special keys.</summary>
+    public static bool IsKeycodeUnicode(long code) => code < (long)Key.Special;
+
+    /// <summary>Moves a file or folder (an operating-system path) to the recycle bin. Windows only: elsewhere <see cref="Error.Unavailable"/>, nothing moved.</summary>
+    public static Error MoveToTrash(string path)
+    {
+        if (!OperatingSystem.IsWindows()) return Error.Unavailable;
+        try
+        {
+            if (Directory.Exists(path))
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            else if (File.Exists(path))
+                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            else return Error.FileNotFound;
+            return Error.Ok;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException) { return Error.Failed; }
+    }
 
     /// <summary>The bytes of managed memory in use: Godot's "static" memory is the engine's own allocations, and the managed heap is what this runtime holds.</summary>
     public static ulong GetStaticMemoryUsage()
@@ -295,8 +346,27 @@ public static class ProjectSettings
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return fallback; }
     }
 
+    // What scripts set while the game runs (set_setting): read before the project's values. save() writes nothing, as an exported Godot game's
+    // project.godot is read-only too.
+    private static readonly Dictionary<string, Variant> s_set = new(StringComparer.Ordinal);
+
+    public static void SetSetting(string name, Variant value)
+    {
+        if (value.VariantType == Variant.Type.Nil) s_set.Remove(name);
+        else s_set[name] = value;
+    }
+
+    public static void Clear(string name) => s_set.Remove(name);
+    public static void SetInitialValue(string name, Variant value) { }
+    public static void SetAsBasic(string name, bool basic) { }
+    public static void SetAsInternal(string name, bool @internal) { }
+    public static void SetRestartIfChanged(string name, bool restart) { }
+    public static Error Save() => Error.Unavailable;
+    internal static void ResetSetForTests() => s_set.Clear();
+
     public static Variant GetSetting(string name, Variant @default = default)
     {
+        if (s_set.TryGetValue(name, out Variant set)) return set;
         // The project's name as Godot has it (the Aver project's NAME is a file-safe form of it).
         if (name == "application/config/name" && TryStored(name, out Variant godotName)) return godotName;
         switch (name)
@@ -324,7 +394,7 @@ public static class ProjectSettings
         return TryStored(name, out Variant stored) ? stored : @default;
     }
 
-    public static bool HasSetting(string name) => name is "physics/3d/default_gravity" or "physics/3d/default_gravity_vector" or "application/config/name"
+    public static bool HasSetting(string name) => s_set.ContainsKey(name) || name is "physics/3d/default_gravity" or "physics/3d/default_gravity_vector" or "application/config/name"
         or "physics/common/physics_ticks_per_second" or "display/window/size/viewport_width" or "display/window/size/viewport_height"
         or "gui/theme/custom" or "display/window/stretch/mode" or "display/window/stretch/aspect" or "display/window/stretch/scale_mode"
         or "display/window/stretch/scale" or "gui/timers/tooltip_delay_sec" || Stored().ContainsKey(name);
@@ -343,4 +413,21 @@ public static class ProjectSettings
         string[] p = Manifest("WINDOW.SIZE", "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return p.Length >= 2 && long.TryParse(p[axis], out long v) && v > 0 ? v : fallback;
     }
+}
+
+/// <summary>Godot's EngineDebugger. A game runs with no Godot debugger attached, as an exported game does: it is never active and messages go nowhere.</summary>
+public static class EngineDebugger
+{
+    private static readonly Dictionary<string, Callable> s_captures = new(StringComparer.Ordinal);
+
+    public static bool IsActive() => false;
+    public static bool IsProfiling(StringName name) => false;
+    public static bool HasProfiler(StringName name) => false;
+    public static void ProfilerEnable(StringName name, bool enable, Collections.Array? arguments = null) { }
+    public static void SendMessage(string message, Collections.Array data) { }
+    public static void RegisterMessageCapture(StringName name, Callable callable) => s_captures[name] = callable;
+    public static void UnregisterMessageCapture(StringName name) => s_captures.Remove(name);
+    public static bool HasCapture(StringName name) => s_captures.ContainsKey(name);
+    public static void Debug(bool canContinue = true, bool isErrorBreakpoint = false) { }
+    public static void LinePoll() { }
 }

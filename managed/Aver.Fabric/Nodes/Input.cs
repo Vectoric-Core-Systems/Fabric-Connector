@@ -20,7 +20,10 @@ public static partial class InputMap
 
     private static readonly Dictionary<string, ManagedAction> s_actions = new(StringComparer.Ordinal);
 
-    internal static void ResetForTests()
+    internal static void ResetForTests() => LoadFromProjectSettings();
+
+    /// <summary>Back to the project's actions: what scripts added, changed or erased is dropped (the project's bindings and Godot's ui_* defaults remain).</summary>
+    public static void LoadFromProjectSettings()
     {
         s_actions.Clear();
         s_erasedBuiltins.Clear();
@@ -450,6 +453,9 @@ public static class Input
         return false;
     }
 
+    /// <summary>Godot delivers accumulated input at once here; Aver hands every event to the scripts as it arrives, so nothing is waiting.</summary>
+    public static void FlushBufferedEvents() { }
+
     // ---- keys, mouse, pads ----
 
     private static bool NativeKey(Key key)
@@ -526,6 +532,12 @@ public static class Input
 
     /// <summary>The object that carries Input's signals: <c>Input.Singleton.Connect("joy_connection_changed", ...)</c>.</summary>
     public static GodotObject Singleton => s_joyHooks ??= new InputSignals();
+
+    /// <summary>The names of Input's signals, carried by <see cref="Singleton"/> (GDScript's Input.joy_connection_changed.connect(...)).</summary>
+    public static class SignalName
+    {
+        public static readonly StringName JoyConnectionChanged = "joy_connection_changed";
+    }
 
     /// <summary>Raised when a gamepad is plugged in or removed (Godot's joy_connection_changed): the device number and whether it is now connected.</summary>
     public static event Action<long, bool>? JoyConnectionChanged;

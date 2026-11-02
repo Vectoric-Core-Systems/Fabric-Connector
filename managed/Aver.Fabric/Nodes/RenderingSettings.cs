@@ -6,8 +6,19 @@
 
 namespace Aver.Fabric;
 
+/// <summary>Godot's RenderingDevice, the low-level GPU interface. Aver exposes none: <see cref="RenderingServer.GetRenderingDevice"/> answers null, as Godot's
+/// Compatibility renderer does, so scripts take their path for a renderer without one.</summary>
+public class RenderingDevice : GodotObject
+{
+    public string GetDeviceName() => "";
+    public string GetDeviceVendorName() => "";
+}
+
 public static partial class RenderingServer
 {
+    public static RenderingDevice? GetRenderingDevice() => null;
+    public static RenderingDevice? CreateLocalRenderingDevice() => null;
+
     /// <summary>Godot's RenderingServer.ShadowQuality (SHADOW_QUALITY_*).</summary>
     public enum ShadowQuality { Hard = 0, SoftVeryLow = 1, SoftLow = 2, SoftMedium = 3, SoftHigh = 4, SoftUltra = 5, Max = 6 }
 

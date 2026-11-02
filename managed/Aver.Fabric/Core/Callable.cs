@@ -224,6 +224,17 @@ public readonly struct Signal : IEquatable<Signal>
     public void Disconnect(Callable callable) { if (Owner != null && Name != null) Owner.Disconnect(Name, callable); }
     public bool IsConnected(Callable callable) => Owner != null && Name != null && Owner.IsConnected(Name, callable);
     public Error Emit(params Variant[] args) => Owner is null || Name is null ? Error.InvalidParameter : Owner.EmitSignal(Name, args);
+    public bool HasConnections() => Owner != null && Name != null && Owner.HasConnections(Name);
+
+    /// <summary>One dictionary per connection, as Godot's get_connections gives: signal, callable, flags.</summary>
+    public Collections.Array GetConnections()
+    {
+        var list = new Collections.Array();
+        if (Owner is null || Name is null) return list;
+        foreach (Callable c in Owner.GetSignalConnections(Name))
+            list.Add(new Collections.Dictionary { ["signal"] = Variant.From(this), ["callable"] = Variant.From(c), ["flags"] = 0 });
+        return list;
+    }
 
     public bool Equals(Signal other) => ReferenceEquals(Owner, other.Owner) && Name == other.Name;
     public override bool Equals(object? obj) => obj is Signal s && Equals(s);

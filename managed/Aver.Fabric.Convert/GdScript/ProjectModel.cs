@@ -289,6 +289,9 @@ internal sealed class ProjectModel
                     var mi = new MemberInfo { Kind = MK.Func, Name = fd.Name, Decl = fd, Owner = s, IsStatic = fd.IsStatic, Async = ContainsAwait(fd.Body) };
                     mi.CsName = Naming.MethodName(fd.Name);
                     if (mi.CsName == s.CsName) mi.CsName += "_";   // a C# member cannot be named like its class
+                    // debug_node beside _debug_node: both would be DebugNode; the underscore one keeps it (_DebugNode), the name the runtime tries first for it.
+                    if (fd.Name.StartsWith('_') && s.Decl.Members.OfType<FuncDecl>().Any(f => f.Name == fd.Name.TrimStart('_')))
+                        mi.CsName = "_" + mi.CsName;
                     if (!s.ByName.ContainsKey(fd.Name)) Add(s, mi, used, rename: false);
                     break;
                 }

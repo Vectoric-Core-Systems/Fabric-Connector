@@ -371,6 +371,8 @@ internal sealed partial class GdEmitter
                     return MemberOf(new Ex("(" + owner.ToDisplayString(s_nameFormat) + ")" + Wrap(target, P.Unary), GdType.Obj(owner), P.Unary), name, at, expected);
                 // Neither the declared class nor one subclass has it: a script member or a subclass property is read by name when the code runs.
                 if (MayExistBelow(tt, name)) return DynamicMember(target, name, at);
+                // Godot 4 lacks it too (a Godot 3 name such as flags_unshaded): Godot runs the line and fails the access when it happens, so it is made by name.
+                if (sym != null && GodotApi.Has(sym.Name, name) == false) return DynamicMember(target, name, at);
                 Note(at, "member", name, Rating.Unsupported, $"Aver.Fabric has no member '{name}' on {tt.Cs}");
                 return new Ex(tcode + "." + Naming.Pascal(name), GdType.Variant);
             }
@@ -428,7 +430,11 @@ internal sealed partial class GdEmitter
             {
                 Rs.IFieldSymbol? f = sym.GetMembers().OfType<Rs.IFieldSymbol>().FirstOrDefault(x => x.Name == Naming.Pascal(name));
                 if (f != null) return new Ex(target.Code + "." + f.Name, GdType.Obj(sym)) { IsConstExpr = true };
+                if (ApiModel.EnumMember(sym, name, out string em)) return new Ex(target.Code + "." + em, GdType.Obj(sym)) { IsConstExpr = true };
             }
+            // A PascalCase name is a nested type (GDScript's properties are snake_case): Input.MouseMode is the enum, not the mouse_mode property.
+            if (char.IsUpper(name[0]) && name.Any(char.IsLower) && Api.NestedType(sym, name) is { } nested)
+                return TypeRef(GdType.Obj(nested), nested.ToDisplayString(s_nameFormat));
             ApiMember? api = Api.Lookup(sym, name);
             if (api != null)
             {
@@ -644,6 +650,8 @@ internal sealed partial class GdEmitter
         {
             if (a.Type.Kind == GK.Null) ac = "default(Variant)";
             if (b.Type.Kind == GK.Null) bc = "default(Variant)";
+            // Two branches that each convert to Variant (a StringName and a string): C# needs one of them typed to pick the result's type.
+            else if (!a.Type.IsVariant && !b.Type.IsVariant && a.Type.Kind != GK.Null) ac = "(Variant)" + (ac.Contains(' ') ? "(" + ac + ")" : ac);
         }
         return new Ex($"{Wrap(new Ex(cond, GdType.Bool, cond.Contains(' ') ? P.Eq : P.Primary), P.OrOr)} ? {WrapCond(ac)} : {WrapCond(bc)}", rt, P.Cond);
     }
@@ -800,6 +808,8 @@ internal sealed partial class GdEmitter
         // Equality of everything else: references, null, structs of one type, enums of one type, callables.
         if (op is "==" or "!=")
         {
+            // A class compared as a value (parent == Enemy): GDScript compares the object with the class object, false for any instance.
+            if (lt.IsClassRef || rt.IsClassRef) return new Ex($"{VariantFromTyped(l)} {op} {VariantFromTyped(r)}", GdType.Bool, P.Eq);
             if (lt.Kind == GK.Null || rt.Kind == GK.Null)
             {
                 Ex other = lt.Kind == GK.Null ? r : l;

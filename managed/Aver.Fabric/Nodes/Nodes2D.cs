@@ -82,3 +82,33 @@ public class StaticBody2D : PhysicsBody2D
     public Vector2 ConstantLinearVelocity { get; set; }
     public float ConstantAngularVelocity { get; set; }
 }
+
+/// <summary>A 2D image node (Godot's Sprite2D). Unsupported: its texture, frames and region are kept for scripts; nothing is drawn.</summary>
+public class Sprite2D : Node2D
+{
+    public new class SignalName : Node2D.SignalName
+    {
+        public static readonly StringName FrameChanged = "frame_changed";
+        public static readonly StringName TextureChanged = "texture_changed";
+    }
+
+    private Texture2D? _texture;
+    private int _frame;
+
+    public Texture2D? Texture { get => _texture; set { if (ReferenceEquals(_texture, value)) return; _texture = value; EmitSignal(SignalName.TextureChanged); } }
+    public bool Centered { get; set; } = true;
+    public Vector2 Offset { get; set; }
+    public bool FlipH { get; set; }
+    public bool FlipV { get; set; }
+    public int Hframes { get; set; } = 1;
+    public int Vframes { get; set; } = 1;
+    public int Frame
+    {
+        get => _frame;
+        set { int f = Math.Clamp(value, 0, Math.Max(0, Hframes * Vframes - 1)); if (f == _frame) return; _frame = f; EmitSignal(SignalName.FrameChanged); }
+    }
+    public Vector2I FrameCoords { get => new(Frame % Math.Max(1, Hframes), Frame / Math.Max(1, Hframes)); set => Frame = value.Y * Hframes + value.X; }
+    public bool RegionEnabled { get; set; }
+    public Rect2 RegionRect { get; set; }
+    public bool RegionFilterClipEnabled { get; set; }
+}

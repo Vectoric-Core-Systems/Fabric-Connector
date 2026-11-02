@@ -119,6 +119,13 @@ internal sealed partial class GdEmitter
             {
                 if (c.Args[0] is Literal { Kind: LitKind.String } lit)
                 {
+                    // load("res://x.gd") of a script of the project is its class, as preload is (load(...).new()).
+                    string lpath = ProjectModel.ResolveRes((string)lit.Value!, _script);
+                    if (lpath.EndsWith(".gd", StringComparison.Ordinal) && _m.ByPath.TryGetValue(lpath, out ScriptInfo? loaded))
+                    {
+                        Done(TypeRef(GdType.OfScript(loaded), QualifiedScript(loaded)));
+                        return true;
+                    }
                     GdType t = Obj(ResourceClassFor((string)lit.Value!));
                     Done(R($"GD.Load<{t.Cs}>({E(0).Code})", t));
                 }
@@ -153,9 +160,10 @@ internal sealed partial class GdEmitter
                 // Callable(self, "on_done") names one of our functions: use the generated MethodName constant.
                 if (E(0).Code == "this" && c.Args[1] is Literal { Kind: LitKind.String } lit && FindScriptMember((string)lit.Value!).Member is { Kind: MK.Func } fm)
                 { Done(R($"new Callable(this, MethodName.{fm.CsName})", GdType.Callable)); return true; }
-                Done(R($"new Callable({E(0).Code}, {Adapt(E(1), GdType.String)})", GdType.Callable)); return true;
+                // The object may arrive untyped (states[current]): it is read out as the object it holds.
+                Done(R($"new Callable({Adapt(E(0), Obj("GodotObject"))}, {Adapt(E(1), GdType.String)})", GdType.Callable)); return true;
             }
-            case "Signal" when n == 2: Done(R($"new Signal({E(0).Code}, {Adapt(E(1), GdType.String)})", GdType.Signal)); return true;
+            case "Signal" when n == 2: Done(R($"new Signal({Adapt(E(0), Obj("GodotObject"))}, {Adapt(E(1), GdType.String)})", GdType.Signal)); return true;
 
             // ---- randomness ----
             case "randf" when n == 0: Done(R("GD.Randf()", GdType.Float32)); return true;
@@ -402,7 +410,8 @@ internal sealed partial class GdEmitter
             case "is_empty": return R($"{a}.Count == 0", GdType.Bool, P.Eq);
             case "append": case "push_back": return R($"{a}.Add({El(0)})", GdType.Void);
             case "push_front": return R($"{a}.PushFront({El(0)})", GdType.Void);
-            case "append_array": return R($"{a}.AppendArray({E(0).Code})", GdType.Void);
+            // An untyped value (a call made by name) holds the Array to add: read it out, typed like this one.
+            case "append_array": return R($"{a}.AppendArray({(E(0).Type.IsVariant ? (typed ? "(" + at.Cs + ")" : "") + FromVariant(Wrap(E(0), P.Primary), GdType.UntypedArray) : Adapt(E(0), at))})", GdType.Void);
             case "pop_back": return R(typed ? $"{a}.PopBack()" : $"{a}.Pop()", elem);
             case "pop_front": return R($"{a}.PopFront()", elem);
             case "has": return R($"{a}.Contains({El(0)})", GdType.Bool);
@@ -419,7 +428,7 @@ internal sealed partial class GdEmitter
             case "sort": return R($"{a}.Sort()", GdType.Void);
             case "pick_random": return R($"{a}.PickRandom()", elem);
             case "duplicate": return R($"{a}.Duplicate({(n > 0 ? Adapt(E(0), GdType.Bool) : "")})", at);
-            case "slice" when !typed: return R($"{a}.Slice({Adapt(E(0), GdType.Int)}{(n > 1 ? ", " + Adapt(E(1), GdType.Int) : "")})", GdType.UntypedArray);
+            case "slice" when n is 1 or 2: return R($"{a}.Slice({Adapt(E(0), GdType.Int)}{(n > 1 ? ", " + Adapt(E(1), GdType.Int) : "")})", typed ? at : GdType.UntypedArray);
             case "min": return R($"{a}.Min()", elem);
             case "max": return R($"{a}.Max()", elem);
             case "count": return R($"{a}.Count({El(0)})", GdType.Int);

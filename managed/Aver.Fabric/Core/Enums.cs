@@ -23,6 +23,8 @@ public enum Side { Left = 0, Top = 1, Right = 2, Bottom = 3 }
 
 public enum Corner { TopLeft = 0, TopRight = 1, BottomRight = 2, BottomLeft = 3 }
 
+public enum ClockDirection { Clockwise = 0, Counterclockwise = 1 }
+
 public enum Orientation { Vertical = 1, Horizontal = 0 }
 
 public enum HorizontalAlignment { Left = 0, Center = 1, Right = 2, Fill = 3 }
@@ -57,7 +59,7 @@ public sealed class ExportAttribute : Attribute
     public ExportAttribute(PropertyHint hint, string hintString = "") { Hint = hint; HintString = hintString; }
 }
 
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
 public sealed class ExportGroupAttribute : Attribute
 {
     public string Name { get; }
@@ -65,7 +67,7 @@ public sealed class ExportGroupAttribute : Attribute
     public ExportGroupAttribute(string name, string prefix = "") { Name = name; Prefix = prefix; }
 }
 
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
 public sealed class ExportSubgroupAttribute : Attribute
 {
     public string Name { get; }
@@ -73,7 +75,7 @@ public sealed class ExportSubgroupAttribute : Attribute
     public ExportSubgroupAttribute(string name, string prefix = "") { Name = name; Prefix = prefix; }
 }
 
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
 public sealed class ExportCategoryAttribute : Attribute
 {
     public string Name { get; }

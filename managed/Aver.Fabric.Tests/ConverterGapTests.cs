@@ -33,6 +33,8 @@ static class ConverterGapTests
         T.Run("converter gap: an addon's editor-only scripts (EditorPlugin, EditorInterface, and what loads them) are left out of the game (COGITO)", EditorOnlyScripts);
         T.Run("converter gap: preload(\"./x.gd\") from the script's own folder, and `var _name` with a setter (COGITO)", RelativePreloadAndUnderscoreSetter);
         T.Run("converter gap: twelve GDScript shapes that wrote C# that did not compile (COGITO round two)", GdScriptShapesRoundTwo);
+        T.Run("converter gap: classes as values, Signal parameters, Godot 3 names, nested enums and Array conversions (COGITO round three)", GdScriptShapesRoundThree);
+        T.Run("converter gap: the runtime calls COGITO makes (key names, settings, singletons, weights, images, zips, clipboard)", RuntimeCallsRoundThree);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -575,6 +577,108 @@ static class ConverterGapTests
         SceneTree.Instance.Root.AddChild(shapes);
         T.Check("and runs as GDScript does: 1 + 2 + 4 + 8 + 16 + 32 + 64, the setter stopped at its await", (long)shapes.GetType().GetMethod("Run")!.Invoke(shapes, null)! == 127);
         shapes.Free();
+    }
+
+    // Godot's own API (third_party/godot-gdextension/extension_api.json), found from the test's folder up.
+    private static string? GodotApiFile()
+    {
+        for (DirectoryInfo? d = new(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            string f = Path.Combine(d.FullName, "third_party", "godot-gdextension", "extension_api.json");
+            if (File.Exists(f)) return f;
+        }
+        return null;
+    }
+
+    // COGITO, round three.
+    private static void GdScriptShapesRoundThree()
+    {
+        string? api = GodotApiFile();
+        T.Check("Godot's extension_api.json is found for the Godot 3 name check", api != null);
+        Aver.Fabric.Convert.GdScript.GodotApi.PathOverride = api;
+        try
+        {
+            ConversionResult r = Many(
+                ("GapThreeHelper", "extends RefCounted\n\nfunc v() -> int:\n\treturn 3\n"),
+                ("GapThree", "class_name GapThree\nextends Node3D\n\nsignal poked\n\n@export_category(\"A\")\n@export_category(\"B\")\n@export var tagged := 1\n\n" +
+                    "var hits := 0\nvar kinds := [Node, GapThree]\n\n" +
+                    "func debug_node(n: Node) -> int:\n\treturn 1\n\nfunc _debug_node(n: Node) -> int:\n\treturn 2\n\nfunc ping() -> void:\n\thits += 1\n\n" +
+                    "func names() -> PackedStringArray:\n\tvar list = [\"a\", \"b\"]\n\treturn list\n\n" +
+                    "func listen(sig: Signal, cb: Callable) -> int:\n\tif not sig.is_connected(cb):\n\t\tsig.connect(cb)\n\tsig.emit()\n\treturn sig.get_connections().size()\n\n" +
+                    "static func quiet() -> bool:\n\treturn EngineDebugger.is_active()\n\n" +
+                    "func godot3(mat: StandardMaterial3D, label: RichTextLabel) -> void:\n\tmat.flags_unshaded = true\n\tlabel.bbcode_text = \"x\"\n\n" +
+                    "func exclude_self() -> void:\n\tvar q := PhysicsRayQueryParameters3D.new()\n\tq.exclude = [self]\n\n" +
+                    "func takes(m: Material) -> void:\n\tpass\n\nfunc pass_bool(a: Material, b: Material) -> void:\n\tvar m = a or b\n\ttakes(m)\n\n" +
+                    "func run() -> int:\n\tvar n := 0\n" +
+                    "\tif Input.MouseMode.MOUSE_MODE_VISIBLE == Input.MOUSE_MODE_VISIBLE: n += 1\n" +
+                    "\tif get_parent() != GapThree and kinds.size() == 2: n += 2\n" +
+                    "\tvar holder = {\"obj\": self}\n\tvar cb := Callable(holder[\"obj\"], \"ping\")\n\tcb.call()\n\tif hits == 1: n += 4\n" +
+                    "\tif names().size() == 2: n += 8\n" +
+                    "\tvar typed: Array[int] = [1, 2, 3, 4]\n\tvar part: Array[int] = typed.slice(1, 3)\n\tvar more = [5, 6]\n\tpart.append_array(more)\n\tif part.size() == 4 and part[0] == 2: n += 16\n" +
+                    "\tif call(\"_debug_node\", self) == 2 and debug_node(self) == 1: n += 32\n" +
+                    "\tif listen(poked, ping) == 1 and hits == 2: n += 64\n" +
+                    "\tif not quiet(): n += 128\n" +
+                    "\tvar ch := BaseMaterial3D.TEXTURE_CHANNEL_GREEN\n\tif ch == 1: n += 256\n" +
+                    "\tvar nm = \"x\" if hits > 100 else &\"y\"\n\tif str(nm) == \"y\": n += 512\n" +
+                    "\tvar body := StaticBody3D.new()\n\tvar layer := 4\n\tbody.set_collision_layer(layer)\n\tif body.collision_layer == 4: n += 1024\n\tbody.free()\n" +
+                    "\tif load(\"res://gapthreehelper.gd\").new().v() == 3: n += 2048\n" +
+                    "\tvar vv = [Vector2i(3, 4)]\n\tvar v := Vector2i(vv[0])\n\tif v.x == 3: n += 4096\n" +
+                    "\tvar pm: ProcessMode = process_mode\n\tif pm == process_mode: n += 8192\n" +
+                    "\treturn n\n"));
+            T.Check("it compiles (before: a class as a value, Signal.Call, flags_unshaded, Input.MouseMode, ProcessMode, Array to string[], typed slice, " +
+                    "Callable(untyped, m), _debug_node beside debug_node, EngineDebugger, two export categories, [self] as a RID, a bool as a Material)", r.Success, Errors(r));
+            if (!r.Success) return;
+            T.Check("the Godot 3 names are made by name (Godot lacks them too), not compile errors", Text(r, 1).Contains("mat.Set(\"flags_unshaded\", true)") && Text(r, 1).Contains("label.Set(\"bbcode_text\", \"x\")"), Text(r, 1));
+            var three = New<Node3D>(r, "GapThree");
+            SceneTree.Instance.Root.AddChild(three);
+            long got = (long)three.GetType().GetMethod("Run")!.Invoke(three, null)!;
+            T.Check("and runs as GDScript does: every check holds (16383)", got == 16383, got.ToString());
+            three.Free();
+        }
+        finally { Aver.Fabric.Convert.GdScript.GodotApi.PathOverride = null; }
+    }
+
+    private static void RuntimeCallsRoundThree()
+    {
+        T.Check("key names as Godot writes them", OS.GetKeycodeString(Key.A | (Key)KeyModifierMask.Shift | (Key)KeyModifierMask.Ctrl) == "Shift+Ctrl+A" &&
+                OS.GetKeycodeString(Key.Kp5) == "Kp 5" && OS.GetKeycodeString(Key.Space) == "Space", OS.GetKeycodeString(Key.A | (Key)KeyModifierMask.Shift | (Key)KeyModifierMask.Ctrl));
+        T.Check("and back, letter case ignored", OS.FindKeycodeFromString("ctrl+space") == (Key.Space | (Key)KeyModifierMask.Ctrl) && OS.FindKeycodeFromString("Escape") == Key.Escape);
+        ProjectSettings.SetSetting("gap/test/value", 7);
+        T.Check("a setting a script sets is read back", ProjectSettings.HasSetting("gap/test/value") && ProjectSettings.GetSetting("gap/test/value").AsInt64() == 7);
+        ProjectSettings.SetSetting("gap/test/value", default);
+        T.Check("and a nil value clears it", !ProjectSettings.HasSetting("gap/test/value"));
+        var holder = new Node { Name = "Single" };
+        Engine.RegisterSingleton("GapSingle", holder);
+        T.Check("a script's singleton is registered by name", Engine.HasSingleton("GapSingle") && ReferenceEquals(Engine.GetSingleton("GapSingle"), holder) && Engine.GetSingleton("Nope") == null);
+        Engine.UnregisterSingleton("GapSingle");
+        holder.Free();
+        var rng = new RandomNumberGenerator();
+        T.Check("rand_weighted picks the only weighted index, and -1 with no weight", rng.RandWeighted(new[] { 0f, 2f, 0f }) == 1 && rng.RandWeighted(new[] { 0f, 0f }) == -1);
+        Image img = Image.Create(2, 1, false, Image.Format.Rgba8);
+        img.SetPixel(0, 0, new Color(1, 0, 0));
+        img.Rotate90(ClockDirection.Clockwise);
+        T.Check("rotate_90 swaps the size and turns the pixels", img.GetWidth() == 1 && img.GetHeight() == 2 && img.GetPixel(0, 0).R > 0.9f);
+        string zipPath = Path.Combine(Path.GetTempPath(), "fabric_gap_" + Guid.NewGuid().ToString("N") + ".zip");
+        using (var z = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        using (var w = new StreamWriter(z.CreateEntry("dir/a.txt").Open())) w.Write("hi");
+        var reader = new ZipReader();
+        bool zipOk = reader.Open(zipPath) == Error.Ok && reader.GetFiles().Contains("dir/a.txt") && System.Text.Encoding.UTF8.GetString(reader.ReadFile("dir/a.txt")) == "hi"
+            && reader.ReadFile("DIR/A.TXT", caseSensitive: false).Length == 2;
+        reader.Close();
+        File.Delete(zipPath);
+        T.Check("ZIPReader lists and reads an archive's files", zipOk);
+        var sprite = new Sprite2D { Hframes = 4, Vframes = 2 };
+        sprite.Frame = 20;
+        T.Check("Sprite2D keeps its frame inside its grid", sprite.Frame == 7 && sprite.FrameCoords == new Vector2I(3, 1));
+        sprite.Free();
+        DisplayServer.ClipboardSet("copied");
+        T.Check("the clipboard round-trips", DisplayServer.ClipboardGet() == "copied" && DisplayServer.ClipboardHas());
+        T.Check("Array and packed arrays convert element by element",
+            PackedArrays.FromArray<string>(new Aver.Fabric.Collections.Array { "a", "b" }).SequenceEqual(new[] { "a", "b" }) && PackedArrays.ToArray(new[] { 1L, 2L }).Count == 2);
+        ClassValue cls = GDScript.ClassObject(typeof(Node3D));
+        Variant made = cls.New();
+        T.Check("a class used as a value is one object, and new() builds an instance", ReferenceEquals(cls, GDScript.ClassObject(typeof(Node3D))) && made.AsGodotObject() is Node3D);
+        (made.AsGodotObject() as Node)?.Free();
     }
 }
 

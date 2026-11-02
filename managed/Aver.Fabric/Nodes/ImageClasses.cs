@@ -165,6 +165,28 @@ public class Image : Resource
     public void FlipX() => _img?.FlipX();
     public void FlipY() => _img?.FlipY();
 
+    /// <summary>Turns the picture a quarter turn (its width and height swap).</summary>
+    public void Rotate90(ClockDirection direction)
+    {
+        if (_img == null) return;
+        int w = _img.Width, h = _img.Height;
+        var turned = new FwImage(h, w, _img.Format);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                (int nx, int ny) = direction == ClockDirection.Clockwise ? (h - 1 - y, x) : (y, w - 1 - x);
+                turned.SetPixel(nx, ny, _img.GetPixel(x, y));
+            }
+        _img = turned;
+    }
+
+    public void Rotate180()
+    {
+        if (_img == null) return;
+        _img.FlipX();
+        _img.FlipY();
+    }
+
     public override Resource Duplicate(bool subresources = false)
     {
         var copy = (Image)base.Duplicate(subresources);
