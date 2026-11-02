@@ -181,15 +181,25 @@ public class Window : Viewport
     {
         Vector2I now = WindowControl.GetSize();
         Vector2 px = WindowPixels;
+        float scale = ContentScaleFactor;   // the display's scale can arrive, or change, without the size moving
         bool first = _lastPixels == null;
-        bool moved = (_lastEngineSize is { } last && last != now) || (_lastPixels is { } lp && lp != px);
+        bool rescaled = _lastScale is { } ls && ls != scale;
+        bool moved = (_lastEngineSize is { } last && last != now) || (_lastPixels is { } lp && lp != px) || rescaled;
         _lastEngineSize = now;
         _lastPixels = px;
+        _lastScale = scale;
         // Text measured before the engine lent its font holds an estimate: measured again now, once.
-        if (first) foreach (Control c in Gui.AllControls().ToList()) c.UpdateMinimumSize();
-        if (first || moved) ContentChanged();
+        if (first || rescaled) foreach (Control c in Gui.AllControls().ToList()) c.UpdateMinimumSize();
+        if (first || moved)
+        {
+            ContentChanged();
+            Aver.Scripting.Log.Info($"[Fabric] UI: {px.X:0}x{px.Y:0} window pixels, display scale {WindowControl.DpiScale():0.##}, stretch {ContentScaleMode}, " +
+                                    $"content scale {scale:0.##}, laid out in {GetVisibleRect().Size.X:0}x{GetVisibleRect().Size.Y:0}");
+        }
         if (moved) EmitSignal(SignalName.SizeChanged);
     }
+
+    private float? _lastScale;
 
     public override Vector2 GetMousePosition() => WindowToContent(Input.MousePosition);
 

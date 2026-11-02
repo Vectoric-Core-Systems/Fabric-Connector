@@ -445,14 +445,15 @@ static class ConverterGapTests
     }
 
     // Godot4-FPS-Template copies the main camera's global transform onto a camera under CanvasLayer/SubViewportContainer/SubViewport every frame. The engine
-    // composes an entity with all its parents, so that camera's entity must hang under none, or the player's transform is applied twice.
+    // composes an entity with all its parents, so that camera's entity keeps its parent (a path to it resolves after a level reload) and ignores the parent's
+    // transform (Entity.SetTransformAbsolute, set when it enters the tree with the engine; SceneTest covers the engine side).
     private static void ThreeDUnderNonThreeD()
     {
         var player = new Node3D();
-        var layer = new CanvasLayer();
-        var container = new SubViewportContainer();
-        var view = new SubViewport();
-        var cam = new Camera3D();
+        var layer = new CanvasLayer { Name = "CanvasLayer" };
+        var container = new SubViewportContainer { Name = "SubViewportContainer" };
+        var view = new SubViewport { Name = "SubViewport" };
+        var cam = new Camera3D { Name = "Camera3D" };
         var held = new Node3D();
         var top = new Node3D { TopLevel = true };
         player.AddChild(layer);
@@ -461,7 +462,7 @@ static class ConverterGapTests
         view.AddChild(cam);
         player.AddChild(held);
         player.AddChild(top);
-        T.Check("a camera under a SubViewport hangs under no entity", NodeHost.EngineParent(cam) == null);
+        T.Check("a camera under a SubViewport keeps its parent, so its path resolves", NodeHost.EngineParent(cam) == view && player.GetNodeOrNull("CanvasLayer/SubViewportContainer/SubViewport/Camera3D") == cam);
         T.Check("a 3D child of a 3D node hangs under it", NodeHost.EngineParent(held) == player);
         T.Check("a top-level node hangs under none, as before", NodeHost.EngineParent(top) == null);
         T.Check("non-3D nodes keep their parent", NodeHost.EngineParent(container) == layer && NodeHost.EngineParent(view) == container);

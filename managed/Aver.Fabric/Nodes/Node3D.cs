@@ -357,13 +357,7 @@ public partial class Node3D : Node
     internal override void OnEnteringTree()
     {
         base.OnEnteringTree();
-        // A level's placements hang under their file parent whatever its type; under a non-3D parent this node takes its own place in the world, as in Godot
-        // (NodeHost.EngineParent), with its local transform as the global one.
-        if (Backed && !_topLevel && GetParent() is { } parent && parent is not Node3D && parent is not Window)
-        {
-            HangEntity();
-            Push();
-        }
+        ApplyOwnTransform();
         if (!_visible || ParentNode3D is { _visible: false }) OnVisibilityApplied(IsVisibleInTree());
         ApplyInterpolation();
     }
@@ -372,6 +366,24 @@ public partial class Node3D : Node
     {
         base.OnExitingTree();
         ForgetInterpolation();
+    }
+
+    private bool _ownTransform;
+    private static bool s_noAbsolute;   // an engine from before scene ABI minor 6: the parent's transform is composed, as it always was
+
+    // Godot places a Node3D whose parent is not a Node3D in the world directly (a camera under a SubViewport below a CanvasLayer below the moving player).
+    // The engine composes an entity with all its parents', so such a node's entity keeps its parent (a path to it, and its destruction, follow the tree)
+    // and is told to ignore the parent's transform; its local transform is then its global one.
+    private void ApplyOwnTransform()
+    {
+        if (!Backed || s_noAbsolute || _topLevel) return;
+        bool own = GetParent() is { } parent && parent is not Node3D && parent is not Window;
+        if (own == _ownTransform) return;
+        try
+        {
+            if (Self.SetTransformAbsolute(own)) _ownTransform = own;
+        }
+        catch (EntryPointNotFoundException) { s_noAbsolute = true; }
     }
 
     // The values the node was spawned with are what the entity holds: reading them back returns the exact Godot numbers.
