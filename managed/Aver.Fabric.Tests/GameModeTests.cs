@@ -130,7 +130,7 @@ static class GameModeTests
 
         cam.TopLevel = true;
         T.CheckVec("top_level keeps the global position", start, cam.GlobalPosition);
-        T.Check("the engine hangs a top-level camera's entity under nothing (the engine composes world matrices through parents)", NodeHost.EngineParent(cam) == null);
+        T.Check("a top-level camera's entity keeps its parent and ignores its transform (TransformAbsolute), as Godot keeps it in the tree", NodeHost.EngineParent(cam) == target);
         T.Check("and an ordinary child under its parent", NodeHost.EngineParent(target) == cubio);
 
         cubio.Position = new Vector3(-8f, 2f, 1f);   // the player walks off

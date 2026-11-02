@@ -199,11 +199,13 @@ public partial class Node3D : Node
         }
     }
 
-    /// <summary>The engine composes an entity's world matrix with its parents', so a top-level node's entity must not hang under its parent's: it is a root
-    /// while the node is top-level (its local transform is then its global one), and goes back under the parent entity when it is not. Does nothing without an entity.</summary>
+    /// <summary>A top-level node ignores its parent's transform and stays in the tree: its entity keeps its parent (a path to it, the level snapshot Stop
+    /// reloads and its destruction follow the tree) and is told to ignore the parent's transform. An engine without that flag gets the entity detached
+    /// instead (a root while the node is top-level). Does nothing without an entity.</summary>
     private void HangEntity()
     {
         if (!Backed) return;
+        ApplyOwnTransform();
         if (NodeHost.EngineParent(this)?.Self is { IsValid: true } parentEntity) Self.SetParent(parentEntity);
         else Self.Detach();
     }
@@ -370,14 +372,15 @@ public partial class Node3D : Node
 
     private bool _ownTransform;
     private static bool s_noAbsolute;   // an engine from before scene ABI minor 6: the parent's transform is composed, as it always was
+    internal static bool NoAbsoluteTransform => s_noAbsolute;
 
-    // Godot places a Node3D whose parent is not a Node3D in the world directly (a camera under a SubViewport below a CanvasLayer below the moving player).
-    // The engine composes an entity with all its parents', so such a node's entity keeps its parent (a path to it, and its destruction, follow the tree)
-    // and is told to ignore the parent's transform; its local transform is then its global one.
+    // Godot places a Node3D whose parent is not a Node3D in the world directly (a camera under a SubViewport below a CanvasLayer below the moving player),
+    // and a top-level one too. The engine composes an entity with all its parents', so such a node's entity keeps its parent (a path to it, and its
+    // destruction, follow the tree) and is told to ignore the parent's transform; its local transform is then its global one.
     private void ApplyOwnTransform()
     {
-        if (!Backed || s_noAbsolute || _topLevel) return;
-        bool own = GetParent() is { } parent && parent is not Node3D && parent is not Window;
+        if (!Backed || s_noAbsolute) return;
+        bool own = _topLevel || GetParent() is { } parent && parent is not Node3D && parent is not Window;
         if (own == _ownTransform) return;
         try
         {

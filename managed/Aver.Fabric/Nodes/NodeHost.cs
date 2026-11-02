@@ -35,10 +35,10 @@ internal static class NodeHost
         set => s_current = value;
     }
 
-    /// <summary>The node whose entity this node's entity hangs under in the engine: its parent, except that a top-level node hangs under none (the engine composes
-    /// an entity's world matrix with its parents', and a top-level node ignores its parent's transform). A 3D node under a non-3D parent keeps its parent and
-    /// ignores the transform through the entity's TransformAbsolute flag (Node3D.ApplyOwnTransform), so a path to it still resolves.</summary>
-    internal static Node? EngineParent(Node n) => n is Node3D { TopLevel: true } ? null : n.GetParent();
+    /// <summary>The node whose entity this node's entity hangs under in the engine: its parent. A top-level node, and a 3D node under a non-3D parent, keep it
+    /// and ignore its transform through the entity's TransformAbsolute flag (Node3D.ApplyOwnTransform), so a path to them still resolves; only an engine
+    /// without the flag hangs a top-level node under none.</summary>
+    internal static Node? EngineParent(Node n) => n is Node3D { TopLevel: true } && Node3D.NoAbsoluteTransform ? null : n.GetParent();
 
     internal static IEnumerable<Node> PreOrder(Node n)
     {

@@ -416,10 +416,35 @@ public partial class Node : GodotObject
     // ---- finding nodes ----
 
     /// <summary>The node at a path: "Child/Grandchild", "../Sibling", "/root/Main/Child", "%UniqueName", ".". Throws when there is none.</summary>
-    public Node GetNode(NodePath path) => GetNodeOrNull(path) ?? throw new InvalidOperationException($"Node not found: \"{path}\" (relative to \"{GetPath2()}\").");
+    public Node GetNode(NodePath path) => GetNodeOrNull(path) ?? throw new InvalidOperationException($"Node not found: \"{path}\" (relative to \"{GetPath2()}\"){MissDetail(path)}.");
 
-    public T GetNode<T>(NodePath path) where T : class =>
-        GetNodeOrNull(path) as T ?? throw new InvalidOperationException($"Node not found or not a {typeof(T).Name}: \"{path}\" (relative to \"{GetPath2()}\").");
+    public T GetNode<T>(NodePath path) where T : class
+    {
+        Node? found = GetNodeOrNull(path);
+        if (found is T t) return t;
+        string why = found != null ? $"; it is a {found.GetClass()}" : MissDetail(path);
+        throw new InvalidOperationException($"Node not found or not a {typeof(T).Name}: \"{path}\" (relative to \"{GetPath2()}\"){why}.");
+    }
+
+    // Where a relative path stopped, for the error: the last node it reached and that node's children.
+    private string MissDetail(NodePath path)
+    {
+        if (path.IsAbsolute()) return "";
+        Node? current = this;
+        for (int i = 0; i < path.GetNameCount(); i++)
+        {
+            string name = path.GetName(i);
+            Node? next = name == "." ? current : name == ".." ? current?.GetParent() : name.StartsWith('%') ? current?.FindUnique(name[1..]) : current?.FindChildByName(name);
+            if (next == null)
+            {
+                if (current == null) return "";
+                string kids = string.Join(", ", current._children.Take(12).Select(c => c._name));
+                return $"; '{current._name}' has no '{name}' (its children: {(kids.Length > 0 ? kids : "none")}{(current._children.Count > 12 ? ", ..." : "")})";
+            }
+            current = next;
+        }
+        return "";
+    }
 
     public Node? GetNodeOrNull(NodePath path)
     {
@@ -490,7 +515,8 @@ public partial class Node : GodotObject
             n.EnsureChildren();
             foreach (Node c in n._children)
             {
-                if (WildcardMatch(c._name, pattern) && (type.Length == 0 || c.IsClass(type)) && (!owned || c._owner != null)) result.Add(c);
+                // An empty pattern is any name, as in Godot (find_children("", "CogitoAttribute") lists every attribute).
+                if ((pattern.Length == 0 || WildcardMatch(c._name, pattern)) && (type.Length == 0 || c.IsClass(type)) && (!owned || c._owner != null)) result.Add(c);
                 if (recursive) Walk(c);
             }
         }

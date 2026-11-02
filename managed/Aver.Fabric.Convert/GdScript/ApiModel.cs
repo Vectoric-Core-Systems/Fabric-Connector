@@ -355,11 +355,12 @@ internal sealed class ApiModel
         return null;
     }
 
-    // Two more of GodotSharp's prefixes: one that ends the enum's name (Control.PRESET_FULL_RECT is LayoutPreset.FullRect) and one that differs from
-    // it in the word's ending only (Image.INTERPOLATE_LANCZOS is Interpolation.Lanczos).
+    // Two more of GodotSharp's prefixes: one that ends the enum's name, perhaps as its plural (Control.PRESET_FULL_RECT is LayoutPreset.FullRect,
+    // ResourceSaver.FLAG_CHANGE_PATH is SaverFlags.ChangePath), and one that differs from it in the word's ending only (Image.INTERPOLATE_LANCZOS is
+    // Interpolation.Lanczos).
     private static bool PrefixNamesEnum(string prefix, string enumName)
     {
-        if (prefix.Length >= 4 && enumName.EndsWith(prefix, StringComparison.Ordinal)) return true;
+        if (prefix.Length >= 4 && (enumName.EndsWith(prefix, StringComparison.Ordinal) || enumName.EndsWith(prefix + "s", StringComparison.Ordinal))) return true;
         int common = 0;
         while (common < prefix.Length && common < enumName.Length && prefix[common] == enumName[common]) common++;
         return common >= 5 && common >= prefix.Length - 1;

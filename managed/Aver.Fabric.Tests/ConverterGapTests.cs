@@ -499,7 +499,9 @@ static class ConverterGapTests
         player.AddChild(top);
         T.Check("a camera under a SubViewport keeps its parent, so its path resolves", NodeHost.EngineParent(cam) == view && player.GetNodeOrNull("CanvasLayer/SubViewportContainer/SubViewport/Camera3D") == cam);
         T.Check("a 3D child of a 3D node hangs under it", NodeHost.EngineParent(held) == player);
-        T.Check("a top-level node hangs under none, as before", NodeHost.EngineParent(top) == null);
+        // COGITO's player: SwimmingHeadShapeCast (top_level) under the camera. A detached entity was saved by the Play snapshot as a level root, so
+        // after Stop the player's $Body/Neck/Head/Eyes/Camera/SwimmingHeadShapeCast was gone.
+        T.Check("a top-level node keeps its parent too (only its transform is its own)", NodeHost.EngineParent(top) == player);
         T.Check("non-3D nodes keep their parent", NodeHost.EngineParent(container) == layer && NodeHost.EngineParent(view) == container);
         player.Position = new Vector3(10, 0, 0);
         cam.GlobalTransform = new Transform3D(Basis.Identity, new Vector3(10, 2, 0));
@@ -673,6 +675,9 @@ static class ConverterGapTests
     // COGITO: cogito_player_state.gd saves itself with ResourceSaver.save(self, "user://...tres", ResourceSaver.FLAG_CHANGE_PATH) and loads it back.
     private static void ResourceSaverRoundTrip()
     {
+        ConversionResult r = Many(("GapSaver", "extends Resource\nclass_name GapSaver\nfunc store(p: String) -> int:\n\treturn ResourceSaver.save(self, p, ResourceSaver.FLAG_CHANGE_PATH)\n"));
+        string cs = r.Scripts.First(x => x.ClassName == "GapSaver").Text;
+        T.Check("ResourceSaver.FLAG_CHANGE_PATH is SaverFlags.ChangePath, and the call compiles", r.Errors.Count == 0 && cs.Contains("ResourceSaver.SaverFlags.ChangePath"), Errors(r) + cs);
         string dir = Path.Combine(Path.GetTempPath(), "aver-fabric-saver-test-" + System.Environment.ProcessId);
         Directory.CreateDirectory(dir);
         try
@@ -712,6 +717,15 @@ static class ConverterGapTests
         node.UpdateConfigurationWarnings();
         node.NotifyPropertyListChanged();
         T.Check("update_configuration_warnings and notify_property_list_changed are there and do nothing", true);
+        // COGITO's player: find_children("", "CogitoAttribute", false) lists its attributes; an empty pattern is any name.
+        var attr = new Node3D { Name = "HealthAttribute" };
+        var other = new Node { Name = "Timer" };
+        node.AddChild(attr);
+        node.AddChild(other);
+        attr.Owner = node;
+        other.Owner = node;
+        Aver.Fabric.Collections.Array<Node> found = node.FindChildren("", "Node3D", false);
+        T.Check("find_children with an empty pattern matches every name, filtered by type", found.Count == 1 && found[0] == attr);
         node.Free();
     }
 
