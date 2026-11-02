@@ -231,10 +231,24 @@ public abstract partial class GodotObject : AverActor, IDisposable
         MethodInfo? m = MemberAccess.FindMethod(GetType(), method.ToString(), args.Length);
         if (m == null)
         {
+            if (TryAccessorCall(method.ToString(), args, out Variant accessorResult)) return accessorResult;
             if (TryDynamicCall(method.ToString(), args, out Variant dynamicResult)) return dynamicResult;
             throw new MissingMethodException(GetType().Name, method.ToString());
         }
         return MemberAccess.Invoke(m.IsStatic ? null : this, m, args);
+    }
+
+    // A property's accessor called by name (call("set_visible", false), get_x, is_x): Godot's accessors are methods, Aver.Fabric's are the property.
+    private bool TryAccessorCall(string name, Variant[] args, out Variant result)
+    {
+        result = default;
+        if (args.Length == 1 && name.StartsWith("set_", StringComparison.Ordinal) && name.Length > 4 && MemberAccess.TrySet(this, name[4..], args[0])) return true;
+        if (args.Length == 0 && name.StartsWith("get_", StringComparison.Ordinal) && name.Length > 4 && MemberAccess.TryGet(this, name[4..], out result)) return true;
+        if (args.Length == 0 && name.StartsWith("is_", StringComparison.Ordinal) && name.Length > 3 &&
+            (MemberAccess.TryGet(this, name[3..], out result) || MemberAccess.TryGet(this, name, out result))) return true;
+        // An accessor of a property with another name (set_albedo is albedo_color's setter), from Godot's own API.
+        if (GodotAccessors.PropertyOf(GetType(), name) is not { } prop) return false;
+        return args.Length == 1 ? MemberAccess.TrySet(this, prop, args[0]) : args.Length == 0 && MemberAccess.TryGet(this, prop, out result);
     }
 
     /// <summary>Calls a method when the current tick pass ends.</summary>
@@ -266,6 +280,9 @@ public abstract partial class GodotObject : AverActor, IDisposable
     // ---- metadata ----
 
     private Dictionary<string, Variant>? _meta;
+
+    /// <summary>Tells Godot's inspector to read the property list again; nothing shows one in a running game.</summary>
+    public void NotifyPropertyListChanged() { }
 
     public void SetMeta(StringName name, Variant value)
     {

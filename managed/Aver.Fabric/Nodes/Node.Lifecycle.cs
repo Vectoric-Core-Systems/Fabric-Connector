@@ -334,6 +334,10 @@ public partial class Node
         return text;
     }
 
+    /// <summary>The node's type in its scene, when its script class is a wider type (the converter bases a script on the most derived type its
+    /// scenes place it on): a RigidBody3D class freezes where the node was a static or animatable body.</summary>
+    internal virtual void TakeNativeClass(string godotClass) { }
+
     /// <summary>Applies exported values (key and Godot-text value pairs) the way a scene instantiation does, before _EnterTree.</summary>
     internal void ApplyValues(IEnumerable<(string Key, string Text)> values)
     {
@@ -347,12 +351,14 @@ public partial class Node
         {
             if (key == "_placed" && int.TryParse(text, out int placed)) PlacedVisuals = placed;
             else if (key == "_class" && PlainText(text) is { Length: > 0 } godotClass && godotClass != GetClass()) standInFor = godotClass;
+            else if (key == "_native" && PlainText(text) is { Length: > 0 } native) TakeNativeClass(native);
         }
         foreach ((string key, string text) in values)
         {
             switch (key)
             {
                 case "_placed": continue;   // the number of mesh placements below this node that draw it (Node.PlacedVisuals)
+                case "_native": continue;   // read above, before the values it changes the meaning of
                 case "_name": SetNameInternal(PlainText(text)); continue;
                 case "_owner": ownerPath = PlainText(text); continue;
                 case "_unique": unique = text is "1" or "true"; continue;
@@ -413,7 +419,7 @@ public partial class Node
             }
             catch (Exception ex)
             {
-                Log.Warn($"[Fabric] {GetClass()} '{_name}': setting '{key}' failed: {ex.GetType().Name}: {ex.Message}");
+                Log.Warn($"[Fabric] {GetClass()} '{_name}': setting '{key}' failed: {MemberAccess.Describe(ex)}");
             }
         }
         if (ownerPath != null && GetNodeOrNull(ownerPath) is Node owner) Owner = owner;

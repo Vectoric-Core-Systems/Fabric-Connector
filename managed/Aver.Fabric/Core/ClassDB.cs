@@ -75,7 +75,7 @@ public static class ClassDB
             }
             catch (Exception ex)
             {
-                Aver.Scripting.Log.Warn($"[Fabric] {@class}: setting '{name}' failed: {ex.GetType().Name}: {ex.Message}");
+                Aver.Scripting.Log.Warn($"[Fabric] {@class}: setting '{name}' failed: {MemberAccess.Describe(ex)}");
             }
         }
         return o;

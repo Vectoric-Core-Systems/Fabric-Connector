@@ -132,6 +132,12 @@ public partial class ShaderMaterial
 /// into an ordinary shader; <see cref="GetCode"/> returns that text when the converter wrote it (Fabric/visualshaders).</summary>
 public class VisualShader : Shader
 {
+    // The graph as Godot saves it (mode, flags/..., modes/..., nodes/<function>/<id>/node, .../connections, graph_offset): the converter made the
+    // shader from it already, so a resource that holds one inline passes the keys here and they are dropped without a warning each.
+    internal override bool TryDynamicSet(string name, Variant value) =>
+        name is "mode" or "graph_offset" || name.StartsWith("flags/", StringComparison.Ordinal) || name.StartsWith("modes/", StringComparison.Ordinal) ||
+        name.StartsWith("nodes/", StringComparison.Ordinal) || name.StartsWith("varyings/", StringComparison.Ordinal);
+
     /// <summary>The shading-language text Godot would generate for the graph, as the converter re-generated it. Empty when it is not available.</summary>
     public string GetCode()
     {

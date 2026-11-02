@@ -723,4 +723,7 @@ public partial class Node : GodotObject
 
     /// <summary>Whether _Ready has run for this node.</summary>
     public bool IsNodeReady() => _readyDone;
+
+    /// <summary>Asks Godot's editor to redraw the node's warning icon; a running game has none to show.</summary>
+    public void UpdateConfigurationWarnings() { }
 }

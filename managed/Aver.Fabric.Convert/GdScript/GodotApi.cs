@@ -14,6 +14,7 @@ public static class GodotApi
     {
         public string? Inherits;
         public readonly HashSet<string> Members = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, string> Accessors = new(StringComparer.Ordinal);   // set_albedo -> albedo_color
     }
 
     /// <summary>The file to read instead of the one beside the converter (tests).</summary>
@@ -39,6 +40,11 @@ public static class GodotApi
                 foreach (string list in new[] { "methods", "properties", "signals", "constants" })
                     if (c.TryGetProperty(list, out JsonElement items))
                         foreach (JsonElement m in items.EnumerateArray()) cls.Members.Add(m.GetProperty("name").GetString() ?? "");
+                if (c.TryGetProperty("properties", out JsonElement props))
+                    foreach (JsonElement pr in props.EnumerateArray())
+                        foreach (string acc in new[] { "setter", "getter" })
+                            if (pr.TryGetProperty(acc, out JsonElement a) && a.GetString() is { Length: > 0 } method)
+                                cls.Accessors.TryAdd(method, pr.GetProperty("name").GetString() ?? "");
                 if (c.TryGetProperty("enums", out JsonElement enums))
                     foreach (JsonElement e in enums.EnumerateArray())
                     {
@@ -61,5 +67,15 @@ public static class GodotApi
         for (string? c = className; c != null && all.TryGetValue(c, out Cls? cls); c = cls.Inherits)
             if (cls.Members.Contains(member)) return true;
         return false;
+    }
+
+    /// <summary>The property a Godot accessor method sets or reads (BaseMaterial3D.set_albedo is albedo_color's setter), or null.</summary>
+    public static string? AccessorProperty(string className, string method)
+    {
+        Dictionary<string, Cls>? all = Classes();
+        if (all == null) return null;
+        for (string? c = className; c != null && all.TryGetValue(c, out Cls? cls); c = cls.Inherits)
+            if (cls.Accessors.TryGetValue(method, out string? prop)) return prop;
+        return null;
     }
 }

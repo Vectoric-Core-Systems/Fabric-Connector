@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-897 public types and 9744 public members, read from `managed/Aver.Fabric/` (173 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+897 public types and 9746 public members, read from `managed/Aver.Fabric/` (174 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -5065,6 +5065,7 @@ Values: `Disabled = 0`, `Self = 1`, `Dependencies = 2`
 - `public Variant CallDeferred(StringName method, params Variant[] args)` - Calls a method when the current tick pass ends.
 - `public bool HasMethod(StringName method)`
 - `public string[] GetExportedPropertyNames()` - The names of the properties and fields scripts can reach by name (exported or declared by a script class).
+- `public void NotifyPropertyListChanged()` - Tells Godot's inspector to read the property list again; nothing shows one in a running game.
 - `public void SetMeta(StringName name, Variant value)`
 - `public Variant GetMeta(StringName name, Variant @default = default)`
 - `public bool HasMeta(StringName name)`
@@ -7297,6 +7298,7 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public Tween CreateTween()` - A tween bound to this node: it stops when the node is freed, waits while the node is out of the tree, and pauses with it.
 - `public bool IsInsideTree()`
 - `public bool IsNodeReady()` - Whether _Ready has run for this node.
+- `public void UpdateConfigurationWarnings()` - Asks Godot's editor to redraw the node's warning icon; a running game has none to show.
 - `public PhysicsInterpolationModeEnum PhysicsInterpolationMode { get; set; }`
 - `public bool IsPhysicsInterpolated()` - True when this node's mode, or the first one above it that is not Inherit, is On (the tree's switch not asked).
 - `public bool IsPhysicsInterpolatedAndEnabled()` - True when IsPhysicsInterpolated and the tree's switch (PhysicsInterpolation) is on.

@@ -36,6 +36,8 @@ static class ConverterGapTests
         T.Run("converter gap: twelve GDScript shapes that wrote C# that did not compile (COGITO round two)", GdScriptShapesRoundTwo);
         T.Run("converter gap: classes as values, Signal parameters, Godot 3 names, nested enums and Array conversions (COGITO round three)", GdScriptShapesRoundThree);
         T.Run("converter gap: the runtime calls COGITO makes (key names, settings, singletons, weights, images, zips, clipboard)", RuntimeCallsRoundThree);
+        T.Run("converter gap: a script on a more derived node type (extends Node3D on a RigidBody3D) is based on that type; RigidBody3D stands in for static bodies", ScriptBaseFromScenes);
+        T.Run("converter gap: by-name accessors (set_visible, set_albedo), editor-only calls, and Aver.Fabric internals out of a name's reach", ByNameAccessors);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -603,6 +605,77 @@ static class ConverterGapTests
         shapes.Free();
     }
 
+    private static string SceneNode(string path, string @base, string cls, string script) =>
+        $"{{\"path\":\"{path}\",\"base\":\"{@base}\",\"class\":\"{cls}\",\"script\":\"{script}\",\"owner\":\"\",\"unique\":false,\"packed\":{{}}}}";
+
+    // COGITO: cogito_object.gd (extends Node3D) is on RigidBody3D pickups and StaticBody3D props, cogito_door.gd on static and animatable bodies,
+    // the options menu (extends Control) on a MarginContainer. Godot keeps each node's type; the class is the node, so it takes the widest one.
+    private static void ScriptBaseFromScenes()
+    {
+        string nodes = "{\"schema\":1,\"scenes\":[{\"scene\":\"res://a.tscn\",\"nodes\":[" + string.Join(",",
+            SceneNode(".", "RigidBody3D", "GapPickup", "res://gappickup.gd"), SceneNode("Shelf", "StaticBody3D", "GapPickup", "res://gappickup.gd"),
+            SceneNode("Bolt", "RigidBody3D", "GapBolt", "res://gapbolt.gd"),
+            SceneNode("Door", "StaticBody3D", "GapDoor", "res://gapdoor.gd"), SceneNode("Lift", "AnimatableBody3D", "GapDoor", "res://gapdoor.gd"),
+            SceneNode("Menu", "MarginContainer", "GapMenu", "res://gapmenu.gd"), SceneNode("Plain", "Node3D", "GapPlain", "res://gapplain.gd")) + "]}]}";
+        var sources = new (string Cls, string Gd)[]
+        {
+            ("GapPickup", "extends Node3D\nclass_name GapPickup\nfunc weight() -> float:\n\treturn 1.0\n"),
+            ("GapBolt", "extends GapPickup\nclass_name GapBolt\n"),
+            ("GapDoor", "extends Node3D\nclass_name GapDoor\n"),
+            ("GapMenu", "extends Control\nclass_name GapMenu\n"),
+            ("GapPlain", "extends Node3D\nclass_name GapPlain\n"),
+        };
+        ConversionResult r = ScriptConverter.Convert(
+            sources.Select(x => new ScriptSource { ResPath = "res://" + x.Cls.ToLowerInvariant() + ".gd", Text = x.Gd, Kind = "gdscript", ClassName = x.Cls, Output = "Content/Scripts/" + x.Cls + ".cs" }).ToList(),
+            new ConvertSettings { RefsDir = Refs, KeepAssembly = true, ExtraSources = System.Array.Empty<(string, string)>(), SceneNodes = nodes });
+        T.Check("compiles", r.Errors.Count == 0 && r.GeneralErrors.Count == 0, Errors(r));
+        string Cs(string cls) => r.Scripts.First(x => x.ClassName == cls).Text;
+        T.Check("rigid and static bodies (counting a derived script's nodes) share RigidBody3D", Cs("GapPickup").Contains(": RigidBody3D") && Cs("GapBolt").Contains(": GapPickup"), Cs("GapPickup"));
+        T.Check("static and animatable bodies are one line: AnimatableBody3D", Cs("GapDoor").Contains(": AnimatableBody3D"));
+        T.Check("a Control script on a MarginContainer is a MarginContainer", Cs("GapMenu").Contains(": MarginContainer"));
+        T.Check("a script placed on its own type stays as declared", Cs("GapPlain").Contains(": Node3D"));
+        if (r.Errors.Count > 0) return;
+        var shelf = New<RigidBody3D>(r, "GapPickup");
+        shelf.ApplyValues(new[] { ("_native", "\"StaticBody3D\"") });
+        T.Check("where the scene had a static body the RigidBody3D is frozen, static", shelf.Freeze && shelf.FreezeMode == RigidBody3D.FreezeModeEnum.Static);
+        var lift = new RigidBody3D();
+        lift.ApplyValues(new[] { ("_native", "\"AnimatableBody3D\"") });
+        T.Check("an animatable body: frozen, kinematic", lift.Freeze && lift.FreezeMode == RigidBody3D.FreezeModeEnum.Kinematic);
+        var zone = new RigidBody3D();
+        zone.ApplyValues(new[] { ("_native", "\"Area3D\"") });
+        T.Check("an area: frozen and a sensor", zone.Freeze && zone.IsSensor);
+        var rigid = new RigidBody3D();
+        rigid.ApplyValues(new[] { ("_native", "\"RigidBody3D\"") });
+        T.Check("a rigid body stays free", !rigid.Freeze && !rigid.IsSensor);
+        foreach (GodotObject o in new GodotObject[] { shelf, lift, zone, rigid }) o.Free();
+    }
+
+    private static void ByNameAccessors()
+    {
+        var mesh = new MeshInstance3D();
+        mesh.Call("set_visible", false);
+        T.Check("call(\"set_visible\", false) sets the property", !mesh.Visible);
+        T.Check("call(\"is_visible\") reads it", !mesh.Call("is_visible").AsBool());
+        mesh.Free();
+        Aver.Fabric.GodotAccessors.PathOverride = GodotApiFile();
+        var mat = new StandardMaterial3D();
+        mat.Call("set_albedo", Colors.Red);
+        T.Check("set_albedo, Godot's setter of albedo_color, sets it", mat.AlbedoColor == Colors.Red, mat.AlbedoColor.ToString());
+        var fog = new FogMaterial();
+        fog.Call("set_albedo", Colors.Blue);
+        T.Check("and a FogMaterial's own albedo", fog.Albedo == Colors.Blue);
+        var body = new GapBodyHolder();
+        body.Body = new Node3D();
+        T.Check("a script's `body` is what get(\"body\") reads, not the engine body Aver.Fabric keeps", body.Get("body").AsGodotObject() == body.Body);
+        body.Body.Free();
+        body.Free();
+        var node = new Node();
+        node.UpdateConfigurationWarnings();
+        node.NotifyPropertyListChanged();
+        T.Check("update_configuration_warnings and notify_property_list_changed are there and do nothing", true);
+        node.Free();
+    }
+
     // Godot's own API (third_party/godot-gdextension/extension_api.json), found from the test's folder up.
     private static string? GodotApiFile()
     {
@@ -726,6 +799,12 @@ public class GapWeaponsManager : Node3D
     public Aver.Fabric.Collections.Array<Node3D> WeaponsArray { get; set; } = new();
     public int SeenAtReady = -1;
     public override void _Ready() => SeenAtReady = WeaponsArray.Count;
+}
+
+// A player script's `var body` on a CharacterBody3D (whose Aver.Fabric class keeps an internal Body of its own).
+public class GapBodyHolder : CharacterBody3D
+{
+    public Node3D? Body;
 }
 
 // The script classes of CustomResourcesInScene: a custom Resource holding another, and the node whose typed list holds them.

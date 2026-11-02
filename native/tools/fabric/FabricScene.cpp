@@ -1375,6 +1375,9 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     PlacedVisual visual;
     const bool placedVisual = !scan.prefabPass && planPlacedVisual(report_, fn, props, visual);
     if (placedVisual) props.emplace_back("_placed", makeInt(static_cast<long long>(visual.instances.size())));
+    // The node's own type under its script: a script class placed on a more derived node type (its scenes' widest) takes the node's part
+    // from it, a RigidBody3D class freezing where the node was a static or animatable body.
+    if (si && cc.fabricClass != cls) props.emplace_back("_native", makeString(cc.fabricClass));
 
     // ---- the record ----
     fmt::OcPlacedComponent comp;

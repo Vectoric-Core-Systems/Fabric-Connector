@@ -22,8 +22,7 @@ internal static class GdScriptConverter
     /// <summary>Converts the scripts as one project: every class sees the others.</summary>
     public static List<GdConvertedFile> Convert(IReadOnlyList<GdSource> sources, ApiModel? api, string? godotProjectDir, SceneIndex? scenes = null)
     {
-        ProjectModel model = ProjectModel.Build(sources, api, godotProjectDir);
-        model.Scenes = scenes;
+        ProjectModel model = ProjectModel.Build(sources, api, godotProjectDir, scenes);
         var emitter = new GdEmitter(model);
         emitter.CollectParamHints(model.Scripts);
         var result = new List<GdConvertedFile>();

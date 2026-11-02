@@ -110,7 +110,8 @@ internal sealed class ApiModel
         if (Lookup(t, gd) is { Kind: not MemberKind.NestedType }) return true;
         foreach (string pre in new[] { "get_", "set_", "is_", "has_" })
             if (gd.StartsWith(pre, StringComparison.Ordinal) && gd.Length > pre.Length && Lookup(t, gd[pre.Length..]) is { Kind: MemberKind.Property or MemberKind.Field }) return true;
-        return false;
+        // An accessor whose property has another name (BaseMaterial3D.set_albedo sets albedo_color).
+        return GodotApi.AccessorProperty(t.Name, gd) is { } prop && Lookup(t, prop) is { Kind: MemberKind.Property or MemberKind.Field };
     }
 
     /// <summary>A Godot class spelled with an acronym (AABB, AudioStreamWAV, MultiplayerAPI) is Aabb, AudioStreamWav, MultiplayerApi in GodotSharp and so here:

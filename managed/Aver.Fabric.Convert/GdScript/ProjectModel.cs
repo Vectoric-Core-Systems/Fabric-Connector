@@ -63,6 +63,7 @@ internal sealed class ScriptInfo
     public ScriptInfo? Outer;
     public ScriptInfo? BaseScript;
     public Rs.INamedTypeSymbol? BaseApi;
+    public Rs.INamedTypeSymbol? WidenedFrom;                     // the declared API base, when the scenes placed the script on a more derived type
     public string BaseUnresolved = "";
     public string? DeclaredClassName;
     public List<MemberInfo> Members = new();
@@ -148,9 +149,9 @@ internal sealed class ProjectModel
     }
 
     /// <summary>Parses the sources and builds the table. Returns the scripts in the order given.</summary>
-    public static ProjectModel Build(IReadOnlyList<GdSource> sources, ApiModel? api, string? godotProjectDir)
+    public static ProjectModel Build(IReadOnlyList<GdSource> sources, ApiModel? api, string? godotProjectDir, SceneIndex? scenes = null)
     {
-        var model = new ProjectModel { Api = api };
+        var model = new ProjectModel { Api = api, Scenes = scenes };
         foreach (GdSource src in sources)
         {
             ParseResult parsed = GdScriptParser.Parse(src.Text);
@@ -166,6 +167,7 @@ internal sealed class ProjectModel
         if (godotProjectDir != null) model.ReadAutoloads(godotProjectDir);
         foreach (ScriptInfo s in model.Scripts) model.Populate(s);
         foreach (ScriptInfo s in model.Scripts) model.ResolveBases(s);
+        model.WidenBasesFromScenes();
         model.MarkAwaited();
         foreach (ScriptInfo s in model.AllScripts().OrderBy(x => x.Chain().Count()).ToList()) model.MarkOverrides(s);
         return model;
@@ -382,6 +384,43 @@ internal sealed class ProjectModel
         if (api == "Object") api = "GodotObject";
         s.BaseApi = Api?.Fabric(api);
         if (s.BaseApi == null) s.BaseUnresolved = api;
+    }
+
+    // A script on a node of a more derived type (extends Node3D, on a RigidBody3D) leaves the node its type in Godot; here the class is the node,
+    // so its API base becomes the most derived type the scenes place it (and the scripts derived from it) on. Bodies of different kinds share
+    // RigidBody3D, which freezes where the scene had a static or animatable body (Aver.Fabric reads the node's type from the level).
+    private void WidenBasesFromScenes()
+    {
+        if (Scenes == null || Api == null) return;
+        foreach (ScriptInfo s in Scripts)
+        {
+            if (s.BaseScript != null || s.BaseApi is not { } declared) continue;
+            var paths = new HashSet<string>(Scripts.Where(x => x.DerivesFromScript(s)).Select(x => x.ResPath), StringComparer.Ordinal);
+            var used = new List<Rs.INamedTypeSymbol>();
+            foreach (ScenePlace p in Scenes.Placements(paths))
+                if (Api.Fabric(p.Node.Base) is { } t && !Same(t, declared) && GdType.Derives(t, declared) && !used.Any(u => Same(u, t))) used.Add(t);
+            if (used.Count == 0) continue;
+            Rs.INamedTypeSymbol? body = Api.Fabric("PhysicsBody3D");
+            List<Rs.INamedTypeSymbol> bodies = body == null ? new() : used.Where(t => GdType.Derives(t, body)).ToList();
+            Rs.INamedTypeSymbol? pick = bodies.Count > 0 ? MostDerived(bodies) ?? Emulating(bodies) : MostDerived(used);
+            if (pick == null) continue;
+            s.WidenedFrom = declared;
+            s.BaseApi = pick;
+        }
+    }
+
+    private static bool Same(Rs.INamedTypeSymbol a, Rs.INamedTypeSymbol b) => Rs.SymbolEqualityComparer.Default.Equals(a, b);
+
+    // The type every other one is an ancestor of, or null when they are not on one line.
+    private static Rs.INamedTypeSymbol? MostDerived(List<Rs.INamedTypeSymbol> types) =>
+        types.FirstOrDefault(c => types.All(t => Same(t, c) || GdType.Derives(c, t)));
+
+    // RigidBody3D stands in for static and animatable bodies (frozen); a character or vehicle body does not.
+    private Rs.INamedTypeSymbol? Emulating(List<Rs.INamedTypeSymbol> bodies)
+    {
+        if (Api?.Fabric("RigidBody3D") is not { } rigid) return null;
+        string[] emulated = { "RigidBody3D", "StaticBody3D", "AnimatableBody3D", "PhysicsBody3D" };
+        return bodies.All(b => emulated.Contains(b.Name)) ? rigid : null;
     }
 
     // A void coroutine somebody awaits must return a Task; one nobody awaits is async void (a signal handler, a virtual).

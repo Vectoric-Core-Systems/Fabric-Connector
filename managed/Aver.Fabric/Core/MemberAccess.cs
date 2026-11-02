@@ -10,6 +10,13 @@ namespace Aver.Fabric;
 
 internal static class MemberAccess
 {
+    /// <summary>An exception as a log line: a reflected call's TargetInvocationException names what the member itself threw.</summary>
+    internal static string Describe(Exception ex)
+    {
+        while (ex is System.Reflection.TargetInvocationException { InnerException: { } inner }) ex = inner;
+        return $"{ex.GetType().Name}: {ex.Message}";
+    }
+
     private const BindingFlags All = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
 
     /// <summary>"move_speed" to "MoveSpeed"; a name that already has capitals is returned unchanged.</summary>
@@ -48,33 +55,48 @@ internal static class MemberAccess
     // ignoring case and underscores.
     private static string Fold(string s) => s.Replace("_", "").ToLowerInvariant();
 
-    internal static PropertyInfo? FindProperty(System.Type t, string name)
+    // Aver.Fabric's own internals (CollisionObject3D.Body, the engine body) are not Godot's API: a script's member of the same name
+    // (a player's `var body`) is what a read or a call by name reaches. A script class's non-public members still are, and so are the
+    // internals a scene's values set (_viewport_key).
+    private static bool Reachable(MemberInfo m, bool nonPublic) => !nonPublic || m.DeclaringType?.Assembly != typeof(MemberAccess).Assembly;
+
+    private static bool Reachable(PropertyInfo p) => Reachable(p, p.GetMethod?.IsPublic != true && p.SetMethod?.IsPublic != true);
+    private static bool Reachable(FieldInfo f) => Reachable(f, !f.IsPublic);
+    private static bool Reachable(MethodInfo m) => Reachable(m, !m.IsPublic);
+
+    internal static PropertyInfo? FindProperty(System.Type t, string name) => FindProperty(t, name, reading: false);
+
+    internal static PropertyInfo? FindProperty(System.Type t, string name, bool reading)
     {
         foreach (string c in Candidates(name))
         {
-            PropertyInfo? p = t.GetProperty(c, All);
-            if (p != null) return p;
+            PropertyInfo? p;
+            try { p = t.GetProperty(c, All); }
+            catch (AmbiguousMatchException) { p = t.GetProperties(All).FirstOrDefault(x => x.Name == c && (!reading || Reachable(x))); }
+            if (p != null && (!reading || Reachable(p))) return p;
         }
         string key = Fold(name);
         foreach (PropertyInfo p in t.GetProperties(All))
-            if (p.GetIndexParameters().Length == 0 && Fold(p.Name) == key) return p;
+            if (p.GetIndexParameters().Length == 0 && Fold(p.Name) == key && (!reading || Reachable(p))) return p;
         return null;
     }
 
-    internal static FieldInfo? FindField(System.Type t, string name)
+    internal static FieldInfo? FindField(System.Type t, string name) => FindField(t, name, reading: false);
+
+    internal static FieldInfo? FindField(System.Type t, string name, bool reading)
     {
         foreach (string c in Candidates(name))
         {
             for (System.Type? k = t; k != null && k != typeof(object); k = k.BaseType)
             {
                 FieldInfo? f = k.GetField(c, All | BindingFlags.DeclaredOnly);
-                if (f != null) return f;
+                if (f != null && (!reading || Reachable(f))) return f;
             }
         }
         string key = Fold(name);
         for (System.Type? k = t; k != null && k != typeof(object); k = k.BaseType)
             foreach (FieldInfo f in k.GetFields(All | BindingFlags.DeclaredOnly))
-                if (Fold(f.Name) == key && !f.Name.Contains('<')) return f;
+                if (Fold(f.Name) == key && !f.Name.Contains('<') && (!reading || Reachable(f))) return f;
         return null;
     }
 
@@ -111,13 +133,13 @@ internal static class MemberAccess
     internal static bool TryGet(object target, string name, out Variant value)
     {
         System.Type t = target.GetType();
-        PropertyInfo? p = FindProperty(t, name);
+        PropertyInfo? p = FindProperty(t, name, reading: true);
         if (p != null && p.GetMethod != null && p.GetIndexParameters().Length == 0)
         {
             value = Variant.FromObject(p.GetValue(target));
             return true;
         }
-        FieldInfo? f = FindField(t, name);
+        FieldInfo? f = FindField(t, name, reading: true);
         if (f != null)
         {
             value = Variant.FromObject(f.GetValue(target));
@@ -136,7 +158,7 @@ internal static class MemberAccess
             {
                 foreach (MethodInfo m in k.GetMethods(All | BindingFlags.DeclaredOnly))
                 {
-                    if (m.Name != c) continue;
+                    if (m.Name != c || !Reachable(m)) continue;
                     ParameterInfo[] ps = m.GetParameters();
                     int required = ps.Count(x => !x.IsOptional);
                     if (argc < required || argc > ps.Length) continue;

@@ -150,6 +150,9 @@ internal sealed partial class GdEmitter
         }
 
         string baseName = s.BaseScript != null ? QualifiedScript(s.BaseScript) : s.BaseApi != null ? s.BaseApi.ToDisplayString(s_nameFormat) : s.BaseUnresolved;
+        if (s.WidenedFrom != null && s.BaseApi != null)
+            Note(c, "extends", s.WidenedFrom.Name, Rating.Approximated,
+                 $"extends {s.WidenedFrom.Name}, and the scenes place it on {s.BaseApi.Name} nodes: the class is based on {s.BaseApi.Name}, so those nodes keep their type");
         _w.Open($"public partial class {s.CsName} : {baseName}");
 
         // The members, in source order. Group attributes stand for the next exported variable.

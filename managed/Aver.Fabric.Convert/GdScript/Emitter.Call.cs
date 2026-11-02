@@ -347,6 +347,13 @@ internal sealed partial class GdEmitter
                 if (pre != "Set" && args.Count == 0) { prop = p.CsName; break; }
             }
         }
+        // Godot's accessor of a property with another name (BaseMaterial3D.set_albedo sets albedo_color).
+        if (prop == null && GodotApi.AccessorProperty(type.Name, gd) is { } godotProp && Api.Lookup(type, godotProp) is { Kind: MemberKind.Property or MemberKind.Field } gp &&
+            args.Count == (gd.StartsWith("set_", StringComparison.Ordinal) ? 1 : 0))
+        {
+            prop = gp.CsName;
+            setter = args.Count == 1;
+        }
         if (prop == null) return null;
         ApiMember member = Api.Lookup(type, prop)!;
         if (staticOnly && !member.IsStatic) return null;

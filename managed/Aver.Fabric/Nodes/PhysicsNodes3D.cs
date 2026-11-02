@@ -77,7 +77,9 @@ public partial class CollisionObject3D : Node3D
 
     internal virtual Aver.Physics.MotionType Motion => Aver.Physics.MotionType.Static;
     internal virtual float BodyMassKg => 0f;
-    internal virtual bool IsSensor => false;
+    internal virtual bool IsSensor => _sensorStandIn;
+    private bool _sensorStandIn;   // a body standing in for an Area3D (TakeNativeClass)
+    internal void StandInForArea() => _sensorStandIn = true;
 
     /// <summary>False for a node whose body is made elsewhere (a PhysicalBone3D is a part of the engine's ragdoll, not a body of its own).</summary>
     internal virtual bool MakesOwnBody => true;
@@ -528,6 +530,15 @@ public class RigidBody3D : PhysicsBody3D
             Body.SetInertia(new PhysFloat3(_inertia.Z * k, _inertia.X * k, _inertia.Y * k));   // about the engine's x, y, z = Godot's z, x, y
         }
         else if (Body.Inertia.IsOverride) Body.SetInertia(null);
+    }
+
+    // A RigidBody3D class on a node that was another kind of body in its scene (TakeNativeClass): frozen, as Godot's own stand-in for one.
+    internal override void TakeNativeClass(string godotClass)
+    {
+        if (godotClass == "RigidBody3D" || godotClass == "VehicleBody3D" || godotClass == "PhysicalBone3D") return;
+        Freeze = true;
+        FreezeMode = godotClass is "AnimatableBody3D" or "CharacterBody3D" ? FreezeModeEnum.Kinematic : FreezeModeEnum.Static;
+        if (godotClass == "Area3D") StandInForArea();
     }
 
     /// <summary>Holds the body in place (Static, or Kinematic to be moved by script and carry others) until unfrozen.</summary>
