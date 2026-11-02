@@ -246,10 +246,18 @@ public class Window : Viewport
         set { _baseSize = value; ContentChanged(); }
     }
 
-    /// <summary>The extra scale applied on top of the stretch. Project key UI.STRETCHSCALE.</summary>
+    /// <summary>The extra scale applied on top of the stretch. Project key UI.STRETCHSCALE. A project that neither stretches nor states a scale gets the
+    /// display's scale (2 on a 200% screen), where Godot would draw one window pixel per unit and its UI would come out tiny on a high-DPI display;
+    /// at 100% that is 1, Godot's own value.</summary>
     public float ContentScaleFactor
     {
-        get => _factor ??= float.TryParse(Project("UI.STRETCHSCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) && f > 0 ? f : 1f;
+        get
+        {
+            if (_factor is { } set) return set;
+            if (float.TryParse(Project("UI.STRETCHSCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f) && f > 0)
+                return (_factor = f).Value;
+            return ContentScaleMode == ContentScaleModeEnum.Disabled ? WindowControl.DpiScale() : 1f;
+        }
         set { _factor = Math.Max(0.01f, value); ContentChanged(); }
     }
 
@@ -884,8 +892,8 @@ public class SceneTreeDriver : Node
     public override void _Process(double delta)
     {
         SceneTree tree = SceneTree.Instance;
-        if (Tail) tree.EndPass(delta, tree.LastRealDelta, physics: false);
-        else { Input.BeginFrame(delta); tree.BeginPass(delta, physics: false); }
+        if (Tail) { tree.EndPass(delta, tree.LastRealDelta, physics: false); Input.InProcessFrame = false; }
+        else { Input.InProcessFrame = true; Input.BeginFrame(delta); tree.BeginPass(delta, physics: false); }
     }
 
     public override void _PhysicsProcess(double delta)

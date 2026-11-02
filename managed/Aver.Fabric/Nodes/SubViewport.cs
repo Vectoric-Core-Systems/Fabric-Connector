@@ -411,12 +411,18 @@ public class SubViewportContainer : Control
             sv.RefreshParentVisible();
             int id = sv.ViewId;
             if (id == 0) continue;
+            // The engine draws the view in window pixels, the rectangle is in UI units: with a content scale (a stretch mode, the display's scale) the
+            // two differ. A stretched view also renders at the window pixels it covers, so it is as sharp as the main view.
             Rect2 r = GetGlobalRect();
-            int w = Math.Max(1, (int)(Stretch ? r.Size.X / _shrink : sv.Size.X)), h = Math.Max(1, (int)(Stretch ? r.Size.Y / _shrink : sv.Size.Y));
-            if (Stretch && r.Size.X >= 1f && r.Size.Y >= 1f && (sv.Size.X != w || sv.Size.Y != h)) sv.Size = new Vector2I(w, h);
-            float drawW = Stretch ? r.Size.X : sv.Size.X, drawH = Stretch ? r.Size.Y : sv.Size.Y;
+            Window root = SceneTree.Instance.Root;
+            Vector2 c0 = root.ContentToWindow(r.Position), c1 = root.ContentToWindow(r.End);
+            float pxW = c1.X - c0.X, pxH = c1.Y - c0.Y;
+            int w = Math.Max(1, (int)(Stretch ? pxW / _shrink : sv.Size.X)), h = Math.Max(1, (int)(Stretch ? pxH / _shrink : sv.Size.Y));
+            if (Stretch && pxW >= 1f && pxH >= 1f && (sv.Size.X != w || sv.Size.Y != h)) sv.Size = new Vector2I(w, h);
+            Vector2 d1 = root.ContentToWindow(r.Position + new Vector2(sv.Size.X, sv.Size.Y));
+            float drawW = Stretch ? pxW : d1.X - c0.X, drawH = Stretch ? pxH : d1.Y - c0.Y;
             bool ok = show && drawW >= 1f && drawH >= 1f;
-            b.SetScreenRect(id, r.Position.X, r.Position.Y, drawW, drawH, ok);
+            b.SetScreenRect(id, c0.X, c0.Y, drawW, drawH, ok);
             if (ok && _uiId != id) { b.AddUiConsumer(id); _uiId = id; }   // a view made again after leaving the tree has a new id and no consumers
             else if (!ok && _uiId == id) { b.RemoveUiConsumer(id); _uiId = 0; }
             break;   // one view per container, as in Godot's usual use

@@ -212,6 +212,8 @@ public static class Input
 
     /// <summary>True while a physics pass runs (set by the driver): "just pressed" then means this physics frame, not this process frame.</summary>
     internal static bool InPhysicsFrame;
+    /// <summary>True while a process pass runs (set by the driver).</summary>
+    internal static bool InProcessFrame;
 
     /// <summary>The seconds of the frame being processed.</summary>
     internal static double FrameDelta { get; private set; }
@@ -247,7 +249,7 @@ public static class Input
     {
         s_actions.Clear(); s_keys.Clear(); s_mouseButtons.Clear(); s_joyButtons.Clear(); s_joyAxes.Clear(); s_builtin.Clear();
         s_mouseVelocity = s_mousePosition = default;
-        InPhysicsFrame = false;
+        InPhysicsFrame = InProcessFrame = false;
         s_mouseMode = MouseModeEnum.Visible;
         s_pointerApplied = false;
         s_cursorShape = CursorShape.Arrow;
@@ -273,8 +275,11 @@ public static class Input
         }
     }
 
-    private static long ProcessFrameNow => NodeHost.Current.IsEngine ? Aver.Framework.Engine.ProcessFrames : SceneTree.Instance.GetFrame();
-    private static long PhysicsFrameNow => NodeHost.Current.IsEngine ? Aver.Framework.Engine.PhysicsFrames : SceneTree.Instance.PhysicsFrameCount;
+    // Frames FINISHED, as Godot counts them (and the managed tree does): a press seen between passes, or in a pass of the other kind, is stamped with
+    // the number the next pass of each kind will read, so "just pressed" holds in exactly that pass. The engine counts passes STARTED (its counter
+    // moves before the pass's callbacks), so inside a pass of that kind its count is one ahead.
+    private static long ProcessFrameNow => NodeHost.Current.IsEngine ? Aver.Framework.Engine.ProcessFrames - (InProcessFrame ? 1 : 0) : SceneTree.Instance.GetFrame();
+    private static long PhysicsFrameNow => NodeHost.Current.IsEngine ? Aver.Framework.Engine.PhysicsFrames - (InPhysicsFrame ? 1 : 0) : SceneTree.Instance.PhysicsFrameCount;
 
     internal static bool HeldModifier(KeyModifierMask m) => m switch
     {
