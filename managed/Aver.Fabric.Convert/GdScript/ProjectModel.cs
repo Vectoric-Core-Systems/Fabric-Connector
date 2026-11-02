@@ -166,8 +166,41 @@ internal sealed class ProjectModel
             string name = line[..eq].Trim();
             string value = line[(eq + 1)..].Trim().Trim('"');
             bool singleton = value.StartsWith('*');
-            Autoloads.Add(new AutoloadInfo { Name = name, Path = value.TrimStart('*'), IsSingleton = singleton });
+            string path = value.TrimStart('*');
+            // Godot 4.4+ may name the script by uid ("*uid://cfvax2ybt3j06"): the file's res:// path, so the autoload keeps its script's type.
+            if (path.StartsWith("uid://", StringComparison.Ordinal) && ResolveUid(dir, path) is { } res) path = res;
+            Autoloads.Add(new AutoloadInfo { Name = name, Path = path, IsSingleton = singleton });
         }
+    }
+
+    private Dictionary<string, string>? _uids;
+
+    // uid://... to res://...: a script's "<file>.uid" holds its uid; a scene or resource states it in its header (uid="uid://...").
+    private string? ResolveUid(string dir, string uid)
+    {
+        if (_uids == null)
+        {
+            _uids = new Dictionary<string, string>(StringComparer.Ordinal);
+            string root = Path.GetFullPath(dir);
+            foreach (string f in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                string rel = Path.GetRelativePath(root, f).Replace('\\', '/');
+                if (rel.StartsWith(".godot/", StringComparison.Ordinal)) continue;
+                try
+                {
+                    if (f.EndsWith(".uid", StringComparison.OrdinalIgnoreCase))
+                        _uids.TryAdd(File.ReadAllText(f).Trim(), "res://" + rel[..^4]);
+                    else if (f.EndsWith(".tscn", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".tres", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string first = File.ReadLines(f).FirstOrDefault() ?? "";
+                        int at = first.IndexOf("uid=\"uid://", StringComparison.Ordinal);
+                        if (at >= 0 && first.IndexOf('"', at + 5) is int end and > 0) _uids.TryAdd(first[(at + 5)..end], "res://" + rel);
+                    }
+                }
+                catch (IOException) { }
+            }
+        }
+        return _uids.GetValueOrDefault(uid);
     }
 
     // ---- members ----

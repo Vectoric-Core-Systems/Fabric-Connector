@@ -156,6 +156,13 @@ public partial class CollisionObject3D : Node3D
         if (!_body.IsValid) return;
         FabricPhysics.Pump();
         Transform3D now = GlobalTransform;
+        if (FabricPhysics.TracePositions && Aver.Framework.Engine.PhysicsFrames % 60 == 0)
+        {
+            Vector3 bodyAt = FromPhys(_body.Origin, 1f / FabricSpace.CmPerMetre);
+            var engineFilter = _body.CollisionFilter;
+            Aver.Scripting.Log.Info($"[Fabric] {GetType().Name} '{Name}' (body {_body.Handle}) node at {now.Origin}, body at {bodyAt}, layer {_layer} mask {_mask}, " +
+                                    $"engine filter {(engineFilter is { } f ? $"{f.Layer}/{f.Mask}" : "none")}, active {_body.IsActive}{TraceExtra()}");
+        }
         if (!_hasSynced || !now.Equals(_lastSynced))
         {
             _lastSynced = now;
@@ -167,6 +174,9 @@ public partial class CollisionObject3D : Node3D
 
     // The node was moved by script or animation since the last step: bodies that do not simulate themselves follow it.
     internal virtual void OnNodeMoved(Transform3D global, float dt) { }
+
+    // More for the AVER_FABRIC_TRACE "positions" line (an area's engine-side overlaps).
+    internal virtual string TraceExtra() => "";
 
     // Once per physics step, before the step runs.
     internal virtual void OnPhysicsStep(float dt) { }
@@ -666,6 +676,7 @@ public class RigidBody3D : PhysicsBody3D
     {
         base.OnPhysicsStep(dt);
         PhysBody b = Body;
+        ReconcileContacts(b);
         if (_freeze) return;
         if (_constantForce != Vector3.Zero) b.AddForce(ToPhysDirection(_constantForce, FabricSpace.CmPerMetre));
         if (_constantTorque != Vector3.Zero) b.AddTorque(ToPhysAngular(_constantTorque, FabricSpace.CmPerMetre * FabricSpace.CmPerMetre));
@@ -684,11 +695,33 @@ public class RigidBody3D : PhysicsBody3D
         if (_freeze) PlaceBody(Body, global, carry: _freezeMode == FreezeModeEnum.Kinematic, dt);
     }
 
-    // Called by FabricPhysics for a contact-monitor record on this body.
+    private readonly List<CollisionObject3D> _touching = new();
+
+    // Called by FabricPhysics for a contact-monitor record on this body, and by ReconcileContacts: once per change.
     internal void RaiseContact(CollisionObject3D other, bool began)
     {
         if (!ContactMonitor) return;
+        if (began) { if (_touching.Contains(other)) return; _touching.Add(other); }
+        else if (!_touching.Remove(other)) return;
         EmitSignal(began ? SignalName.BodyEntered : SignalName.BodyExited, other);
+    }
+
+    // The engine's contact list against what was reported (see FabricPhysics.Pump): a touch that began or ended while another step ran is raised now.
+    private void ReconcileContacts(PhysBody b)
+    {
+        if (!ContactMonitor || !b.IsValid) return;
+        IReadOnlyList<PhysBody> now;
+        try { now = b.Contacts; }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return; }
+        var nodes = new List<CollisionObject3D>();
+        foreach (PhysBody o in now)
+            if (FabricPhysics.NodeOf(o.Handle) is { } n) nodes.Add(n);
+        foreach (CollisionObject3D gone in _touching.Where(t => !nodes.Contains(t)).ToList())
+        {
+            if (gone.IsAlive) RaiseContact(gone, false);
+            else _touching.Remove(gone);
+        }
+        foreach (CollisionObject3D n in nodes) RaiseContact(n, true);
     }
 }
 
@@ -969,7 +1002,12 @@ public class Area3D : CollisionObject3D
     internal override void OnBodyBuilt(PhysBody body)
     {
         _area = Aver.Physics.Area.Create(body);
-        if (_area.Handle == 0) return;
+        if (_area.Handle == 0)
+        {
+            Aver.Scripting.Log.Warn($"[Fabric] Area3D '{Name}': the engine would not make its body an area, so it reports no overlaps");
+            return;
+        }
+        if (FabricPhysics.TraceAreas) Aver.Scripting.Log.Info($"[Fabric] area '{Name}' is body {body.Handle}: layer {CollisionLayer}, mask {CollisionMask}, monitoring {_monitoring}");
         _area.SetFlags(_monitoring, _monitorable);
         _area.SetCollision(CollisionLayer, CollisionMask);
         _area.SetPriority(_priority);
@@ -988,15 +1026,17 @@ public class Area3D : CollisionObject3D
     public bool OverlapsBody(Node body) => body is Node3D n && _bodies.Contains(n);
     public bool OverlapsArea(Node area) => area is Area3D a && _areas.Contains(a);
 
+    internal override string TraceExtra() => _area.Handle == 0 ? ", no engine area" : $", engine overlaps [{string.Join(",", _area.Overlaps.Select(o => o.Handle))}]";
+
     // Called by FabricPhysics (and tests): something entered or left, so the lists change and the signal goes out.
     internal void RaiseBodyOverlap(Node3D body, bool entered)
     {
+        if (FabricPhysics.TraceAreas) Aver.Scripting.Log.Info($"[Fabric] area '{Name}' {(entered ? "entered by" : "left by")} {body.GetType().Name} '{body.Name}'{(_monitoring ? "" : " (not monitoring)")}");
         if (!_monitoring) return;
         if (entered) { if (_bodies.Contains(body)) return; _bodies.Add(body); }
         else if (!_bodies.Remove(body)) return;
         EmitSignal(entered ? SignalName.BodyEntered : SignalName.BodyExited, body);
     }
-
     internal void RaiseAreaOverlap(Area3D area, bool entered)
     {
         if (!_monitoring) return;
@@ -1006,4 +1046,36 @@ public class Area3D : CollisionObject3D
     }
 
     internal override void OnNodeMoved(Transform3D global, float dt) => PlaceBody(Body, global, carry: false, dt);
+
+    // Once a physics tick: what the engine says is inside now (its overlap list, as of its last step) against what was reported, and the difference
+    // raised as entered / exited. The engine's event queue holds only its last step's records, so with more than one step between two ticks an
+    // enter was lost (Godot4-FPS-Template's weapon pickups, a frozen gun the pickup area passed over); the list cannot miss one.
+    internal override void OnPhysicsStep(float dt)
+    {
+        base.OnPhysicsStep(dt);
+        if (_area.Handle == 0 || !_monitoring) return;
+        IReadOnlyList<(int Handle, bool IsArea)> inside;
+        try { inside = _area.Overlaps; }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return; }
+        var bodies = new List<Node3D>();
+        var areas = new List<Area3D>();
+        foreach ((int handle, bool isArea) in inside)
+        {
+            if (FabricPhysics.NodeOf(handle) is not { } node) continue;
+            if (isArea) { if (node is Area3D a) areas.Add(a); }
+            else bodies.Add(node);
+        }
+        foreach (Node3D gone in _bodies.Where(b => !bodies.Contains(b)).ToList())
+        {
+            if (gone.IsAlive) RaiseBodyOverlap(gone, false);
+            else _bodies.Remove(gone);
+        }
+        foreach (Area3D gone in _areas.Where(a => !areas.Contains(a)).ToList())
+        {
+            if (gone.IsAlive) RaiseAreaOverlap(gone, false);
+            else _areas.Remove(gone);
+        }
+        foreach (Node3D b in bodies) RaiseBodyOverlap(b, true);
+        foreach (Area3D a in areas) RaiseAreaOverlap(a, true);
+    }
 }

@@ -16,6 +16,10 @@ namespace Aver.Fabric;
 internal static class FabricPhysics
 {
     private static readonly Dictionary<int, WeakReference<CollisionObject3D>> s_byBody = new();
+    // AVER_FABRIC_TRACE containing "areas": area overlaps are logged, also the ones no node receives (Area3D.RaiseBodyOverlap logs the rest).
+    internal static readonly bool TraceAreas = (System.Environment.GetEnvironmentVariable("AVER_FABRIC_TRACE") ?? "").Contains("areas", StringComparison.OrdinalIgnoreCase);
+    // "positions": every collision object's node and body position, once a second.
+    internal static readonly bool TracePositions = (System.Environment.GetEnvironmentVariable("AVER_FABRIC_TRACE") ?? "").Contains("positions", StringComparison.OrdinalIgnoreCase);
     private static long s_pumpedFrame = -1;
 
     internal static void Register(int bodyHandle, CollisionObject3D node)
@@ -41,7 +45,11 @@ internal static class FabricPhysics
     {
         if (NodeOf(areaHandle) is not Area3D area) return;
         CollisionObject3D? other = NodeOf(otherHandle);
-        if (other == null) return;
+        if (other == null)
+        {
+            if (TraceAreas) Log.Info($"[Fabric] area '{area.Name}' {(entered ? "entered" : "left")} by body {otherHandle}, which no node owns: not reported");
+            return;
+        }
         if (otherIsArea) { if (other is Area3D a) area.RaiseAreaOverlap(a, entered); }
         else area.RaiseBodyOverlap(other, entered);
     }
@@ -55,7 +63,9 @@ internal static class FabricPhysics
         body.RaiseContact(other, began);
     }
 
-    /// <summary>Reads the engine's event queues once per physics frame, whichever node asks first.</summary>
+    /// <summary>Reads the engine's event queues once per physics frame, whichever node asks first. They hold only the engine's last step, so with
+    /// two steps between ticks an enter was lost: areas and contact-monitored bodies also compare the engine's current lists each tick
+    /// (Area3D.OnPhysicsStep, RigidBody3D.ReconcileContacts). Both describe the same last step, and the signals are raised once per change.</summary>
     internal static void Pump()
     {
         long frame = Aver.Framework.Engine.PhysicsFrames;

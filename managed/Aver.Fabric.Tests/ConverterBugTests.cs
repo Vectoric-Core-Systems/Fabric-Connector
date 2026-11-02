@@ -19,6 +19,7 @@ static class ConverterBugTests
         T.Run("converter C5: value type, integer and bool coercions", Coercions);
         T.Run("converter C5b: Basis(), Transform3D(), Quaternion() are GDScript's identity and Color() opaque black, not C#'s zeros", IdentityConstructors);
         T.Run("converter C5c: an untyped Array where an Array[T] is wanted (query.exclude = list), and back", UntypedToTypedArrays);
+        T.Run("converter C5d: an autoload named by uid keeps its script's type; a loop variable the body assigns", UidAutoloadAndLoopAssign);
         T.Run("converter C6: a member only a subclass has is reached through a cast", BaseTypedReceivers);
         T.Run("converter C7: an autoload names its script as a type, its enum travels in a signal", AutoloadAsType);
         T.Run("converter C8: a static function that needs an instance is written as an instance method", StaticNeedsInstance);
@@ -190,6 +191,37 @@ static class ConverterBugTests
         T.Check("an untyped Array reaches an Array[RID] through the wrapper's conversion", Has(t, "(Collections.Array<Rid>)HitObjects"), t);
         if (!r.Success) return;
         T.Check("the exclude list is the script's array (shared, one RID) and the typed array reads back untyped", System.Convert.ToInt64(Call(r, "Sample", "Query")) == 3);
+    }
+
+    // ---- C5d ----
+
+    // bukkbeek/GodotFPS-Template: project.godot names its Bullets autoload by uid (Godot 4.4+), and a loop sets a member of each child it iterates.
+    private static void UidAutoloadAndLoopAssign()
+    {
+        string root = Temp("uid");
+        try
+        {
+            string proj = Path.Combine(root, "Game");
+            string outDir = Path.Combine(root, "Out");
+            Directory.CreateDirectory(Path.Combine(proj, "autoloads"));
+            Directory.CreateDirectory(outDir);
+            File.WriteAllText(Path.Combine(proj, "project.godot"), "config_version=5\n\n[autoload]\n\nBullets=\"*uid://cfvax2ybt3j06\"\n");
+            File.WriteAllText(Path.Combine(proj, "autoloads", "bullets.gd"),
+                "extends Node\n\nenum AmmoType { KNIFE, PISTOL }\n\nfunc _get_ammo(t: AmmoType) -> int:\n\treturn 7 if t == AmmoType.PISTOL else 0\n");
+            File.WriteAllText(Path.Combine(proj, "autoloads", "bullets.gd.uid"), "uid://cfvax2ybt3j06\n");
+            File.WriteAllText(Path.Combine(proj, "weapon.gd"),
+                "extends Node\n\n@export var bullet_type: Bullets.AmmoType = Bullets.AmmoType.PISTOL\n\n" +
+                "func ammo() -> int:\n\treturn Bullets._get_ammo(bullet_type)\n\n" +
+                "func layers() -> int:\n\tvar total := 0\n\tfor child in get_children():\n\t\tchild.collision_layer = 2\n\t\tchild = null\n\tfor i in range(3):\n\t\ti += 1\n\t\ttotal += i\n\treturn total\n");
+            var so = new StringWriter();
+            var se = new StringWriter();
+            int code = ConvertCli.Run(new[] { "scripts", "--project", proj, "--out", outDir, "--refs", Refs }, so, se);
+            T.Check("it converts and compiles (before: CS1503 for the enum, CS0236 for the field, CS1656 for the loop)", code == 0, se.ToString());
+            string weapon = File.ReadAllText(Path.Combine(outDir, "Content", "Scripts", "Weapon.cs"));
+            T.Check("the uid autoload is reached as its script's class", weapon.Contains("GetNode<Bullets>(\"/root/Bullets\")"), weapon);
+            T.Check("the enum default is the enum itself, not a lookup by name", !weapon.Contains("GetMember(GetNode"), weapon);
+        }
+        finally { try { Directory.Delete(root, true); } catch (IOException) { } }
     }
 
     // ---- C6 ----

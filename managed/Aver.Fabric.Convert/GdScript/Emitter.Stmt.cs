@@ -389,7 +389,14 @@ internal sealed partial class GdEmitter
         if (rangeArgs != null)
         {
             Ex[] a = rangeArgs.Select(x => Expr(x, GdType.Int)).ToArray();
-            _w.Open($"foreach (long {cs} in GDScript.Range({string.Join(", ", a.Select(x => Adapt(x, GdType.Int)))}))");
+            string range = $"GDScript.Range({string.Join(", ", a.Select(x => Adapt(x, GdType.Int)))})";
+            if (AssignsLoopVariable(f))
+            {
+                string item = Fresh(cs.TrimStart('@') + "Item");
+                _w.Open($"foreach (long {item} in {range})");
+                _w.Line($"long {cs} = {item};");
+            }
+            else _w.Open($"foreach (long {cs} in {range})");
             PushScope(); Declare(f.VarName, cs, GdType.Int, f); EmitBlockBody(f.Body); PopScope();
             _w.Close();
             return;
@@ -428,8 +435,31 @@ internal sealed partial class GdEmitter
             _w.Close();
             return;
         }
-        _w.Open($"foreach ({vtype.Cs} {cs} in {source})");
+        if (AssignsLoopVariable(f))
+        {
+            // GDScript lets the body assign the loop variable (it does not change what is iterated); C# does not let a foreach variable be assigned.
+            string item = Fresh(cs.TrimStart('@') + "Item");
+            _w.Open($"foreach ({vtype.Cs} {item} in {source})");
+            _w.Line($"{vtype.Cs} {cs} = {item};");
+        }
+        else
+        {
+            _w.Open($"foreach ({vtype.Cs} {cs} in {source})");
+        }
         PushScope(); Declare(f.VarName, cs, vtype, f); EmitBlockBody(f.Body); PopScope();
         _w.Close();
+    }
+
+    // The variable itself, or a member or element of it: on a Variant or a value type the emitter writes the changed value back to the variable.
+    private bool AssignsLoopVariable(ForStmt f) => AssignsIn(f.Body).Any(a => RootOf(a.Target) is Identifier i && i.Name == f.VarName);
+
+    private static Expr RootOf(Expr e)
+    {
+        while (true)
+        {
+            if (e is MemberAccess m) e = m.Target;
+            else if (e is Subscript s) e = s.Target;
+            else return e;
+        }
     }
 }
