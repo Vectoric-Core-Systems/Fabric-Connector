@@ -44,6 +44,9 @@ internal sealed class MemberInfo
     public bool? CsConst;                      // const: emitted as a C# const (a compile-time constant of a primitive type)
     public string? ConstAlias;                 // const X = preload("res://y.gd") / = SomeClass: X is that class
     public ScriptInfo? AliasScript;
+    public bool AliasChecked;                  // TypeAlias looked: const X = Other.Enum, or an untyped var never reassigned that holds a type
+    public GdType? AliasType;
+    public string? AliasCode;
 
     public FuncDecl? Func => Decl as FuncDecl;
     public VarDecl? Var => Decl as VarDecl;

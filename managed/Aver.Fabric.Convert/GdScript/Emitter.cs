@@ -300,6 +300,12 @@ internal sealed partial class GdEmitter
                 {
                     if (mi.Kind == MK.Class) { cur = mi.Inner; break; }
                     if (mi.Kind == MK.Enum && parts.Count == 1) return GdType.OfEnum(mi.Enum!);
+                    // `const Group = preload("./group.gd")` then `var g: Group`: the constant names the script.
+                    if (mi.Kind == MK.Const)
+                    {
+                        if (mi.ConstAlias == null) ResolveConstAlias(mi);
+                        if (mi.AliasScript != null) { cur = mi.AliasScript; break; }
+                    }
                 }
             }
             if (cur == null && o.Decl.Name == parts[0] && !o.IsInner) cur = o;

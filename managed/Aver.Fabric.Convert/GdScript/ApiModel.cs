@@ -348,8 +348,18 @@ internal sealed class ApiModel
         string name = gd.StartsWith('_') ? Naming.VirtualName(gd) : Naming.MethodName(gd);
         foreach (INamedTypeSymbol t in Chain(baseType))
             foreach (ISymbol m in t.GetMembers(name))
-                if (m is IMethodSymbol ms && (ms.IsVirtual || ms.IsAbstract || ms.IsOverride) && Visible(ms)) return ms;
+                if (m is IMethodSymbol ms && (ms.IsVirtual || ms.IsAbstract || ms.IsOverride) && Visible(ms) && !HostVirtual(ms)) return ms;
         return null;
+    }
+
+    // A virtual first declared by the engine host or .NET (Node.OnInput overrides Aver.Framework's): Aver.Fabric uses it to run the node, it is not the
+    // Godot API, so a GDScript function of that name (func on_input) is the script's own method.
+    private static bool HostVirtual(IMethodSymbol m)
+    {
+        IMethodSymbol root = m;
+        while (root.OverriddenMethod is { } o) root = o;
+        string ns = root.ContainingNamespace?.ToDisplayString() ?? "";
+        return ns == "System" || (ns.StartsWith("Aver", StringComparison.Ordinal) && !ns.StartsWith("Aver.Fabric", StringComparison.Ordinal));
     }
 
     public List<IMethodSymbol> Constructors(INamedTypeSymbol? t) =>

@@ -152,6 +152,9 @@ internal sealed partial class GdEmitter
 
     private Ex MemberValue(MemberInfo mi, string? receiver, ScriptInfo scope)
     {
+        // A constant or static read through an object (an autoload's CONST, other.SOME_ENUM_VALUE) is the class's in C#.
+        if (receiver != null && (mi.Kind == MK.Const || (mi.Kind == MK.Var && mi.IsStatic))) receiver = QualifiedScript(mi.Owner);
+        if (mi.Kind is MK.Var or MK.Const && mi.AliasScript == null && TypeAlias(mi, out Ex alias)) return alias;
         switch (mi.Kind)
         {
             case MK.Var:
@@ -587,7 +590,25 @@ internal sealed partial class GdEmitter
             };
             return new Ex($"{Wrap(v, P.Primary)}.VariantType == Variant.Type.{vt}", GdType.Bool, P.Eq);
         }
-        return new Ex($"{Wrap(v, P.Rel + 1)} is {t.Cs}", GdType.Bool, P.Rel);
+        return new Ex($"{TestSubject(v, t)} is {t.Cs}", GdType.Bool, P.Rel);
+    }
+
+    // `self is RigidBody3D` in a class that can never be one is false in GDScript; C# refuses a test between unrelated classes (CS8121), so it goes
+    // through object.
+    private static string TestSubject(Ex v, GdType t) =>
+        Unrelated(v.Type, t) ? "(object)" + Wrap(v, P.Unary) : Wrap(v, P.Rel + 1);
+
+    private static bool Unrelated(GdType a, GdType b)
+    {
+        Rs.INamedTypeSymbol? Api(GdType g) => g.Kind == GK.ScriptClass ? g.Script?.ApiRoot : g.Kind == GK.Object ? g.Sym : null;
+        if (a.Kind is not (GK.Object or GK.ScriptClass) || b.Kind is not (GK.Object or GK.ScriptClass) || a.IsVariant) return false;
+        if (a.Kind == GK.ScriptClass && b.Kind == GK.ScriptClass && a.Script != null && b.Script != null)
+            return !a.Script.DerivesFromScript(b.Script) && !b.Script.DerivesFromScript(a.Script);
+        Rs.INamedTypeSymbol? sa = Api(a), sb = Api(b);
+        if (sa == null || sb == null || sa.TypeKind == Rs.TypeKind.Interface || sb.TypeKind == Rs.TypeKind.Interface) return false;
+        if (a.Kind == GK.ScriptClass) return !GdType.Derives(sa, sb);   // an API class is never a script class's subclass
+        if (b.Kind == GK.ScriptClass) return !GdType.Derives(sb, sa);
+        return !GdType.Derives(sa, sb) && !GdType.Derives(sb, sa);
     }
 
     private Ex CastEx(Cast c)

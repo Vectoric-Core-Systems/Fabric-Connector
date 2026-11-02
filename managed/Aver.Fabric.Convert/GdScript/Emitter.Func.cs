@@ -314,7 +314,8 @@ internal sealed partial class GdEmitter
             if (p.Default == null || p.IsRest) continue;
             Ex d = Expr(p.Default, p.Type);
             if (d.Type.Kind == GK.Null) p.DefaultCode = p.Type.IsReference || p.Type.Kind == GK.Object ? "null" : "default";
-            else if (d.IsConstExpr || (d.Const != null)) p.DefaultCode = Adapt(d, p.Type);
+            // A StringName or NodePath parameter = "" is a conversion, not a C# constant.
+            else if ((d.IsConstExpr || (d.Const != null)) && p.Type.Kind is not (GK.StringName or GK.NodePath)) p.DefaultCode = Adapt(d, p.Type);
             else needOverloads = true;
         }
         // A constructor with defaults also gets the parameterless one the runtime needs to make the node.
@@ -351,6 +352,15 @@ internal sealed partial class GdEmitter
         _w.Close();
 
         if (needOverloads) EmitOverloads(mi, ps, name, isCtor, ret, mods);
+        // _init(pool_name) with no default: the runtime makes a node with no arguments, and a subclass's constructor calls base() (super(args)
+        // cannot pass them on in C#). That one sets the fields only.
+        if (isCtor && ps.Count > 0 && ps[0].Default == null && !ps[0].IsRest)
+        {
+            _w.Line();
+            _w.Open($"public {name}()");
+            if (ctorInits != null) foreach ((MemberInfo m, string code) in ctorInits) _w.Line($"{FieldTarget(m)} = {code};");
+            _w.Close();
+        }
     }
 
     private bool UseAsyncVoid(MemberInfo mi) => mi.IsOverride || !mi.AwaitedSomewhere;

@@ -154,7 +154,7 @@ internal sealed partial class GdEmitter
         Ex value = Expr(a.Value, target.Type.IsVariant ? null : target.Type);
 
         string newValue;
-        if (op.Length == 0) { CheckProvisional(target, value.Type); newValue = Unparen(Adapt(value, target.Type)); }
+        if (op.Length == 0) { CheckProvisional(target, value.Type); newValue = Unparen(NarrowToMember(target, Adapt(value, target.Type))); }
         else
         {
             Ex bin = BinaryOp(op, target, value, a);
@@ -162,7 +162,7 @@ internal sealed partial class GdEmitter
             if (s_nativeCompound.Contains(op) && target.SetTemplate == null && target.Parent == null && target.Type.IsNumeric && value.Type.IsNumeric
                 && !(op == "/" && target.Type.Kind == GK.Int && value.Type.Kind == GK.Float))
             {
-                _w.Line($"{target.Code} {op}= {Adapt(value, target.Type)};");
+                _w.Line($"{target.Code} {op}= {NarrowToMember(target, Adapt(value, target.Type))};");
                 return;
             }
             if (op is "+" && target.Type.Kind == GK.String && value.Type.Kind == GK.String && target.SetTemplate == null && target.Parent == null)
@@ -170,9 +170,18 @@ internal sealed partial class GdEmitter
                 _w.Line($"{target.Code} += {value.Code};");
                 return;
             }
-            newValue = Adapt(bin, target.Type);
+            newValue = NarrowToMember(target, Adapt(bin, target.Type));
         }
         _w.Line(AssignCode(target, newValue) + ";");
+    }
+
+    // An API member of a narrower integer type (collision_mask is a uint): C# has no implicit conversion from the long a GDScript int is.
+    private static string NarrowToMember(Ex target, string code)
+    {
+        Rs.ITypeSymbol? ty = target.Api?.Symbol switch { Rs.IPropertySymbol p => p.Type, Rs.IFieldSymbol f => f.Type, _ => null };
+        if (target.Type.Kind != GK.Int || ty?.SpecialType is not (Rs.SpecialType.System_UInt32 or Rs.SpecialType.System_UInt64 or Rs.SpecialType.System_Int16
+            or Rs.SpecialType.System_UInt16 or Rs.SpecialType.System_Byte or Rs.SpecialType.System_SByte)) return code;
+        return $"({ty.ToDisplayString()})({code})";
     }
 
     // Writes a value into an assignment target: a call for dynamic targets, `X = X with { f = v }` for a field of a struct property.
@@ -191,7 +200,8 @@ internal sealed partial class GdEmitter
         if (r.Value == null)
         {
             _ctx.ReturnsWithoutValue = true;
-            _w.Line("return;");
+            // A bare return in a function declared to return a value gives that type's default (null for an object), as GDScript does.
+            _w.Line(!_ctx.InferReturn && _ctx.Return.Kind != GK.Void ? "return default;" : "return;");
             return;
         }
         if (_ctx.InferReturn)
@@ -246,7 +256,7 @@ internal sealed partial class GdEmitter
         GdType t = ResolveType(tt.Type);
         if (target.Type.IsVariant || !(t.Kind is GK.Object or GK.ScriptClass) || target.Type.Kind is GK.Struct) return false;
         string name = Fresh(Naming.Camel(t.Cs.Split('.').Last()));
-        code = $"{target.Code} is {t.Cs} {name}";
+        code = $"{TestSubject(target, t)} is {t.Cs} {name}";
         _ctx.Narrow[id.Name] = (name, t);
         return true;
     }

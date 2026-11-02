@@ -32,6 +32,7 @@ static class ConverterGapTests
         T.Run("converter gap: Godot 4.5 @abstract classes and functions, and BaseMaterial3D's flags and features by number (COGITO)", AbstractAndMaterialFlags);
         T.Run("converter gap: an addon's editor-only scripts (EditorPlugin, EditorInterface, and what loads them) are left out of the game (COGITO)", EditorOnlyScripts);
         T.Run("converter gap: preload(\"./x.gd\") from the script's own folder, and `var _name` with a setter (COGITO)", RelativePreloadAndUnderscoreSetter);
+        T.Run("converter gap: twelve GDScript shapes that wrote C# that did not compile (COGITO round two)", GdScriptShapesRoundTwo);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -545,6 +546,35 @@ static class ConverterGapTests
         Node user = New<Node>(r, "GapUser");
         T.Check("both preloads are the script, and the setter runs once: 500 + 50 + 1 + 3", (long)user.GetType().GetMethod("Run")!.Invoke(user, null)! == 554);
         user.Free();
+    }
+
+    // COGITO, round two: shapes GDScript accepts that the converter wrote as C# that did not compile.
+    private static void GdScriptShapesRoundTwo()
+    {
+        ConversionResult r = Many(
+            ("GapGroup", "class_name GapGroup\nextends Node\n\nvar pool := \"\"\n\nfunc _init(pool_name: String):\n\tpool = pool_name\n"),
+            ("GapActive", "class_name GapActive\nextends GapGroup\n"),
+            ("GapAlerts", "class_name GapAlerts\nextends Node3D\n\nsignal done\n\nconst LIMIT := 64\n\nenum Mode { CALM, ALERT, PANIC }\n" +
+                "enum Mask { NONE = 0, A = 1 << (Mode.ALERT - 1), B = 1 << (Mode.PANIC - 1) }\n\nvar seen := 0\n\n" +
+                "func on_input(e: InputEvent) -> void:\n\tseen += 1\n\nfunc _done() -> void:\n\tdone.emit()\n"),
+            ("GapShapes", "class_name GapShapes\nextends Control\n\nconst Group = preload(\"./gapactive.gd\")\nvar modes = GapAlerts.Mode\nvar hits := 0\n" +
+                "var flag := false:\n\tset(v):\n\t\tflag = v\n\t\tawait get_tree().process_frame\n\t\thits += 100\n\n" +
+                "func pick(m: int) -> String:\n\tmatch m:\n\t\tmodes.CALM:\n\t\t\treturn \"calm\"\n\t\tmodes.CALM:\n\t\t\treturn \"never\"\n\t\tmodes.ALERT:\n\t\t\treturn \"alert\"\n\treturn \"other\"\n\n" +
+                "func nothing() -> Node:\n\tif hits > 1000:\n\t\treturn get_parent()\n\treturn\n\n" +
+                "func tagged(tag: StringName = \"\") -> String:\n\treturn str(tag)\n\n" +
+                "func run() -> int:\n\tvar g: Group = Group.new(\"pool\")\n\tvar body := StaticBody3D.new()\n\tbody.collision_mask = GapAlerts.Mask.B\n\tvar n := 0\n" +
+                "\tif g.pool == \"pool\": n += 1\n\tif pick(GapAlerts.Mode.ALERT) == \"alert\" and pick(0) == \"calm\": n += 2\n\tif nothing() == null: n += 4\n" +
+                "\tif tagged() == \"\" and tagged(\"x\") == \"x\": n += 8\n\tif body.collision_mask == 2: n += 16\n\tif not (self is RigidBody3D): n += 32\n" +
+                "\tvar a := GapAlerts.new()\n\ta.on_input(InputEventKey.new())\n\tif a.seen == 1 and a.LIMIT == 64: n += 64\n\tbody.free()\n\ta.free()\n\tg.free()\n" +
+                "\tflag = true\n\treturn n + hits\n"));
+        T.Check("it compiles (before: override OnInput, an enum in a var, uint from long, a long enum, a repeated match value, a bare return, " +
+                "self is an unrelated class, a const as a type, Sub.new(args) with no _init, await in a setter, StringName = \"\", signal done beside _done)",
+                r.Success, Errors(r));
+        if (!r.Success) return;
+        var shapes = New<Control>(r, "GapShapes");
+        SceneTree.Instance.Root.AddChild(shapes);
+        T.Check("and runs as GDScript does: 1 + 2 + 4 + 8 + 16 + 32 + 64, the setter stopped at its await", (long)shapes.GetType().GetMethod("Run")!.Invoke(shapes, null)! == 127);
+        shapes.Free();
     }
 }
 

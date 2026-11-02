@@ -143,7 +143,9 @@ internal static class GeneratedMembers
             string args = invoke == null || invoke.Parameters.Length == 0 ? "" : ", " + string.Join(", ", invoke.Parameters.Select(p => p.Type.TypeKind == TypeKind.Enum ? "(long)" + Id(p.Name) : Id(p.Name)));
             if (!firstBlock) sb.Append(nl);
             firstBlock = false;
-            sb.Append(i1).Append("public event ").Append(Id(s.Name)).Append(' ').Append(Id(name)).Append(" { add => ConnectEvent(SignalName.").Append(Id(name))
+            // signal end_reached beside func _end_reached: both are EndReached; the method keeps the name (scenes connect to it), the event steps aside.
+            string evName = type.GetMembers(name).Any(m => m is not IEventSymbol) ? name + "Event" : name;
+            sb.Append(i1).Append("public event ").Append(Id(s.Name)).Append(' ').Append(Id(evName)).Append(" { add => ConnectEvent(SignalName.").Append(Id(name))
               .Append(", value); remove => DisconnectEvent(SignalName.").Append(Id(name)).Append(", value); }").Append(nl);
             sb.Append(i1).Append("protected void EmitSignal").Append(name).Append('(').Append(ps).Append(") => EmitSignal(SignalName.").Append(Id(name)).Append(args)
               .Append(");").Append(nl);

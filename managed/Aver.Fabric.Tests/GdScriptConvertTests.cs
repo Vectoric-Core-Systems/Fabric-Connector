@@ -232,7 +232,7 @@ static class GdScriptConvertTests
         T.Check("@tool: [Tool], reported unsupported; @icon: [Icon]", Has(t, "[Tool]", "[Icon(\"res://i.svg\")]") && r.Items.Any(i => i.Property == "Tool" && i.Rating == Rating.Unsupported));
         T.Check("signals: [Signal] delegates with typed parameters", Has(t, "[Signal] public delegate void HitEventHandler(long damage, Node who);", "[Signal] public delegate void DiedEventHandler();"));
         T.Check("signal.emit(): the generated EmitSignal helper, null for a node", t.Contains("EmitSignalHit(_hp, null);"));
-        T.Check("enums: a C# enum with the values; an anonymous enum: constants", Has(t, "public enum Mode { Idle, Run = 5, Jump }", "public const long AnonA = 0;", "public const long AnonB = 2;"));
+        T.Check("enums: a C# enum (long, as GDScript ints are) with the values; an anonymous enum: constants", Has(t, "public enum Mode : long { Idle, Run = 5, Jump }", "public const long AnonA = 0;", "public const long AnonB = 2;"));
         T.Check("consts: const where C# allows it, static readonly otherwise", Has(t, "public const long Max = 100;", "public const double Speed = 4.5;", "public static readonly Collections.Array Names"));
         T.Check("static var: static field", t.Contains("public static long Shared = 1;"));
         T.Check("@export: [Export] with the type of the value; _range, _enum with the hint string", Has(t, "[Export]\n    public double speed = 2.5;") || Has(t, "public double speed = 2.5;"));

@@ -85,6 +85,7 @@ internal sealed partial class GdEmitter
         if (!(subj.Type.Kind is GK.Int or GK.String or GK.Enum or GK.StringName)) return false;
         if (m.Branches.Any(b => b.Guard != null) || m.Branches.Any(b => BreaksOut(b.Body, false))) return false;
         var labels = new List<List<string>>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);   // a value repeated in a later branch never reaches it (the first match wins)
         int defaultIndex = -1;
         for (int i = 0; i < m.Branches.Count; i++)
         {
@@ -99,7 +100,7 @@ internal sealed partial class GdEmitter
                         Ex v = Expr(pv.Expr, subj.Type);
                         string label = SwitchLabel(v, subj.Type);
                         if (label == "" || !(v.IsConstExpr || v.Const != null)) return false;
-                        list.Add(label);
+                        if (seen.Add(label)) list.Add(label);
                         break;
                     }
                     case PatWildcard or PatBind:
@@ -116,6 +117,7 @@ internal sealed partial class GdEmitter
         for (int i = 0; i < m.Branches.Count; i++)
         {
             MatchBranch br = m.Branches[i];
+            if (labels[i].Count == 0 && i != defaultIndex) continue;
             foreach (string l in labels[i]) _w.Line($"case {l}:");
             if (i == defaultIndex) _w.Line("default:");
             _w.Line("{"); _w.Indent++;

@@ -331,10 +331,10 @@ internal sealed partial class GdEmitter
                 Ex ev = Expr(v.Value, GdType.Int);
                 parts.Add($"{cs} = {EnumValueCode(ev)}");
             }
-            if (parts.Count <= 4 && parts.Sum(p => p.Length) < 80) _w.Line($"public enum {Naming.TypeName(ed.Name)} {{ {string.Join(", ", parts)} }}");
+            if (parts.Count <= 4 && parts.Sum(p => p.Length) < 80) _w.Line($"public enum {Naming.TypeName(ed.Name)} : long {{ {string.Join(", ", parts)} }}");
             else
             {
-                _w.Open($"public enum {Naming.TypeName(ed.Name)}");
+                _w.Open($"public enum {Naming.TypeName(ed.Name)} : long");
                 foreach (string p in parts) _w.Line(p + ",");
                 _w.Close();
             }
@@ -380,6 +380,11 @@ internal sealed partial class GdEmitter
             _w.Line($"// {cd.Name} names {mi.AliasScript.CsPath}: uses below say {QualifiedScript(mi.AliasScript)} directly");
             return;
         }
+        if (TypeAlias(mi, out Ex alias))
+        {
+            _w.Line($"// {cd.Name} names {alias.Code}: uses below say it directly");
+            return;
+        }
         GdType t = ConstType(mi);
         Ex init = cd.Value != null ? Expr(cd.Value, t) : new Ex("default", t);
         string value = Adapt(init, t);
@@ -398,6 +403,42 @@ internal sealed partial class GdEmitter
         else if (cd.Value is Identifier id && _m.ByClassName.TryGetValue(id.Name, out ScriptInfo? byName) && mi.Owner.Find(id.Name) == null)
             mi.AliasScript = byName;
     }
+
+    // `const B = Other.State` or `var state = Other.State` (untyped, never assigned again): GDScript lets a value hold an enum or a class, and
+    // `state.CHASING` then reads it. C# cannot keep a type in a field, so the name stands for that type wherever it is used.
+    private bool TypeAlias(MemberInfo mi, out Ex alias)
+    {
+        alias = null!;
+        if (!mi.AliasChecked)
+        {
+            mi.AliasChecked = true;
+            Expr? value = mi.Decl switch
+            {
+                ConstDecl cd => cd.Value,
+                VarDecl vd when vd.Type == null && vd.Setter == null && vd.Getter == null && !mi.Exported && !vd.HasAnnotation("onready") &&
+                                !Reassigned(mi.Owner.Root.Decl, vd.Name) => vd.Init,
+                _ => null,
+            };
+            if (value is Identifier or MemberAccess)
+            {
+                ScriptInfo savedScript = _script; Ctx savedCtx = _ctx; CodeWriter savedW = _w;
+                try
+                {
+                    EnterMemberContext(mi.Owner, true);
+                    Ex e;
+                    using (new DryScope(this)) e = Expr(value, null);
+                    if (e.Type.IsClassRef) { mi.AliasType = e.Type; mi.AliasCode = e.Code; }
+                }
+                finally { _script = savedScript; _ctx = savedCtx; _w = savedW; }
+            }
+        }
+        if (mi.AliasType == null) return false;
+        alias = new Ex(mi.AliasCode!, mi.AliasType);
+        return true;
+    }
+
+    private static bool Reassigned(ClassDecl root, string name) =>
+        root.Descendants().Any(n => n is Assign a && (a.Target is Identifier { } id && id.Name == name || a.Target is MemberAccess { Target: SelfExpr } ma && ma.Name == name));
 
     // ---- variables ----
 
@@ -510,6 +551,11 @@ internal sealed partial class GdEmitter
     private void EmitVar(ScriptInfo s, MemberInfo mi, List<string> pendingAttrs)
     {
         var vd = (VarDecl)mi.Decl;
+        if (TypeAlias(mi, out Ex alias))
+        {
+            _w.Line($"// {vd.Name} holds {alias.Code} and is never assigned: uses below say it directly");
+            return;
+        }
         GdType t = VarType(mi);
         EnterMemberContext(s, mi.IsStatic);
         _ctx.InAccessor = null;
@@ -603,7 +649,17 @@ internal sealed partial class GdEmitter
         // A setter written set(v): names its parameter v, which C# calls value: alias it.
         if (isSetter && acc.ParamName != null && acc.ParamName != "value") ctx.Scopes[^1][acc.ParamName] = new Local { Gd = acc.ParamName, Cs = "value", Type = t };
         ctx.Used.Add("value");
+        // A setter that awaits runs to its first await and returns, the rest resumes later (GDScript); a C# setter cannot be async, so its body is
+        // an async local function it starts.
+        bool awaits = isSetter && ProjectModel.ContainsAwait(acc.Body);
+        if (awaits)
+        {
+            ctx.IsAsync = true;
+            ctx.Used.Add("SetAsync");
+            _w.Open("async void SetAsync()");
+        }
         EmitBlockBody(acc.Body);
+        if (awaits) { _w.Close(); _w.Line("SetAsync();"); }
         _w.Close();
         (_ctx, _w) = saved;
     }
@@ -618,7 +674,17 @@ internal sealed partial class GdEmitter
         var deferred = _deferredInits.Where(d => ReferenceEquals(d.Member.Owner, s)).ToList();
         if (init == null || init.Kind != MK.Func)
         {
-            if (deferred.Count == 0) return;
+            // No _init of its own: Sub.new(args) hands the arguments to the nearest base script's _init, as GDScript does.
+            List<ParamInfo>? inherited = InheritedInitParams(s);
+            if (deferred.Count == 0 && inherited == null) return;
+            if (inherited != null)
+            {
+                string sig = string.Join(", ", inherited.Select(p => p.IsRest ? $"params Variant[] {p.Cs}" : $"{p.Type.Cs} {p.Cs}"));
+                _w.Line();
+                _w.Open($"public {s.CsName}({sig}) : base({string.Join(", ", inherited.Select(p => p.Cs))})");
+                foreach ((MemberInfo m, string code) in deferred) _w.Line($"{FieldTarget(m)} = {code};");
+                _w.Close();
+            }
             _w.Line();
             _w.Open($"public {s.CsName}()");
             foreach ((MemberInfo m, string code) in deferred) _w.Line($"{FieldTarget(m)} = {code};");
@@ -627,6 +693,25 @@ internal sealed partial class GdEmitter
         }
         _w.Line();
         EmitFunction(s, init, new List<MemberInfo>(), ctorInits: deferred);
+    }
+
+    // The parameters of the _init a script without one inherits (null when no base script has one, or it takes none).
+    private List<ParamInfo>? InheritedInitParams(ScriptInfo s)
+    {
+        for (ScriptInfo? b = s.BaseScript; b != null; b = b.BaseScript)
+        {
+            if (b.ByName.GetValueOrDefault("_init") is not { Kind: MK.Func } init) continue;
+            ScriptInfo savedScript = _script; Ctx savedCtx = _ctx; CodeWriter savedW = _w;
+            try
+            {
+                _script = b;
+                _w = new CodeWriter();
+                NewFuncCtx(init, init.Func!, GdType.Void, infer: false, out List<ParamInfo> ps);
+                return ps.Count > 0 ? ps : null;
+            }
+            finally { _script = savedScript; _ctx = savedCtx; _w = savedW; }
+        }
+        return null;
     }
 
     private static string FieldTarget(MemberInfo m) => m.HasAccessors ? m.Backing : m.CsName;
