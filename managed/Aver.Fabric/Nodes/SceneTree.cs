@@ -172,14 +172,23 @@ public class Window : Viewport
     public bool HasFocus() => WindowControl.Focused;
 
     private Vector2I? _lastEngineSize;
+    private Vector2? _lastPixels;
 
-    // Called once a frame by Input.BeginFrame with the engine: raises size_changed when the window's real size moved (the player resized it, a request
-    // was applied), and not before the game has published a size.
+    // Called once a frame by Input.BeginFrame with the engine: when the window's real size moved (the player resized it, a request was applied) or its UI
+    // rectangle did (the editor's level viewport during Play), lays the Controls out again and raises size_changed; nothing before the game has published a
+    // size. The first frame lays out once against the real rectangle, which a Control that entered before the engine's UI frame opened may not have had.
     internal void PollEngineSize()
     {
         Vector2I now = WindowControl.GetSize();
-        if (_lastEngineSize is { } last && last != now) EmitSignal(SignalName.SizeChanged);
+        Vector2 px = WindowPixels;
+        bool first = _lastPixels == null;
+        bool moved = (_lastEngineSize is { } last && last != now) || (_lastPixels is { } lp && lp != px);
         _lastEngineSize = now;
+        _lastPixels = px;
+        // Text measured before the engine lent its font holds an estimate: measured again now, once.
+        if (first) foreach (Control c in Gui.AllControls().ToList()) c.UpdateMinimumSize();
+        if (first || moved) ContentChanged();
+        if (moved) EmitSignal(SignalName.SizeChanged);
     }
 
     public override Vector2 GetMousePosition() => WindowToContent(Input.MousePosition);
@@ -291,7 +300,8 @@ public class Window : Viewport
     /// stretch mode is on. Without the engine library the stretch is not computed and this is the window's size.</summary>
     public override Rect2 GetVisibleRect()
     {
-        if (ContentScaleMode == ContentScaleModeEnum.Disabled && ContentScaleFactor == 1f) return base.GetVisibleRect();
+        // No stretch: the window's own pixels, which in the engine is its UI rectangle (the editor's level viewport during Play), not the project's window size.
+        if (ContentScaleMode == ContentScaleModeEnum.Disabled && ContentScaleFactor == 1f) return new Rect2(Vector2.Zero, WindowPixels);
         Vector2 c = Compute().Content;
         return new Rect2(Vector2.Zero, c);
     }

@@ -62,8 +62,9 @@ public static class ClassDB
     // An object for a scene's Object(Class, "p": v, ...) value. An unknown class is an error the reader reports as bad text.
     internal static Variant Build(string @class, IEnumerable<(string Name, Variant Value)> properties)
     {
-        System.Type? t = TypeOf(@class);
-        if (t == null || !CanInstantiate(@class)) throw new FormatException($"unknown or abstract class '{@class}'");
+        // Fabric's classes, then the game's script classes (a custom Resource the converter wrote under its script's class).
+        System.Type? t = ScriptClasses.FindObject(@class);
+        if (t == null || t.IsAbstract || t.GetConstructor(System.Type.EmptyTypes) == null) throw new FormatException($"unknown or abstract class '{@class}'");
         var o = (GodotObject)Activator.CreateInstance(t)!;
         foreach ((string name, Variant value) in properties)
         {
@@ -81,12 +82,13 @@ public static class ClassDB
     }
 
     // A dictionary with a "__class" key stands for an object of that class with the other entries as its properties (the converter
-    // writes a physics material this way). Null when the class is unknown or is not assignable to the wanted type.
+    // writes a physics material, and a custom Resource under its script's class, this way). Null when the class is unknown or is not
+    // assignable to the wanted type.
     internal static object? FromDictionary(Collections.Dictionary d, System.Type wanted)
     {
         if (!d.TryGetValue("__class", out Variant cls)) return null;
-        System.Type? t = TypeOf(cls.AsString());
-        if (t == null || !wanted.IsAssignableFrom(t) || !CanInstantiate(cls.AsString())) return null;
+        System.Type? t = ScriptClasses.FindObject(cls.AsString());
+        if (t == null || !wanted.IsAssignableFrom(t) || t.IsAbstract || t.GetConstructor(System.Type.EmptyTypes) == null) return null;
         var props = new List<(string, Variant)>();
         foreach (KeyValuePair<Variant, Variant> kv in d)
             if (kv.Key.AsString() != "__class") props.Add((kv.Key.AsString(), kv.Value));

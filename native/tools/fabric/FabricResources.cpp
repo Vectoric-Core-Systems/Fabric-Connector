@@ -1412,15 +1412,30 @@ Var Converter::occluderObject(const std::string& type, const std::vector<gd::God
     return makeObject(type, std::move(entries));
 }
 
+ScriptInfo* Converter::resourceScript(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc) {
+    const Var* s = findProp(props, "script");
+    if (!s || s->type != VType::ExtResource) return nullptr;
+    const gd::GodotExtResource* e = doc.findExt(s->s);
+    if (!e || e->type != "Script") return nullptr;
+    ScriptInfo* si = script(e->path);
+    return si && si->exists && !si->className.empty() ? si : nullptr;
+}
+
 Var Converter::genericResourceDict(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc,
                                    const Where& w, const char* why) {
+    // A custom Resource class (a script on the resource) is built as the class its script converts to, so a typed field or list holds it.
+    ScriptInfo* si = resourceScript(props, doc);
     std::vector<std::pair<std::string, Var>> entries;
-    entries.emplace_back("__class", makeString(type));
+    entries.emplace_back("__class", makeString(si ? si->className : type));
     for (const gd::GodotProperty& p : props) {
         if (ignorableResourceProp(p.name)) continue;
         entries.emplace_back(p.name, convertValue(p.value, doc, w, p.name));
     }
-    if (type == "ParticleProcessMaterial")
+    if (si) {
+        si->uses.push_back(doc.file + (w.node.empty() ? std::string() : ":" + w.node));
+        report_.add("resource", doc.file, w.node, type, "", Rating::Converted,
+                    "a custom resource: built at run time as " + si->className + ", the class its script " + si->path + " converts to", 0);
+    } else if (type == "ParticleProcessMaterial")
         report_.add("resource", doc.file, w.node, type, "", Rating::Converted,
                     "held as a ParticleProcessMaterial for scripts; the emitter's .ocparticle is written from its values (the particle node's own rows say what each property became)", 0);
     else if (type == "SpriteFrames")
@@ -1752,6 +1767,9 @@ void Converter::convertStandaloneResources() {
                 report_.add("resource", res, "", t, "", Rating::Converted, "converted where a scene uses it", 0);
             else if (isOccluderType(t))
                 report_.add("resource", res, "", t, "", Rating::Approximated, "kept as Aver.Fabric's " + t + " where a scene uses it; occlusion culling is automatic", 0);
+            else if (const ScriptInfo* si = resourceScript(r->props, *r))
+                report_.add("resource", res, "", t, "", Rating::Converted,
+                            "a custom resource: built as " + si->className + " where a scene uses it (a script's load() of this file finds nothing yet)", 0);
             else
                 report_.add("resource", res, "", t, "", Rating::Unsupported, "a " + t + " resource has no Aver counterpart yet", 0);
         } else if (isModelExt(ext)) {

@@ -345,11 +345,19 @@ internal static class ScriptClasses
     private static readonly Dictionary<string, System.Type> s_byName = new(StringComparer.Ordinal);
     private static int s_assemblies = -1;
 
+    /// <summary>A node class: Fabric's own or a script's.</summary>
     internal static System.Type? Find(string name)
+    {
+        System.Type? t = FindObject(name);
+        return t != null && typeof(Node).IsAssignableFrom(t) ? t : null;
+    }
+
+    /// <summary>Any class an object can be built as: Fabric's own, or a script's (a node, or a custom Resource such as class_name WeaponSlot extends Resource).</summary>
+    internal static System.Type? FindObject(string name)
     {
         if (name.Length == 0) return null;
         System.Type? t = ClassDB.TypeOf(name);
-        if (t != null && typeof(Node).IsAssignableFrom(t)) return t;
+        if (t != null) return t;
         lock (s_byName)
         {
             if (s_byName.TryGetValue(name, out System.Type? hit)) return hit;
@@ -365,7 +373,7 @@ internal static class ScriptClasses
                     catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(x => x != null).ToArray()!; }
                     catch (Exception) { continue; }   // an assembly that cannot be read has no script classes we can use
                     foreach (System.Type c in types)
-                        if (typeof(Node).IsAssignableFrom(c) && !c.IsAbstract && c.GetConstructor(System.Type.EmptyTypes) != null)
+                        if (typeof(GodotObject).IsAssignableFrom(c) && !c.IsAbstract && c.GetConstructor(System.Type.EmptyTypes) != null)
                             s_byName.TryAdd(Aver.Framework.ClassNames.Of(c), c);
                 }
             }

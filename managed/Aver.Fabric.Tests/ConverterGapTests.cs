@@ -26,6 +26,7 @@ static class ConverterGapTests
         T.Run("converter gap: ProjectSettings.get_setting returns every setting of project.godot, with Godot's type", ProjectSettingsKept);
         T.Run("converter gap: a second Play does not leave the first session's autoloads and scene in the tree", SecondSessionTree);
         T.Run("converter gap: a stopped session's tree, GUI, pointer and resources are gone before the next session's nodes enter", StoppedSessionSlate);
+        T.Run("converter gap: custom Resource classes in a scene (an Array[WeaponSlot] of slots holding weapon data) are built as the script classes", CustomResourcesInScene);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -424,4 +425,39 @@ static class ConverterGapTests
         T.Check("the wipe happens once per Stop", SceneTree.Instance == next);
         T.Reset();
     }
+
+    // As the converter writes Godot4-FPS-Template's weapon_stack: each slot and its weapon a "__class" dictionary naming the class its script converts to.
+    private static void CustomResourcesInScene()
+    {
+        Variant v = VariantText.Parse("Array[ExtResource(\"6_x\")]([{\"__class\": \"GapWeaponSlot\", \"current_ammo\": 5, " +
+                                      "\"weapon\": {\"__class\": \"GapWeaponData\", \"weapon_name\": \"blasterI\", \"magazine\": 30}}])");
+        var holder = new GapWeaponHolder();
+        T.Check("the scene value sets the typed list", MemberAccess.TrySet(holder, "weapon_stack", v));
+        T.Check("the entry is built as the script class", holder.WeaponStack.Count == 1 && holder.WeaponStack[0] is GapWeaponSlot);
+        GapWeaponSlot? slot = holder.WeaponStack.Count == 1 ? holder.WeaponStack[0] : null;
+        T.Check("with its own values and a nested custom resource", slot is { CurrentAmmo: 5, Weapon: { WeaponName: "blasterI", Magazine: 30 } });
+        T.Check("every read gives the same object, so a change to it stays (current_ammo -= 1) and find() works",
+                slot != null && ReferenceEquals(holder.WeaponStack[0], slot) && holder.WeaponStack.IndexOf(slot) == 0);
+        Variant one = VariantText.Parse("{\"__class\": \"GapWeaponData\", \"weapon_name\": \"blasterQ\"}");
+        T.Check("a single custom resource field is built too", one.As<GapWeaponData>() is { WeaponName: "blasterQ" });
+        holder.Free();
+    }
+}
+
+// The script classes of CustomResourcesInScene: a custom Resource holding another, and the node whose typed list holds them.
+public class GapWeaponData : Resource
+{
+    public string WeaponName { get; set; } = "";
+    public int Magazine { get; set; }
+}
+
+public class GapWeaponSlot : Resource
+{
+    public GapWeaponData? Weapon { get; set; }
+    public int CurrentAmmo { get; set; }
+}
+
+public class GapWeaponHolder : Node
+{
+    public Aver.Fabric.Collections.Array<GapWeaponSlot> WeaponStack { get; set; } = new();
 }

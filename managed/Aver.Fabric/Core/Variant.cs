@@ -435,7 +435,16 @@ public readonly struct Variant : IEquatable<Variant>
         if (t.IsGenericType)
         {
             System.Type def = t.GetGenericTypeDefinition();
-            if (def == typeof(Collections.Array<>)) return Activator.CreateInstance(t, AsGodotArray());
+            if (def == typeof(Collections.Array<>))
+            {
+                Collections.Array a = AsGodotArray();
+                // Array[WeaponSlot] from a scene: each "__class" entry becomes its object once, stored back, so every read sees the same one.
+                System.Type elem = t.GetGenericArguments()[0];
+                if (typeof(GodotObject).IsAssignableFrom(elem))
+                    for (int i = 0; i < a.Count; i++)
+                        if (a[i].VariantType == Type.Dictionary && ClassDB.FromDictionary(a[i].AsGodotDictionary(), elem) is GodotObject built) a[i] = built;
+                return Activator.CreateInstance(t, a);
+            }
             if (def == typeof(Collections.Dictionary<,>)) return Activator.CreateInstance(t, AsGodotDictionary());
         }
         if (typeof(GodotObject).IsAssignableFrom(t) || t == typeof(object))

@@ -285,9 +285,13 @@ internal static class UiText
         if (LineProvider != null) return LineProvider(family, px) + extra;
         var key = (family, (int)MathF.Round(px * 4f));
         if (s_lines.TryGetValue(key, out float known)) return known + extra;
-        float h = EngineMeasure("A", family, px, 0, out _, out float eh) && eh > 0f ? eh : px * FallbackLine;
-        s_lines[key] = h;
-        return h + extra;
+        // Only a real measurement is kept: one taken before the engine lent its font would hold the estimate for the rest of the session.
+        if (EngineMeasure("A", family, px, 0, out _, out float eh) && eh > 0f)
+        {
+            s_lines[key] = eh;
+            return eh + extra;
+        }
+        return px * FallbackLine + extra;
     }
 
     internal static float Ascent(Font? font, float px) => LineHeight(font, px) * AscentShare;
