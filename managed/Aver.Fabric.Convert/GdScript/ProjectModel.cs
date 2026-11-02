@@ -109,6 +109,23 @@ internal sealed class ProjectModel
     public readonly List<ScriptInfo> Scripts = new();           // top-level scripts in manifest order
     public readonly Dictionary<string, ScriptInfo> ByPath = new(StringComparer.Ordinal);
     public readonly Dictionary<string, ScriptInfo> ByClassName = new(StringComparer.Ordinal);
+
+    /// <summary>A path a script names (preload, extends) made absolute: Godot reads "./x.gd", "../x.gd" and a bare "x.gd" from the script's own folder.</summary>
+    public static string ResolveRes(string path, ScriptInfo from)
+    {
+        if (path.Contains("://", StringComparison.Ordinal) || path.StartsWith('/')) return path;
+        string own = from.Root.ResPath;
+        if (!own.StartsWith("res://", StringComparison.Ordinal)) return path;
+        var parts = own["res://".Length..].Split('/').ToList();
+        parts.RemoveAt(parts.Count - 1);   // the script's file name
+        foreach (string p in path.Split('/'))
+        {
+            if (p is "" or ".") continue;
+            if (p == "..") { if (parts.Count > 0) parts.RemoveAt(parts.Count - 1); }
+            else parts.Add(p);
+        }
+        return "res://" + string.Join('/', parts);
+    }
     public readonly List<AutoloadInfo> Autoloads = new();
     public readonly List<string> Problems = new();
 
@@ -254,7 +271,14 @@ internal sealed class ProjectModel
                     var mi = new MemberInfo { Kind = MK.Var, Name = vd.Name, CsName = Naming.FieldName(vd.Name), Decl = vd, Owner = s, IsStatic = vd.IsStatic };
                     mi.Exported = vd.Annotations.Any(a => a.Name.StartsWith("export", StringComparison.Ordinal) && !a.Name.StartsWith("export_group") && !a.Name.StartsWith("export_sub") && !a.Name.StartsWith("export_cat"));
                     Add(s, mi, used);
-                    if (vd.Setter != null || vd.Getter != null) mi.Backing = "_" + Naming.Camel(vd.Name.TrimStart('_'));
+                    if (vd.Setter != null || vd.Getter != null)
+                    {
+                        // `var _target: set = ...` keeps its underscore as the property's name, so the field takes another.
+                        string backing = "_" + Naming.Camel(vd.Name.TrimStart('_'));
+                        while (backing == mi.CsName || used.Contains(backing)) backing = "_" + backing;
+                        mi.Backing = backing;
+                        used.Add(backing);
+                    }
                     break;
                 }
                 case FuncDecl fd:
@@ -325,7 +349,7 @@ internal sealed class ProjectModel
         }
         if (e.ResPath != null)
         {
-            string path = e.ResPath;
+            string path = ResolveRes(e.ResPath, s);
             if (ByPath.TryGetValue(path, out ScriptInfo? target))
             {
                 ScriptInfo? t = target;

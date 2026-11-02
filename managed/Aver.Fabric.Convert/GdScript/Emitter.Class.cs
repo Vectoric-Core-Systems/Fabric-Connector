@@ -393,7 +393,7 @@ internal sealed partial class GdEmitter
         mi.ConstAlias = "";
         var cd = (ConstDecl)mi.Decl;
         if (cd.Value is PreloadExpr p && p.Path is Literal { Kind: LitKind.String } lit && lit.Value is string path &&
-            path.EndsWith(".gd", StringComparison.Ordinal) && _m.ByPath.TryGetValue(path, out ScriptInfo? target))
+            path.EndsWith(".gd", StringComparison.Ordinal) && _m.ByPath.TryGetValue(ProjectModel.ResolveRes(path, mi.Owner), out ScriptInfo? target))
             mi.AliasScript = target;
         else if (cd.Value is Identifier id && _m.ByClassName.TryGetValue(id.Name, out ScriptInfo? byName) && mi.Owner.Find(id.Name) == null)
             mi.AliasScript = byName;

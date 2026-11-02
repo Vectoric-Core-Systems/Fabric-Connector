@@ -31,6 +31,7 @@ static class ConverterGapTests
         T.Run("converter gap: an exported Array[Node3D] stored as NodePaths holds the nodes by _ready (bukkbeek's weapons_array)", NodeArrayExport);
         T.Run("converter gap: Godot 4.5 @abstract classes and functions, and BaseMaterial3D's flags and features by number (COGITO)", AbstractAndMaterialFlags);
         T.Run("converter gap: an addon's editor-only scripts (EditorPlugin, EditorInterface, and what loads them) are left out of the game (COGITO)", EditorOnlyScripts);
+        T.Run("converter gap: preload(\"./x.gd\") from the script's own folder, and `var _name` with a setter (COGITO)", RelativePreloadAndUnderscoreSetter);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -528,6 +529,22 @@ static class ConverterGapTests
         string[] left = r.LeftOut.Select(i => i.File).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         T.Check("the plugin, the dock that names it and the script that preloads it are left out, each reported",
             string.Join(",", left) == "res://gapdock.gd,res://gaploader.gd,res://gapplugin.gd" && r.Items.Count(i => i.Reason.StartsWith("left out of the game")) == 3, string.Join(",", left));
+    }
+
+    // COGITO: `const InputMapUpdater = preload("./input_map_updater.gd")` then InputMapUpdater.new() (a plain Resource before), and
+    // `var _interactable = null: set = _set_interactable`, whose property and backing field were both named _interactable.
+    private static void RelativePreloadAndUnderscoreSetter()
+    {
+        ConversionResult r = Many(
+            ("GapHelper", "extends RefCounted\n\nfunc value() -> int:\n\treturn 5\n"),
+            ("GapUser", "extends Node\n\nconst Helper = preload(\"./gaphelper.gd\")\nconst Same = preload(\"../gaphelper.gd\")\n\nvar sets := 0\n" +
+                "var _target = null:\n\tset = _set_target\n\nfunc _set_target(v) -> void:\n\t_target = v\n\tsets += 1\n\n" +
+                "func run() -> int:\n\t_target = 3\n\treturn Helper.new().value() * 100 + Same.new().value() * 10 + sets + int(_target)\n"));
+        T.Check("it compiles (before: Resource has no New, and _target was declared twice)", r.Success, Errors(r));
+        if (!r.Success) return;
+        Node user = New<Node>(r, "GapUser");
+        T.Check("both preloads are the script, and the setter runs once: 500 + 50 + 1 + 3", (long)user.GetType().GetMethod("Run")!.Invoke(user, null)! == 554);
+        user.Free();
     }
 }
 

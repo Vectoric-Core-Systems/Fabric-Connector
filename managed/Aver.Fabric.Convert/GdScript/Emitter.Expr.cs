@@ -560,7 +560,7 @@ internal sealed partial class GdEmitter
     {
         if (p.Path is Literal { Kind: LitKind.String } lit)
         {
-            string path = (string)lit.Value!;
+            string path = ProjectModel.ResolveRes((string)lit.Value!, _script);
             if (path.EndsWith(".gd", StringComparison.Ordinal) && _m.ByPath.TryGetValue(path, out ScriptInfo? s))
                 return TypeRef(GdType.OfScript(s), QualifiedScript(s));
             GdType t = Obj(ResourceClassFor(path));
