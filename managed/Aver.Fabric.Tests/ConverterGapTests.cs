@@ -29,6 +29,7 @@ static class ConverterGapTests
         T.Run("converter gap: custom Resource classes in a scene (an Array[WeaponSlot] of slots holding weapon data) are built as the script classes", CustomResourcesInScene);
         T.Run("converter gap: a 3D node under a non-3D parent (a SubViewport's camera below a CanvasLayer of the moving player) is placed in the world directly", ThreeDUnderNonThreeD);
         T.Run("converter gap: an exported Array[Node3D] stored as NodePaths holds the nodes by _ready (bukkbeek's weapons_array)", NodeArrayExport);
+        T.Run("converter gap: Godot 4.5 @abstract classes and functions, and BaseMaterial3D's flags and features by number (COGITO)", AbstractAndMaterialFlags);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -486,6 +487,28 @@ static class ConverterGapTests
         T.Check("the list holds the nodes when _Ready runs (a missing one is left out)", manager.SeenAtReady == 2, manager.SeenAtReady.ToString());
         T.Check("in their order", manager.WeaponsArray.Count == 2 && ReferenceEquals(manager.WeaponsArray[0], knife) && ReferenceEquals(manager.WeaponsArray[1], pistol));
         manager.Free();
+    }
+
+    // COGITO: `@abstract class_name CogitoPlayer` lost its `extends CharacterBody3D` (the parser rejected the annotation and skipped the next line), and
+    // `@abstract func create_new_state() -> CogitoPlayerState` has no body. Its material tool reads FLAG_* / FEATURE_* inherited from BaseMaterial3D.
+    private static void AbstractAndMaterialFlags()
+    {
+        ConversionResult r = Many(
+            ("GapShape", "@abstract class_name GapShape\nextends Node3D\n\n@abstract func area() -> float\n\n@abstract func reset()\n\nfunc doubled() -> float:\n\treturn area() * 2.0\n"),
+            ("GapSquare", "class_name GapSquare\nextends GapShape\n\nvar side := 3.0\n\nfunc area() -> float:\n\treturn side * side\n\nfunc reset():\n\tside = 1.0\n"),
+            ("GapMatFlags", "class_name GapMatFlags\nextends StandardMaterial3D\n\nfunc run() -> int:\n\tset_flag(FLAG_DISABLE_DEPTH_TEST, true)\n\tset_flag(FLAG_USE_Z_CLIP_SCALE, true)\n" +
+                "\tset_feature(FEATURE_RIM, true)\n\tvar n := 0\n\tif no_depth_test: n += 1\n\tif get_flag(FLAG_USE_Z_CLIP_SCALE): n += 2\n\tif rim_enabled and get_feature(FEATURE_RIM): n += 4\n" +
+                "\tif not get_feature(FEATURE_REFRACTION): n += 8\n\treturn n\n"));
+        T.Check("it compiles (before: GapShape became a RefCounted, the bodiless functions and FLAG_* did not compile)", r.Success, Errors(r));
+        if (!r.Success) return;
+        Node3D sq = New<Node3D>(r, "GapSquare");
+        T.Check("the abstract class keeps its base (GapSquare is a Node3D through GapShape)", sq.GetType().BaseType?.Name == "GapShape");
+        T.Check("the subclass's function is what the base's call reaches: 3 * 3 * 2", (double)sq.GetType().GetMethod("Doubled")!.Invoke(sq, null)! == 18.0);
+        sq.GetType().GetMethod("Reset")!.Invoke(sq, null);
+        T.Check("a bodiless function without a return value is overridden too", (double)sq.GetType().GetMethod("Doubled")!.Invoke(sq, null)! == 2.0);
+        sq.Free();
+        BaseMaterial3D mat = (BaseMaterial3D)Activator.CreateInstance(s_loaded.GetValue(r, x => Assembly.Load(x.Assembly!)).GetType("GapMatFlags")!)!;
+        T.Check("set_flag / set_feature reach the properties, a flag without one is kept: 1 + 2 + 4 + 8", (long)mat.GetType().GetMethod("Run")!.Invoke(mat, null)! == 15);
     }
 }
 

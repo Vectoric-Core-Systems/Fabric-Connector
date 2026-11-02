@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-876 public types and 9440 public members, read from `managed/Aver.Fabric/` (169 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+878 public types and 9484 public members, read from `managed/Aver.Fabric/` (170 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -1770,6 +1770,10 @@ Values: `Normal = 0`, `Pressed = 1`, `Hover = 2`, `Disabled = 3`, `HoverPressed 
 
 `public class BaseMaterial3D : Material`
 
+- `public bool GetFlag(Flags flag)`
+- `public void SetFlag(Flags flag, bool enable)`
+- `public bool GetFeature(Feature feature)`
+- `public void SetFeature(Feature feature, bool enable)`
 - `public bool EmissionEnabled { get; set; }`
 - `public Color Emission { get; set; }` - The glow colour (sRGB, as Godot stores it).
 - `public float EmissionEnergyMultiplier { get; set; }`
@@ -1923,6 +1927,18 @@ Values: `Disabled = 0`, `PixelAlpha = 1`, `PixelDither = 2`, `ObjectDither = 3`
 `public enum EmissionOperatorEnum`
 
 Values: `Add = 0`, `Multiply = 1`
+
+### BaseMaterial3D.Feature
+
+`public enum Feature`
+
+Values: `Emission = 0`, `NormalMapping = 1`, `Rim = 2`, `Clearcoat = 3`, `Anisotropy = 4`, `AmbientOcclusion = 5`, `Heightmapping = 6`, `SubsurfaceScattering = 7`, `SubsurfaceTransmittance = 8`, `Backlight = 9`, `Refraction = 10`, `Detail = 11`, `BentNormalMapping = 12`, `Max = 13`
+
+### BaseMaterial3D.Flags
+
+`public enum Flags`
+
+Values: `DisableDepthTest = 0`, `AlbedoFromVertexColor = 1`, `SrgbVertexColor = 2`, `UsePointSize = 3`, `FixedSize = 4`, `BillboardKeepScale = 5`, `Uv1UseTriplanar = 6`, `Uv2UseTriplanar = 7`, `Uv1UseWorldTriplanar = 8`, `Uv2UseWorldTriplanar = 9`, `AoOnUv2 = 10`, `EmissionOnUv2 = 11`, `AlbedoTextureForceSrgb = 12`, `DontReceiveShadows = 13`, `DisableAmbientLight = 14`, `UseShadowToOpacity = 15`, `UseTextureRepeat = 16`, `InvertHeightmap = 17`, `SubsurfaceModeSkin = 18`, `ParticleTrailsMode = 19`, `AlbedoTextureMsdf = 20`, `DisableFog = 21`, `DisableSpecularOcclusion = 22`, `UseZClipScale = 23`, `UseFovOverride = 24`, `Max = 25`
 
 ### BaseMaterial3D.ShadingModeEnum
 

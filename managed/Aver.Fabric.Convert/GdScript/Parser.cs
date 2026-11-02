@@ -318,6 +318,8 @@ internal sealed class Parser
 
         if (m == null)
         {
+            // Godot 4.5's `@abstract class_name Name` (or before `extends`) marks the script's own class.
+            if (t.Text is "class_name" or "extends" && anns.All(a => a.Name == "abstract")) { c.Annotations.AddRange(anns); return; }
             if (anns.Count > 0) throw Err(t, $"\"@{anns[^1].Name}\" cannot be used on this");
             return;
         }
@@ -525,6 +527,12 @@ internal sealed class Parser
         f.Params = ParseParams(")");
         ExpectOp(")");
         if (MatchOp("->")) f.ReturnType = ParseType();
+        // An @abstract function (Godot 4.5) is a signature with no body: it is written as one that does nothing, for subclasses to override.
+        if (!IsOp(":") && Cur.Kind is TokKind.Newline or TokKind.Eof or TokKind.Dedent)
+        {
+            f.Body = Fin(new Block(), Cur);
+            return Fin(f, start);
+        }
         ExpectOp(":", "after the function signature");
         f.Body = ParseSuite();
         return Fin(f, start);
