@@ -33,6 +33,10 @@ public partial class Node
     /// <summary>Called once when the node and all its children have entered the tree: children first.</summary>
     public virtual void _Ready() { }
 
+    /// <summary>A converted script's @onready variables, set just before _Ready as Godot does: every class of the script's chain sets its own
+    /// (base first, each override calls base), whatever its _ready does.</summary>
+    public virtual void _OnreadyVars() { }
+
     /// <summary>Called every frame. <paramref name="delta"/> is the frame time in seconds, scaled by the time scale.</summary>
     public virtual void _Process(double delta) { }
 
@@ -204,6 +208,7 @@ public partial class Node
         if (_readyDone) return;
         _readyDone = true;
         OnReadying();
+        _OnreadyVars();
         _Notification(NotificationReady);
         _Ready();
         EmitSignal(SignalName.Ready);

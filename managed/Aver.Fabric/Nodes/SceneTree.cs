@@ -728,15 +728,43 @@ public partial class SceneTree : GodotObject
     // Head of a pass: the frame signal. Runs before any node's _Process / _PhysicsProcess.
     internal void BeginPass(double dt, bool physics, double? realDelta = null)
     {
+        long t0 = Stopwatch.GetTimestamp();
         if (!physics) { LastRealDelta = realDelta ?? RealDelta(); RenderingServer.FrameStarting(); }
         PollMultiplayers(dt, physics);   // G6 NET2: Godot polls its multiplayer APIs at the head of the process frame, before the frame signal
+        long t1 = Stopwatch.GetTimestamp();
         EmitSignal(physics ? SignalName.PhysicsFrame : SignalName.ProcessFrame);
+        Cost(physics ? "physics_frame handlers" : "process_frame handlers", Stopwatch.GetTimestamp() - t1);
+        Cost("frame start, multiplayer poll", t1 - t0);
+    }
+
+    // What the tree's own work cost over a frame (the frame signals' handlers, timers, tweens, the UI): a frame over 100 ms names it, at most every 5 s.
+    private readonly Dictionary<string, long> _frameCost = new(StringComparer.Ordinal);
+    private long _lastCostReport;
+
+    private void Cost(string what, long ticks)
+    {
+        _frameCost.TryGetValue(what, out long t);
+        _frameCost[what] = t + ticks;
+    }
+
+    private void ReportFrameCost()
+    {
+        long total = _frameCost.Values.Sum();
+        long now = Stopwatch.GetTimestamp();
+        if (total * 1000.0 / Stopwatch.Frequency >= 100.0 && (_lastCostReport == 0 || now - _lastCostReport >= 5 * Stopwatch.Frequency))
+        {
+            _lastCostReport = now;
+            Aver.Scripting.Log.Warn("[Fabric] slow frame in the scene tree's own work: " + string.Join(", ", _frameCost.OrderByDescending(kv => kv.Value)
+                .Where(kv => kv.Value > 0).Select(kv => $"{kv.Key} {kv.Value * 1000.0 / Stopwatch.Frequency:0.0} ms")));
+        }
+        _frameCost.Clear();
     }
 
     // Tail of a pass: the timers, then the tweens, as Godot does after the nodes.
     internal void EndPass(double dt, double realDt, bool physics)
     {
         bool paused = Paused;
+        long t0 = Stopwatch.GetTimestamp();
         foreach (SceneTreeTimer t in _timers.ToArray())
         {
             if (t.ProcessInPhysics != physics) continue;
@@ -746,19 +774,27 @@ public partial class SceneTree : GodotObject
             _timers.Remove(t);
             t.Fire();
         }
+        long t1 = Stopwatch.GetTimestamp();
+        Cost("timers", t1 - t0);
         Tween.TweenProcessMode mode = physics ? Tween.TweenProcessMode.Physics : Tween.TweenProcessMode.Idle;
         foreach (Tween tw in _tweens.ToArray())
         {
             if (tw.ProcessMode != mode) continue;
             if (!tw.Advance(dt, realDt, paused)) _tweens.Remove(tw);
         }
+        Cost("tweens", Stopwatch.GetTimestamp() - t1);
         // Like Godot's physics_frames, the count of steps that have finished: a press made between steps is "just pressed" in the next one.
         if (physics) _managedPhysicsFrames++;
         else
         {
+            long g0 = Stopwatch.GetTimestamp();
             Gui.FrameUpdate(dt);   // G5 U1: layout, tooltips and Control drawing at the end of the idle frame
+            long g1 = Stopwatch.GetTimestamp();
+            Cost("UI layout and drawing", g1 - g0);
             DrawCollisionOutline();
             RenderingServer.FrameEnding();
+            Cost("collision outline, rendering frame end", Stopwatch.GetTimestamp() - g1);
+            ReportFrameCost();
         }
     }
 

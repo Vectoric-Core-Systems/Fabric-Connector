@@ -1864,14 +1864,17 @@ bool Converter::emitLevel(const std::string& sceneRes, FNode& root, fmt::OcWorld
     LevelScan scan;
     scan.sceneRoot = &root;
 
+    // The autoloads in every level, as Godot adds them whichever scene runs first (the editor opens any level; a scene change made by
+    // script loads a level as a PackedScene, which leaves its persistent placements out, so they are never doubled).
     std::vector<std::unique_ptr<FNode>> autoloads;
-    if (isStart) {
+    {
         for (const gd::GodotAutoload& a : project_.autoloads) {
             const std::string res = gd::GodotProjectFs::isUid(a.path) ? fs_.resolve(a.path, "") : gd::GodotProjectFs::normalizeRes(a.path);
             const Where w{"res://project.godot", a.name, ""};
             if (!a.singleton) {
-                report_.add("setting", "res://project.godot", a.name, "Autoload", "", Rating::Approximated,
-                            "an autoload without the singleton flag is not added to the tree in Godot either; nothing is placed", a.line);
+                if (isStart)
+                    report_.add("setting", "res://project.godot", a.name, "Autoload", "", Rating::Approximated,
+                                "an autoload without the singleton flag is not added to the tree in Godot either; nothing is placed", a.line);
                 continue;
             }
             std::string ext;
@@ -1893,14 +1896,14 @@ bool Converter::emitLevel(const std::string& sceneRes, FNode& root, fmt::OcWorld
                 node->line = a.line;
             }
             if (!node) {
-                report_.add("setting", "res://project.godot", a.name, "Autoload", "", Rating::Unsupported, "the autoload " + a.path + " could not be converted", a.line);
+                if (isStart) report_.add("setting", "res://project.godot", a.name, "Autoload", "", Rating::Unsupported, "the autoload " + a.path + " could not be converted", a.line);
                 continue;
             }
             node->name = a.name;
             node->persistent = true;
             node->owner = nullptr;
-            if (!node->scriptPath.empty() || ext == ".tscn" || ext == ".scn")
-                report_.add("setting", "res://project.godot", a.name, "Autoload", "", Rating::Converted, "a persistent top-level node, first in the start level", a.line);
+            if (isStart && (!node->scriptPath.empty() || ext == ".tscn" || ext == ".scn"))
+                report_.add("setting", "res://project.godot", a.name, "Autoload", "", Rating::Converted, "a persistent top-level node, first in every level", a.line);
             autoloads.push_back(std::move(node));
         }
     }

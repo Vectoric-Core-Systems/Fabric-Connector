@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-897 public types and 9746 public members, read from `managed/Aver.Fabric/` (174 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+899 public types and 9756 public members, read from `managed/Aver.Fabric/` (175 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -7196,6 +7196,7 @@ Values: `Stretch = 0`, `Tile = 1`, `TileFit = 2`
 - `public virtual void _EnterTree()` - Called when the node enters the tree, parents before children.
 - `public virtual void _ExitTree()` - Called when the node leaves the tree, children before parents.
 - `public virtual void _Ready()` - Called once when the node and all its children have entered the tree: children first.
+- `public virtual void _OnreadyVars()` - A converted script's @onready variables, set just before _Ready as Godot does: every class of the script's chain sets its own (base first, each override calls base), whatever its _ready does.
 - `public virtual void _Process(double delta)` - Called every frame.
 - `public virtual void _PhysicsProcess(double delta)` - Called on every fixed physics step.
 - `public virtual void _Input(InputEvent @event)` - Called for each input event, before the UI and before _UnhandledInput.
@@ -9009,6 +9010,18 @@ Values: `Ignore = 0`, `Reuse = 1`, `Replace = 2`
 `public enum ThreadLoadStatus`
 
 Values: `InvalidResource = 0`, `InProgress = 1`, `Failed = 2`, `Loaded = 3`
+
+### ResourceSaver
+
+`public static class ResourceSaver`
+
+- `public static Error Save(Resource resource, string path = "", SaverFlags flags = SaverFlags.None)` - Writes the resource to path (its own path when empty).
+
+### ResourceSaver.SaverFlags
+
+`public enum SaverFlags : long`
+
+Values: `None = 0`, `RelativePaths = 1`, `BundleResources = 2`, `ChangePath = 4`, `OmitEditorProperties = 8`, `SaveBigEndian = 16`, `Compress = 32`, `ReplaceSubresourcePaths = 64`
 
 ### RichTextEffect
 

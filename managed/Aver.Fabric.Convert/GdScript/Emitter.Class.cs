@@ -193,21 +193,19 @@ internal sealed partial class GdEmitter
         // Constructor: field initialisers that read instance state, then _init.
         EmitConstructor(s);
 
-        // Functions in source order; _ready gets the @onready assignments.
-        bool hasReady = false;
+        // Functions in source order; the @onready assignments in _OnreadyVars.
         foreach (Member m in c.Members)
         {
             if (m is not FuncDecl fd) continue;
             MemberInfo? mi = s.ByName.GetValueOrDefault(fd.Name);
             if (mi == null || !ReferenceEquals(mi.Decl, fd) || fd.Name == "_init") continue;
             _w.Line();
-            if (fd.Name == "_ready") hasReady = true;
             EmitFunction(s, mi, onready);
         }
-        if (!hasReady && onready.Count > 0)
+        if (onready.Count > 0 && onready.Any(m => ((VarDecl)m.Decl).Init != null))
         {
             _w.Line();
-            EmitSyntheticReady(s, onready);
+            EmitOnreadyVars(s, onready);
         }
 
         _w.Close();

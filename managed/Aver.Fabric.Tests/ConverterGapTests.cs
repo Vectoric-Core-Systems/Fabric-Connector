@@ -38,6 +38,8 @@ static class ConverterGapTests
         T.Run("converter gap: the runtime calls COGITO makes (key names, settings, singletons, weights, images, zips, clipboard)", RuntimeCallsRoundThree);
         T.Run("converter gap: a script on a more derived node type (extends Node3D on a RigidBody3D) is based on that type; RigidBody3D stands in for static bodies", ScriptBaseFromScenes);
         T.Run("converter gap: by-name accessors (set_visible, set_albedo), editor-only calls, and Aver.Fabric internals out of a name's reach", ByNameAccessors);
+        T.Run("converter gap: a base class's @onready is set when a subclass's own _ready does not call super", OnreadyThroughSubclass);
+        T.Run("converter gap: ResourceSaver.save writes a game's own resource and ResourceLoader.load reads it back", ResourceSaverRoundTrip);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -650,6 +652,43 @@ static class ConverterGapTests
         foreach (GodotObject o in new GodotObject[] { shelf, lift, zone, rigid }) o.Free();
     }
 
+    // COGITO: HoldInteraction has `@onready var parent_node = get_parent()`; DualInteraction extends it with its own _ready and no super().
+    private static void OnreadyThroughSubclass()
+    {
+        ConversionResult r = Many(
+            ("GapHold", "extends Node3D\nclass_name GapHold\n@onready var parent_node = get_parent()\nvar base_ready := 0\nfunc _ready():\n\tbase_ready += 1\n"),
+            ("GapDual", "extends GapHold\nclass_name GapDual\n@onready var own := get_parent()\nvar seen: Node\nfunc _ready():\n\tseen = parent_node\n"));
+        T.Check("compiles", r.Errors.Count == 0 && r.GeneralErrors.Count == 0, Errors(r));
+        if (r.Errors.Count > 0) return;
+        var holder = new Node3D();
+        var dual = New<Node3D>(r, "GapDual");
+        holder.AddChild(dual);
+        SceneTree.Instance.Root.AddChild(holder);
+        T.Check("the base's @onready ran before the subclass's _ready read it", dual.Get("seen").AsGodotObject() == holder);
+        T.Check("and the subclass's own", dual.Get("own").AsGodotObject() == holder);
+        T.Check("the base's _ready did not run (no super())", dual.Get("base_ready").AsInt64() == 0);
+        holder.Free();
+    }
+
+    // COGITO: cogito_player_state.gd saves itself with ResourceSaver.save(self, "user://...tres", ResourceSaver.FLAG_CHANGE_PATH) and loads it back.
+    private static void ResourceSaverRoundTrip()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "aver-fabric-saver-test-" + System.Environment.ProcessId);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string path = Path.Combine(dir, "slot_a.tres");
+            var state = new GapSaveState { Label = "lobby", Score = 7, Items = new() { new GapSaveItem { Count = 2 }, new GapSaveItem { Count = 5 } } };
+            T.Check("save writes it", ResourceSaver.Save(state, path, ResourceSaver.SaverFlags.ChangePath) == Error.Ok && File.Exists(path));
+            T.Check("FLAG_CHANGE_PATH gives the resource its path", state.ResourcePath == path);
+            T.Check("exists() finds the saved file", ResourceLoader.Exists(path));
+            var back = ResourceLoader.Load(path, (System.Type?)null, ResourceLoader.CacheMode.Ignore) as GapSaveState;
+            T.Check("load() builds the class with its exported values", back is { Label: "lobby", Score: 7 }, back?.Label ?? "null");
+            T.Check("and the resources it held, written inside it", back != null && back.Items.Count == 2 && back.Items[1].Count == 5);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private static void ByNameAccessors()
     {
         var mesh = new MeshInstance3D();
@@ -799,6 +838,20 @@ public class GapWeaponsManager : Node3D
     public Aver.Fabric.Collections.Array<Node3D> WeaponsArray { get; set; } = new();
     public int SeenAtReady = -1;
     public override void _Ready() => SeenAtReady = WeaponsArray.Count;
+}
+
+// The script classes of ResourceSaverRoundTrip: a save state holding a typed list of resources.
+public class GapSaveState : Resource
+{
+    [Export] public string Label = "";
+    [Export] public long Score;
+    [Export] public Aver.Fabric.Collections.Array<GapSaveItem> Items = new();
+    public long NotSaved = 3;
+}
+
+public class GapSaveItem : Resource
+{
+    [Export] public long Count;
 }
 
 // A player script's `var body` on a CharacterBody3D (whose Aver.Fabric class keeps an internal Body of its own).

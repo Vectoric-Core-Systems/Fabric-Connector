@@ -271,15 +271,16 @@ internal sealed partial class GdEmitter
 
     // ---- emitting a function ----
 
-    private void EmitSyntheticReady(ScriptInfo s, List<MemberInfo> onready)
+    // The @onready assignments, in Aver.Fabric's _OnreadyVars (called just before _Ready): a subclass's own _ready leaves its base's set.
+    private void EmitOnreadyVars(ScriptInfo s, List<MemberInfo> onready)
     {
-        _w.Open("public override void _Ready()");
+        _w.Open("public override void _OnreadyVars()");
         var saved = (_script, _ctx);
         _script = s;
         _ctx = new Ctx { Script = s, IsStatic = false, Return = GdType.Void, BodyRoot = new Block() };
         _ctx.Scopes.Add(new Dictionary<string, Local>());
+        _w.Line("base._OnreadyVars();");
         EmitOnready(onready);
-        if (s.BaseScript != null && s.BaseScript.Chain().Any(b => b.ByName.ContainsKey("_ready"))) _w.Line("base._Ready();");
         (_script, _ctx) = saved;
         _w.Close();
     }
@@ -300,7 +301,6 @@ internal sealed partial class GdEmitter
     {
         FuncDecl fd = mi.Func!;
         bool isCtor = fd.Name == "_init";
-        bool isReady = fd.Name == "_ready";
         GdType ret = isCtor ? GdType.Void : ReturnTypeOf(mi);
 
         _script = s;
@@ -345,7 +345,6 @@ internal sealed partial class GdEmitter
             foreach ((MemberInfo m, string code) in ctorInits) _w.Line($"{FieldTarget(m)} = {code};");
         foreach (ParamInfo p in ps.Where(p => p.IsRest))
             _w.Line($"var {Naming.Safe(ctx.DeclNames[p.Decl!])} = new Collections.Array({p.Cs});");
-        if (isReady) EmitOnready(onready);
         EmitBlockBody(fd.Body);
         if (ret.Kind != GK.Void && !isCtor && !AlwaysReturns(fd.Body))
             _w.Line("return " + (ret.IsReference || ret.IsVariant || ret.Kind == GK.Null ? (ret.IsVariant ? "default" : "null") : DefaultValue(ret) is var dv && dv != "new()" ? dv : "default") + ";");

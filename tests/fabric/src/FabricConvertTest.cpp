@@ -484,8 +484,10 @@ int main() {
         check(fmt::loadOcworld(content + "/Maps/props/crate.ocworld", crateLevel, &err), "the sub-scene is a level of its own: " + err);
         size_t crateNodes = 0;
         for (const fmt::OcWorldPlacement& p : crateLevel.placements) crateNodes += !p.className.empty();
-        check(crateLevel.placements.size() == 5 && crateNodes == 4 && crateLevel.placements[0].name == "Crate" && crateLevel.placements[0].className == "RigidBody3D",
+        check(crateLevel.placements.size() == 6 && crateNodes == 5 && crateLevel.placements[1].name == "Crate" && crateLevel.placements[1].className == "RigidBody3D",
               "crate.tscn: four nodes under a RigidBody3D, and the Body's mesh as a plain placement");
+        check(crateLevel.placements[0].name == "Global" && propIs(crateLevel, 0, "_persistent", "1"),
+              "opened as a level of its own it starts with the project's autoload, as Godot adds it whichever scene runs first");
         fmt::OcPrefabData prefab;
         check(fmt::loadOcPrefab(content + "/Prefabs/props/crate.ocprefab", prefab, &err), "the instanced scene was also written as a prefab: " + err);
         check(prefab.valid() && prefab.nodes.size() == 4 && prefab.nodes[0].name == "Crate" && prefab.nodes[0].className == "RigidBody3D" && prefab.nodes[1].parent == prefab.nodes[0].uid,

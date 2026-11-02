@@ -109,6 +109,12 @@ public static class ResourceLoader
 
     internal static string? FindFile(string path)
     {
+        // A file the game saved (ResourceSaver.save to user://, or an absolute path): there, not in the content folder.
+        if (!path.StartsWith("res://", StringComparison.Ordinal) && (path.StartsWith("user://", StringComparison.Ordinal) || System.IO.Path.IsPathRooted(path)))
+        {
+            string saved = FabricPaths.Globalize(path);
+            return File.Exists(saved) ? saved : null;
+        }
         string root = ContentRoot;
         if (root.Length == 0) return null;
         foreach (string c in Candidates(path))
@@ -150,7 +156,7 @@ public static class ResourceLoader
         {
             string? file = FindFile(path);
             string ext = System.IO.Path.GetExtension(path);
-            if (file != null && file.EndsWith(".ocres", StringComparison.OrdinalIgnoreCase))
+            if (file != null && (file.EndsWith(".ocres", StringComparison.OrdinalIgnoreCase) || IsSavedValue(file)))
                 r = CustomResource(file, path, type);
             else if (file != null && TypeForExtension(ext) == typeof(PackedScene) && type.IsAssignableFrom(typeof(PackedScene)))
                 r = PackedScene.FromFile(file, path);
@@ -181,6 +187,23 @@ public static class ResourceLoader
     }
 
     public static T? Load<T>(string path, CacheMode cacheMode = CacheMode.Reuse) where T : class => Load(path, typeof(T), cacheMode) as T;
+
+    // A resource file ResourceSaver wrote (user://save.tres): the "__class" dictionary, as the converter writes a custom resource.
+    private static bool IsSavedValue(string file)
+    {
+        if (!file.EndsWith(".tres", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".res", StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            using var reader = new StreamReader(file);
+            int c;
+            while ((c = reader.Read()) >= 0 && char.IsWhiteSpace((char)c)) { }
+            return c == '{';
+        }
+        catch (IOException) { return false; }
+    }
+
+    /// <summary>Drops a cached resource, so the next load reads the file again (ResourceSaver.save wrote it).</summary>
+    internal static void Forget(string path) => s_cache.Remove(path);
 
     // A custom resource (a .tres with a script) the converter wrote as its "__class" dictionary: built as that class.
     private static Resource? CustomResource(string file, string path, System.Type type)

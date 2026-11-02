@@ -146,9 +146,10 @@ static class GdScriptConvertTests
         T.Check("player_controller: no run-time helper where the types are known", !p.Contains("GDScript."));
         T.Check("@export_range / @export_flags / @export_group become the attributes",
                 Has(p, "[Export(PropertyHint.Range, \"0.0,1.0,0.01\")]", "[Export(PropertyHint.Flags, \"Fire,Ice,Poison\")]", "[ExportGroup(\"Movement\")]", "[ExportGroup(\"Combat\")]"));
-        T.Check("@onready assigns at the start of _Ready, in GDScript order", Has(p, "public override void _Ready()") &&
+        T.Check("@onready assigns in _OnreadyVars (called before _Ready, after the base's), in GDScript order",
+                Has(p, "public override void _Ready()", "public override void _OnreadyVars()", "base._OnreadyVars();") &&
                 p.IndexOf("Head = GetNode<Node3D>(\"Head\");", StringComparison.Ordinal) < p.IndexOf("Camera = GetNode<Camera3D>(\"Head/Camera3D\");", StringComparison.Ordinal) &&
-                p.IndexOf("DashTimer = GetNode<Timer>(\"DashTimer\");", StringComparison.Ordinal) < p.IndexOf("Input.MouseMode = Input.MouseModeEnum.Captured;", StringComparison.Ordinal));
+                p.IndexOf("DashTimer = GetNode<Timer>(\"DashTimer\");", StringComparison.Ordinal) > p.IndexOf("public override void _OnreadyVars()", StringComparison.Ordinal));
         T.Check("setget: a property over a backing field, the setter's own name is the field", Has(p, "private long _health = 100;", "public long Health", "_health = Math.Clamp(value, 0, MaxHealth);"));
         T.Check("signals: [Signal] delegates, typed parameters, EmitSignal helpers", Has(p, "[Signal] public delegate void HealthChangedEventHandler(long oldValue, long newValue);", "EmitSignalHealthChanged(old, _health);"));
         T.Check("x is T narrows the name: a pattern variable, typed members", Has(p, "@event is InputEventMouseMotion inputEventMouseMotion", "inputEventMouseMotion.Relative.X"));
@@ -238,8 +239,8 @@ static class GdScriptConvertTests
         T.Check("@export: [Export] with the type of the value; _range, _enum with the hint string", Has(t, "[Export]\n    public double speed = 2.5;") || Has(t, "public double speed = 2.5;"));
         T.Check("export hints", Has(t, "[Export(PropertyHint.Range, \"0,10,0.5\")]", "[Export(PropertyHint.Enum, \"A,B\")]"));
         T.Check("@export_group: [ExportGroup] on the next export", Regex("\\[ExportGroup\\(\"Look\"\\)\\]\\s+\\[Export\\]\\s+public Color Tint = Colors.White;"));
-        T.Check("@onready: field, assigned in _Ready before the user's code, typed from the annotation", Has(t, "public Camera3D Cam;", "Cam = GetNode<Camera3D>(\"Cam\");") &&
-                t.IndexOf("Cam = GetNode", StringComparison.Ordinal) < t.IndexOf("GD.Print(\"r\")", StringComparison.Ordinal));
+        T.Check("@onready: field, assigned in _OnreadyVars (before _Ready runs the user's code), typed from the annotation", Has(t, "public Camera3D Cam;", "Cam = GetNode<Camera3D>(\"Cam\");") &&
+                t.IndexOf("Cam = GetNode", StringComparison.Ordinal) > t.IndexOf("public override void _OnreadyVars()", StringComparison.Ordinal));
         T.Check("setget: property, backing field, the getter body", Has(t, "private long _hp = 10;", "public long Hp", "_hp = Math.Clamp(value, 0, 99);", "return _hp;"));
         T.Check("typed array and dictionary members", Has(t, "Collections.Array<long> Items = new Collections.Array<long> { 1, 2 };", "Collections.Dictionary Table = new Collections.Dictionary { { \"k\", 1 } };"));
         T.Check("a typed enum variable", t.Contains("public Mode mode = Mode.Run;") || t.Contains("public Mode Mode = Mode.Run;") || t.Contains("Mode.Run"));
