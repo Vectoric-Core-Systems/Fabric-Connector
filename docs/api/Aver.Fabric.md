@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-849 public types and 9137 public members, read from `managed/Aver.Fabric/` (162 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+873 public types and 9411 public members, read from `managed/Aver.Fabric/` (169 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -2304,7 +2304,13 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 - `public Color Modulate { get; set; }`
 - `public Color SelfModulate { get; set; }`
 - `public int ZIndex { get; set; }`
+- `public bool ZAsRelative { get; set; }` - Whether ZIndex is added to the parent's (Godot's z_as_relative, on by default).
 - `public bool TopLevel { get; set; }`
+- `public TextureFilterEnum TextureFilter { get; set; }` - How this item's textures are filtered; ParentNode takes the parent's, and the top takes the project's default (linear).
+- `public TextureRepeatEnum TextureRepeat { get; set; }`
+- `public ClipChildrenMode ClipChildren { get; set; }` - Godot's clip_children.
+- `public Material? Material { get; set; }` - A CanvasItemMaterial sets the blend mode of what the item draws; any other material is kept and changes nothing.
+- `public bool UseParentMaterial { get; set; }`
 - `public void Show()`
 - `public void Hide()`
 - `public bool IsVisibleInTree()`
@@ -2319,6 +2325,23 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 - `public void DrawTextureRect(Texture2D texture, Rect2 rect, bool tile, Color? modulate = null, bool transpose = false)`
 - `public void DrawTextureRectRegion(Texture2D texture, Rect2 rect, Rect2 srcRect, Color? modulate = null)` - Draws a part of a texture (srcRect, in texels) into a rectangle (Godot's draw_texture_rect_region).
 - `public void DrawLine(Vector2 from, Vector2 to, Color color, float width = -1f, bool antialiased = false)` - A line.
+- `public void DrawSetTransform(Vector2 position, float rotation = 0f, Vector2? scale = null)` - Sets a transform every command recorded after it is drawn through, until the next call (Godot's draw_set_transform: a position, a rotation in radians and a scale).
+- `public void DrawSetTransformMatrix(Transform2D xform)`
+- `public void DrawPolyline(Vector2[] points, Color color, float width = -1f, bool antialiased = false)` - A polyline of the width (Godot's draw_polyline); a width below zero is one pixel.
+- `public void DrawPolylineColors(Vector2[] points, Color[] colors, float width = -1f, bool antialiased = false)` - A polyline with a colour per point.
+- `public void DrawMultiline(Vector2[] points, Color color, float width = -1f, bool antialiased = false)`
+- `public void DrawMultilineColors(Vector2[] points, Color[] colors, float width = -1f, bool antialiased = false)`
+- `public void DrawArc(Vector2 center, float radius, float startAngle, float endAngle, int pointCount, Color color, float width = -1f, bool antialiased = false)` - An arc of pointCount points (radians, 0 along +x), as a polyline.
+- `public void DrawCircle(Vector2 position, float radius, Color color, bool filled = true, float width = -1f, bool antialiased = false)` - A circle: filled, or (Godot 4.3) a ring of the width.
+- `public void DrawPolygon(Vector2[] points, Color[] colors, Vector2[]? uvs = null, Texture2D? texture = null)` - A filled polygon with a colour per point (or one colour) and optional texture coordinates (Godot's draw_polygon).
+- `public void DrawColoredPolygon(Vector2[] points, Color color, Vector2[]? uvs = null, Texture2D? texture = null)`
+- `public void DrawPrimitive(Vector2[] points, Color[] colors, Vector2[]? uvs = null, Texture2D? texture = null)` - One to four points as a pixel, a line, a triangle or a quad (Godot's draw_primitive).
+
+### CanvasItem.ClipChildrenMode
+
+`public enum ClipChildrenMode`
+
+Values: `Disabled = 0`, `Only = 1`, `AndDraw = 2`, `Max = 3`
 
 ### CanvasItem.SignalName
 
@@ -2328,6 +2351,41 @@ Values: `Perspective = 0`, `Orthogonal = 1`, `Frustum = 2`
 - `public static readonly StringName VisibilityChanged`
 - `public static readonly StringName Hidden`
 - `public static readonly StringName ItemRectChanged`
+
+### CanvasItem.TextureFilterEnum
+
+`public enum TextureFilterEnum`
+
+Values: `ParentNode = 0`, `Nearest = 1`, `Linear = 2`, `NearestWithMipmaps = 3`, `LinearWithMipmaps = 4`, `NearestWithMipmapsAnisotropic = 5`, `LinearWithMipmapsAnisotropic = 6`, `Max = 7`
+
+### CanvasItem.TextureRepeatEnum
+
+`public enum TextureRepeatEnum`
+
+Values: `ParentNode = 0`, `Disabled = 1`, `Enabled = 2`, `Mirror = 3`, `Max = 4`
+
+### CanvasItemMaterial
+
+`public class CanvasItemMaterial : Material` - A material that sets how a CanvasItem blends with what is behind it (Godot's CanvasItemMaterial).
+
+- `public BlendModeEnum BlendMode { get; set; }`
+- `public LightModeEnum LightMode { get; set; }`
+- `public bool ParticlesAnimation { get; set; }`
+- `public int ParticlesAnimHFrames { get; set; }`
+- `public int ParticlesAnimVFrames { get; set; }`
+- `public bool ParticlesAnimLoop { get; set; }`
+
+### CanvasItemMaterial.BlendModeEnum
+
+`public enum BlendModeEnum`
+
+Values: `Mix = 0`, `Add = 1`, `Sub = 2`, `Mul = 3`, `PremultAlpha = 4`
+
+### CanvasItemMaterial.LightModeEnum
+
+`public enum LightModeEnum`
+
+Values: `Normal = 0`, `Unshaded = 1`, `LightOnly = 2`
 
 ### CanvasLayer
 
@@ -2484,6 +2542,98 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public static string[] GetClassList()` - Every known class, in no particular order.
 - `public static string[] GetInheritersFromClass(StringName @class)` - Every known class that extends class (not including it).
 
+### CodeEdit
+
+`public class CodeEdit : TextEdit` - A text editor for code (Godot's CodeEdit).
+
+- `public bool GuttersDrawBreakpointsGutter { get; set; }`
+- `public bool GuttersDrawBookmarks { get; set; }`
+- `public bool GuttersDrawExecutingLines { get; set; }`
+- `public bool GuttersDrawLineNumbers { get; set; }`
+- `public bool GuttersZeroPadLineNumbers { get; set; }`
+- `public bool GuttersDrawFoldGutter { get; set; }`
+- `public bool LineFolding { get; set; }`
+- `public bool AutoIndentEnabled { get; set; }`
+- `public bool AutoBraceCompletionEnabled { get; set; }`
+- `public bool AutoBraceCompletionHighlightMatching { get; set; }`
+- `public Collections.Dictionary AutoBraceCompletionPairs { get; set; }`
+- `public bool CodeCompletionEnabled { get; set; }`
+- `public string[] CodeCompletionPrefixes { get; set; }`
+- `public bool SymbolLookupOnClick { get; set; }`
+- `public bool SymbolTooltipOnHover { get; set; }`
+- `public bool IndentAutomatic { get; set; }`
+- `public string[] IndentAutomaticPrefixes { get; set; }`
+- `public bool DrawBreakpointsGutter { get; set; }`
+- `public bool HasStringDelimiter(string startKey)`
+- `public bool HasCommentDelimiter(string startKey)`
+- `public void AddStringDelimiter(string startKey, string endKey = "", bool lineOnly = false)`
+- `public void AddCommentDelimiter(string startKey, string endKey = "", bool lineOnly = false)`
+- `public void RemoveStringDelimiter(string startKey)`
+- `public void RemoveCommentDelimiter(string startKey)`
+- `public void ClearStringDelimiters()`
+- `public void ClearCommentDelimiters()`
+- `public bool IsInString(int line, int column = -1)`
+- `public bool IsInComment(int line, int column = -1)`
+- `public int GetDelimiterStartPositionLine(int line, int column)`
+- `public int GetFoldEnd(int line)` - The last line of the block that starts at line (the lines below it that are indented deeper, blank lines inside included), or the line itself.
+- `public bool CanFoldLine(int line)`
+- `public bool IsLineFolded(int line)`
+- `public int[] GetFoldedLines()`
+- `public void FoldLine(int line)`
+- `public void UnfoldLine(int line)`
+- `public void ToggleFoldableLine(int line)`
+- `public void FoldAllLines()`
+- `public void UnfoldAllLines()`
+- `public void IndentLines()` - Indents the selected lines (or the caret's line) by one level.
+- `public void UnindentLines()` - Removes one level of indentation from the selected lines.
+- `public void DuplicateLines()`
+- `public void MoveLinesUp()`
+- `public void MoveLinesDown()`
+- `public void DeleteLines()`
+- `public void ToggleLineComments()` - Comments the selected lines with the first line comment delimiter (or uncomments them when they all have it).
+- `public int GetCodeCompletionSelectedIndex()`
+- `public Collections.Array GetCodeCompletionOptions()`
+- `public void CancelCodeCompletion()`
+- `public void AddCodeCompletionOption(int type, string displayText, string insertText, Color? textColor = null, Resource? icon = null, Variant value = default, int location = 1024)`
+- `public void UpdateCodeCompletionOptions(bool force)`
+- `public void RequestCodeCompletion(bool force = false)`
+
+### CodeEdit.SignalName
+
+`public new class SignalName : TextEdit.SignalName`
+
+- `public static readonly StringName BreakpointToggled`
+- `public static readonly StringName CodeCompletionRequested`
+- `public static readonly StringName SymbolLookup`
+- `public static readonly StringName SymbolValidate`
+- `public static readonly StringName SymbolHovered`
+
+### CodeHighlighter
+
+`public class CodeHighlighter : SyntaxHighlighter` - A highlighter driven by keyword lists, symbols, numbers, functions and delimited regions (Godot's CodeHighlighter).
+
+- `public Color NumberColor { get; set; }`
+- `public Color SymbolColor { get; set; }`
+- `public Color FunctionColor { get; set; }`
+- `public Color MemberVariableColor { get; set; }`
+- `public Collections.Dictionary KeywordColors { get; set; }`
+- `public Collections.Dictionary MemberKeywordColors { get; set; }`
+- `public Collections.Dictionary ColorRegions { get; set; }` - Delimited regions as "start end" (an empty end runs to the end of the line) to colour, as Godot stores them.
+- `public void AddKeywordColor(string keyword, Color color)`
+- `public void RemoveKeywordColor(string keyword)`
+- `public bool HasKeywordColor(string keyword)`
+- `public Color GetKeywordColor(string keyword)`
+- `public void ClearKeywordColors()`
+- `public void AddMemberKeywordColor(string keyword, Color color)`
+- `public void RemoveMemberKeywordColor(string keyword)`
+- `public bool HasMemberKeywordColor(string keyword)`
+- `public Color GetMemberKeywordColor(string keyword)`
+- `public void ClearMemberKeywordColors()`
+- `public void AddColorRegion(string startKey, string endKey, Color color, bool lineOnly = false)`
+- `public void RemoveColorRegion(string startKey)`
+- `public bool HasColorRegion(string startKey)`
+- `public void ClearColorRegions()`
+
 ### CollisionObject2D
 
 `public class CollisionObject2D : Node2D` - What a 2D body or area derives from (Godot's CollisionObject2D).
@@ -2638,9 +2788,10 @@ Values: `AddVelocity = 0`, `AddUpwardVelocity = 1`, `DoNothing = 2`
 - `public void AddPreset(Color color)`
 - `public void ErasePreset(Color color)`
 - `public Color[] GetPresets()`
-- `public void AddRecentPreset(Color color)`
+- `public void AddRecentPreset(Color color)` - Remembers a colour the user picked (Godot keeps the last 32, newest first).
 - `public void EraseRecentPreset(Color color)`
 - `public Color[] GetRecentPresets()`
+- `public string Hex { get; set; }` - The colour as the hex field shows it: RRGGBB, with AA after it when alpha is editable (F55).
 - `public override void _GuiInput(InputEvent @event)`
 - `public override void _Draw()`
 
@@ -2929,6 +3080,7 @@ Values: `SwingSpan = 0`, `TwistSpan = 1`, `Bias = 2`, `Softness = 3`, `Relaxatio
 - `public Vector2 Size { get; set; }` - The size, never below the combined minimum size.
 - `public Vector2 CustomMinimumSize { get; set; }`
 - `public Vector2 PivotOffset { get; set; }`
+- `public Vector2 PivotOffsetRatio { get; set; }` - The pivot as a share of the control's size, added to PivotOffset (Godot 4.5's pivot_offset_ratio): (0.5, 0.5) rotates and scales about the centre.
 - `public float Rotation { get; set; }`
 - `public float RotationDegrees { get; set; }`
 - `public Vector2 Scale { get; set; }`
@@ -2983,7 +3135,21 @@ Values: `SwingSpan = 0`, `TwistSpan = 1`, `Bias = 2`, `Softness = 3`, `Relaxatio
 - `public CursorShape MouseDefaultCursorShape { get; set; }`
 - `public bool MouseForcePassScrollEvents { get; set; }`
 - `public CursorShape GetCursorShape(Vector2 position = default)`
-- `public bool IsLayoutRtl()`
+- `public bool IsLayoutRtl()` - True when the layout runs right to left: this control's direction, else the nearest ancestor's that is set (Inherited and the locale settings read as left to right here).
+- `public string AccessibilityName { get; set; }`
+- `public string AccessibilityDescription { get; set; }`
+- `public AccessibilityLiveMode AccessibilityLive { get; set; }`
+- `public Collections.Array AccessibilityControlsNodes { get; set; }`
+- `public Collections.Array AccessibilityDescribedByNodes { get; set; }`
+- `public Collections.Array AccessibilityLabeledByNodes { get; set; }`
+- `public Collections.Array AccessibilityFlowToNodes { get; set; }`
+- `public Node? ShortcutContext { get; set; }`
+
+### Control.AccessibilityLiveMode
+
+`public enum AccessibilityLiveMode`
+
+Values: `Off = 0`, `Polite = 1`, `Assertive = 2`
 
 ### Control.CursorShape
 
@@ -4141,6 +4307,51 @@ Values: `Inherit = 0`, `Begin = 1`, `Center = 2`, `End = 3`
 - `public RenderingServer.FogVolumeShape Shape { get; set; }`
 - `public Material? Material { get; set; }` - A FogMaterial, or a ShaderMaterial over a fog shader (G6 SH3), whose DENSITY, ALBEDO and EMISSION replace the material's.
 
+### FoldableContainer
+
+`public class FoldableContainer : Container` - A container with a title bar that folds its content away (Godot's FoldableContainer, 4.5).
+
+- `public event Action<bool> FoldingChanged`
+- `public FoldableContainer()`
+- `public string Title { get; set; }`
+- `public HorizontalAlignment TitleAlignment { get; set; }`
+- `public TextServer.OverrunBehavior TitleTextOverrunBehavior { get; set; }`
+- `public TitlePosition TitlePositionValue { get; set; }`
+- `public string Language { get; set; }`
+- `public bool Folded { get; set; }`
+- `public FoldableGroup? FoldableGroup { get; set; }`
+- `public void Fold()`
+- `public void Expand()`
+- `public override void _GuiInput(InputEvent @event)`
+- `public override void _Draw()`
+
+### FoldableContainer.SignalName
+
+`public new class SignalName : Container.SignalName`
+
+- `public static readonly StringName FoldingChanged`
+
+### FoldableContainer.TitlePosition
+
+`public enum TitlePosition`
+
+Values: `Top = 0`, `Bottom = 1`
+
+### FoldableGroup
+
+`public class FoldableGroup : Resource` - A set of FoldableContainers of which at most one is open (Godot's FoldableGroup).
+
+- `public event Action<FoldableContainer> Expanded`
+- `public bool AllowFoldingAll { get; set; }` - When on, the open container can be folded by clicking its title (Godot's allow_folding_all).
+- `public FoldableContainer? GetExpandedContainer()`
+- `public Collections.Array GetContainers()`
+
+### FoldableGroup.SignalName
+
+`public new class SignalName : Resource.SignalName`
+
+- `public static readonly StringName Expanded`
+
 ### Font
 
 `public class Font : Resource` - A font (Godot's Font): a family of the engine's font set plus a style.
@@ -4646,6 +4857,8 @@ Values: `Disabled = 0`, `Self = 1`, `Dependencies = 2`
 - `public Callable[] GetSignalConnections(StringName signal)` - The callables connected to a signal, in connection order.
 - `public Error EmitSignal(StringName signal, params Variant[] args)` - Emits a signal: every connected callable runs in connection order, a Deferred one when the tick pass ends.
 - `public SignalAwaiter ToSignal(GodotObject source, StringName signal)` - Awaitable: await ToSignal(timer, Timer.SignalName.Timeout);
+- `public StringName Tr(StringName message, StringName? context = null)` - Translates a message through the TranslationServer (Godot's Object.tr).
+- `public StringName TrN(StringName message, StringName pluralMessage, int n, StringName? context = null)` - Translates a plural message (Godot's Object.tr_n).
 
 ### GodotObject.ConnectFlags
 
@@ -5531,7 +5744,7 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 `public class Label3D : GeometryInstance3D` - Text in the world (Godot's Label3D).
 
 - `public string Text { get; set; }`
-- `public Font? Font { get; set; }` - The font; null draws with the project's default.
+- `public Font? Font { get; set; }` - The font (a Font, F47: GetStringSize measures with it); null draws with the project's default.
 - `public int FontSize { get; set; }`
 - `public int OutlineSize { get; set; }`
 - `public float PixelSize { get; set; }`
@@ -5540,8 +5753,8 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 - `public Color OutlineModulate { get; set; }`
 - `public HorizontalAlignment HorizontalAlignment { get; set; }`
 - `public VerticalAlignment VerticalAlignment { get; set; }`
-- `public float LineSpacing { get; set; }`
-- `public int AutowrapMode { get; set; }`
+- `public float LineSpacing { get; set; }` - Extra pixels between lines (Godot's line_spacing, default 0 for a Label3D).
+- `public int AutowrapMode { get; set; }` - Godot's autowrap_mode: 0 off, 1 arbitrary, 2 word, 3 word smart.
 - `public float Width { get; set; }`
 - `public bool Uppercase { get; set; }`
 - `public BaseMaterial3D.BillboardModeEnum Billboard { get; set; }`
@@ -5556,7 +5769,8 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 - `public int RenderPriority { get; set; }`
 - `public int OutlineRenderPriority { get; set; }`
 - `public string Language { get; set; }`
-- `public bool IsDrawn { get; }` - Always false: this runtime does not draw world-space text.
+- `public bool IsDrawn { get; }` - True once the engine has taken the label to draw (false without an engine, with no font, or while empty or hidden).
+- `public Vector2 GetTextSize()` - The size of the laid-out text in metres (before the node's scale) and its line count, or zeros when the engine cannot measure it.
 
 ### LabelSettings
 
@@ -5922,6 +6136,32 @@ Values: `Self = 0`, `SpecificBone = 1`, `ExternalNode = 2`
 - `public static double Ease(double s, double curve)`
 - `public static int NearestPo2(int value)`
 - `public static int StepDecimals(double step)` - The number of decimals needed to write a step size exactly (at most 10).
+
+### MenuBar
+
+`public class MenuBar : Control` - A row of menus along the top of a window (Godot's MenuBar).
+
+- `public bool Flat { get; set; }`
+- `public int StartIndex { get; set; }`
+- `public bool SwitchOnHover { get; set; }`
+- `public bool PreferGlobalMenu { get; set; }`
+- `public string Language { get; set; }`
+- `public MenuBar()`
+- `public int GetMenuCount()`
+- `public void SetMenuTitle(int menu, string title)`
+- `public string GetMenuTitle(int menu)`
+- `public void SetMenuTooltip(int menu, string tooltip)`
+- `public string GetMenuTooltip(int menu)`
+- `public void SetMenuDisabled(int menu, bool disabled)`
+- `public bool IsMenuDisabled(int menu)`
+- `public void SetMenuHidden(int menu, bool hidden)`
+- `public bool IsMenuHidden(int menu)`
+- `public PopupMenu? GetMenuPopup(int menu)`
+- `public bool IsNativeMenu()`
+- `public Rect2 GetMenuRect(int menu)` - The rectangle of a menu's title in the bar's own space, empty for a hidden menu.
+- `public int MenuAt(Vector2 point)` - The menu whose title is at the point, or -1.
+- `public override void _GuiInput(InputEvent @event)`
+- `public override void _Draw()`
 
 ### MenuButton
 
@@ -7720,6 +7960,12 @@ Values: `Bias = 0`, `Damping = 1`, `ImpulseClamp = 2`
 
 Values: `FaceX = 0`, `FaceY = 1`, `FaceZ = 2`
 
+### PoFile
+
+`public static class PoFile` - A message catalog read from a gettext .po text file.
+
+- `public static Translation Parse(string text, string? locale = null)` - Reads PO text into a translation: msgid / msgstr pairs, msgctxt contexts, msgid_plural with msgstr[n] forms, and the header's Language.
+
 ### PolygonOccluder3D
 
 `public class PolygonOccluder3D : Occluder3D` - A flat occluder outlined by a 2D polygon in the XY plane (Godot's PolygonOccluder3D).
@@ -8200,6 +8446,16 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 ### RefCounted
 
 `public class RefCounted : GodotObject` - Object kept alive by reference (Godot's RefCounted); in C# the garbage collector does that.
+
+### ReferenceRect
+
+`public class ReferenceRect : Control` - A rectangle outline for reference while building a layout (Godot's ReferenceRect).
+
+- `public Color BorderColor { get; set; }`
+- `public float BorderWidth { get; set; }`
+- `public bool EditorOnly { get; set; }` - Godot draws it in the editor only by default; at run time it is invisible unless this is on.
+- `public ReferenceRect()`
+- `public override void _Draw()`
 
 ### ReflectionProbe
 
@@ -9794,6 +10050,16 @@ Values: `Disabled = 0`, `Once = 1`, `WhenVisible = 2`, `WhenParentVisible = 3`, 
 
 Values: `RgbaUnorm = 0`, `RgbaSnorm = 1`, `RgbaHalf = 2`, `RDouble = 3`, `RgHalf = 4`, `RgbHalf = 5`, `RFloat = 6`, `RgFloat = 7`, `RgbFloat = 8`, `RgbaFloat = 9`, `Max = 10`
 
+### SyntaxHighlighter
+
+`public abstract class SyntaxHighlighter : Resource` - Colours runs of a TextEdit's lines (Godot's SyntaxHighlighter).
+
+- `public TextEdit? GetTextEdit()`
+- `public virtual Collections.Dictionary _GetLineSyntaxHighlighting(int line)` - A GDScript-style override: the colour runs of a line as { column: { "color": Color } }.
+- `public Collections.Dictionary GetLineSyntaxHighlighting(int line)`
+- `public void ClearHighlightingCache()`
+- `public void UpdateCache()`
+
 ### SystemFont
 
 `public class SystemFont : Font` - A font found by name among the operating system's fonts (Godot's SystemFont).
@@ -10004,7 +10270,7 @@ Values: `Top = 0`, `Bottom = 1`, `Max = 2`
 - `public bool MinimapDraw { get; set; }`
 - `public bool IndentUseSpaces { get; set; }`
 - `public int IndentSize { get; set; }`
-- `public Resource? SyntaxHighlighter { get; set; }`
+- `public SyntaxHighlighter? SyntaxHighlighter { get; set; }` - Colours runs of the lines as they are drawn (F50).
 - `public string Language { get; set; }`
 - `public new TextServer.Direction TextDirection { get; set; }`
 - `public double ScrollVertical { get; set; }`
@@ -10071,6 +10337,65 @@ Values: `MatchCase = 1`, `WholeWords = 2`, `Backwards = 4`
 - `public static readonly StringName LinesEditedFrom`
 - `public static readonly StringName CaretChanged`
 
+### TextLine
+
+`public class TextLine : RefCounted` - One line of text with a font and size per run (Godot's TextLine).
+
+- `public TextServer.Direction Direction { get; set; }`
+- `public TextServer.Orientation Orientation { get; set; }`
+- `public TextServer.JustificationFlag Flags { get; set; }`
+- `public void Clear()`
+- `public bool AddString(string text, Font font, int fontSize = 16, string language = "", Variant meta = default)`
+- `public float GetWidth()`
+- `public void SetWidth(float width)`
+- `public HorizontalAlignment GetHorizontalAlignment()`
+- `public void SetHorizontalAlignment(HorizontalAlignment alignment)`
+- `public TextServer.OverrunBehavior GetTextOverrunBehavior()`
+- `public void SetTextOverrunBehavior(TextServer.OverrunBehavior behavior)`
+- `public Collections.Array GetObjects()`
+- `public string GetText()` - The runs' text as one string.
+- `public float GetLineWidth()` - The width of the line's text, trimmed when an overrun behaviour is set and a width.
+- `public float GetLineAscent()`
+- `public float GetLineDescent()`
+- `public float GetLineUnderlinePosition()`
+- `public float GetLineUnderlineThickness()`
+- `public Vector2 GetSize()`
+- `public void Draw(CanvasItem canvas, Vector2 pos, Color? color = null)` - Draws the line with its top-left corner at pos, on a canvas item that is in its draw pass.
+- `public void DrawOutline(CanvasItem canvas, Vector2 pos, int outlineSize = 1, Color? color = null)`
+- `public int HitTest(float coords)` - The character index at a point (x measured from the line's start): the boundary nearest to it, or -1 above or below the line.
+
+### TextParagraph
+
+`public class TextParagraph : RefCounted` - A block of text broken into lines at a width (Godot's TextParagraph).
+
+- `public HorizontalAlignment Alignment { get; set; }`
+- `public TextServer.Direction Direction { get; set; }`
+- `public TextServer.Orientation Orientation { get; set; }`
+- `public TextServer.LineBreakFlag BreakFlags { get; set; }`
+- `public TextServer.OverrunBehavior TextOverrunBehavior { get; set; }`
+- `public int MaxLinesVisible { get; set; }`
+- `public int Dropcap { get; }`
+- `public void Clear()`
+- `public bool AddString(string text, Font font, int fontSize = 16, string language = "", Variant meta = default)`
+- `public float GetWidth()`
+- `public void SetWidth(float width)`
+- `public HorizontalAlignment GetAlignment()`
+- `public void SetAlignment(HorizontalAlignment alignment)`
+- `public TextServer.LineBreakFlag GetBreakFlags()`
+- `public void SetBreakFlags(TextServer.LineBreakFlag flags)`
+- `public int GetMaxLinesVisible()`
+- `public void SetMaxLinesVisible(int max)`
+- `public int GetLineCount()`
+- `public float GetLineWidth(int line)`
+- `public Vector2 GetLineSize(int line)`
+- `public float GetLineAscent(int line)`
+- `public float GetLineDescent(int line)`
+- `public Vector2I GetLineRange(int line)` - The character range of a line: its start and end index in the whole text.
+- `public Vector2 GetSize()`
+- `public void DrawLine(CanvasItem canvas, Vector2 pos, int line, Color? color = null)`
+- `public void Draw(CanvasItem canvas, Vector2 pos, Color? color = null)`
+- `public int HitTest(Vector2 coords)` - The character index at a point in the block, or -1 outside it.
+
 ### TextServer
 
 `public static class TextServer` - Godot's TextServer, reduced to the enums the text controls name.
@@ -10098,6 +10423,12 @@ Values: `Bold = 1`, `Italic = 2`, `FixedWidth = 4`
 `public enum JustificationFlag`
 
 Values: `None = 0`, `Kashida = 1`, `WordBound = 2`, `TrimEdgeSpaces = 4`, `AfterLastTab = 8`, `ConstrainEllipsis = 16`, `SkipLastLine = 32`, `SkipLastLineWithVisibleChars = 64`, `DoNotSkipSingleLine = 128`
+
+### TextServer.LineBreakFlag
+
+`public enum LineBreakFlag`
+
+Values: `None = 0`, `Mandatory = 1`, `WordBound = 2`, `Grapheme = 4`, `Adaptive = 8`, `TrimEdgeSpaces = 16`
 
 ### TextServer.Orientation
 
@@ -10476,6 +10807,41 @@ Values: `Physics = 0`, `Idle = 1`
 - `public override readonly bool Equals(object? obj)`
 - `public override readonly int GetHashCode()`
 - `public override readonly string ToString()`
+
+### Translation
+
+`public class Translation : Resource` - The messages of one locale (Godot's Translation).
+
+- `public string Locale { get; set; }` - The locale, as a code like en, pt_BR or fr-CA.
+- `public void AddMessage(StringName srcMessage, StringName xlatedMessage, StringName? context = null)`
+- `public void AddPluralMessage(StringName srcMessage, string[] xlatedMessages, StringName? context = null)` - A plural message: xlatedMessages are the forms in order.
+- `public StringName GetMessage(StringName srcMessage, StringName? context = null)`
+- `public StringName GetPluralMessage(StringName srcMessage, StringName srcPluralMessage, int n, StringName? context = null)` - The form of a plural message for n (English rule: form 0 for one, form 1 otherwise, or the last form that exists).
+- `public void EraseMessage(StringName srcMessage, StringName? context = null)`
+- `public string[] GetMessageList()`
+- `public string[] GetTranslatedMessageList()`
+- `public int GetMessageCount()`
+- `public void Clear()`
+
+### TranslationServer
+
+`public static class TranslationServer` - Godot's TranslationServer: the locale, the translations added to it, and the lookup.
+
+- `public static bool PseudolocalizationEnabled { get; set; }` - When on, a message with no translation is shown as the source text wrapped in pseudolocalisation marks (Godot's pseudolocalization); off by default.
+- `public static void SetLocale(string locale)` - Sets the current locale.
+- `public static string GetLocale()`
+- `public static void SetFallbackLocale(string locale)`
+- `public static string GetFallbackLocale()`
+- `public static string StandardizeLocale(string locale)` - The locale as Godot spells it: language lower case, an underscore, the script or region as written (pt_BR).
+- `public static void AddTranslation(Translation translation)`
+- `public static void RemoveTranslation(Translation translation)`
+- `public static void Clear()`
+- `public static string[] GetLoadedLocales()`
+- `public static Translation? GetTranslationObject(string locale)`
+- `public static int CompareLocales(string localeA, string localeB)` - How well two locales match: 2 for the same code, 1 for the same language, 0 otherwise (Godot's compare_locales returns a similar score).
+- `public static string GetLocaleName(string locale)`
+- `public static StringName Translate(StringName message, StringName? context = null)`
+- `public static StringName TranslatePlural(StringName message, StringName pluralMessage, int n, StringName? context = null)`
 
 ### Tree
 
