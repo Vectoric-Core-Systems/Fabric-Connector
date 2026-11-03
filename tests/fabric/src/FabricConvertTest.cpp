@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <initializer_list>
 #include <sstream>
 #include <string>
@@ -623,6 +624,21 @@ int main() {
               "a custom resource file is written as its value, so a script's load() of it builds the class");
         check(loadout.find("Array[Shader]([Resource(\"res://props/tint.gdshader\")])") != std::string::npos,
               "a .gdshader the resource holds is its res:// path (a Shader at run time), not null");
+
+        // A project named with a tagline: the folder is the title, so the paths stay short (Windows stops at 260 characters).
+        const std::filesystem::path longSrc = outRoot / "longname-src";
+        std::filesystem::copy(mini, longSrc, std::filesystem::copy_options::recursive, ec);
+        std::string godot = slurp((longSrc / "project.godot").string());
+        const std::string tagline = "Mini Game , An Open Source Game Whose Name Goes On Well Past Any Folder Name Windows Would Like";
+        if (const size_t at = godot.find("config/name=\"Mini Game\""); at != std::string::npos)
+            godot.replace(at, std::string("config/name=\"Mini Game\"").size(), "config/name=\"" + tagline + "\"");
+        { std::ofstream(longSrc / "project.godot", std::ios::binary) << godot; }
+        const std::string out5 = (outRoot / "longname").string();
+        std::string log5;
+        runCapture("\"" + exe.string() + "\" fabric \"" + longSrc.string() + "\" \"" + out5 + "\" --scenes-only", log5);
+        fmt::ProjectDesc ln;
+        check(fmt::loadOcproject(out5 + "/MiniGame/MiniGame.ocproject", ln, &err) && ln.windowTitle == tagline,
+              "a tagline name gives the folder and file its title (MiniGame), and the window title keeps the whole name");
     }
 
     AVER_INFO("=== {} checks, {} failed ===", g_checks, g_failures);

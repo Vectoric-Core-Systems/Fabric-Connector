@@ -303,7 +303,19 @@ int Converter::run() {
 
     std::string folder = std::filesystem::path(godotDir_).filename().string();
     if (folder.empty()) folder = std::filesystem::path(godotDir_).parent_path().filename().string();
-    name_ = safeName(project_.name, safeName(folder, "FabricProject"));
+    // The project's folder and file name: its title, not a tagline ("Molten Aim 25 , An OpenSource Realistic Shooter made in Godot 4.4 ..."), and short,
+    // because it is in every path the project writes twice (<out>/<name>/<name>.ocproject, <out>/<name>/Content/...) and Windows stops at 260 characters.
+    {
+        constexpr size_t kMaxName = 40;
+        std::string title = project_.name;
+        for (const char* sep : {",", ":", " - ", " | ", "(", " \xE2\x80\x94 ", " \xE2\x80\x93 "})
+            if (const size_t at = title.find(sep); at != std::string::npos && !safeName(title.substr(0, at), "").empty()) title.resize(at);
+        name_ = safeName(title, safeName(folder, "FabricProject"));
+        if (name_.size() > kMaxName) name_.resize(kMaxName);
+        if (name_ != safeName(project_.name, name_))
+            report_.add("setting", "project.godot", "", "", "application/config/name", Rating::Converted,
+                        "the project folder and file are named '" + name_ + "' (the title, short enough for Windows paths); the window title is the full name", 0);
+    }
 
     // A dry run converts into a scratch folder and keeps only the report.
     const std::string requestedOut = outDir_;
