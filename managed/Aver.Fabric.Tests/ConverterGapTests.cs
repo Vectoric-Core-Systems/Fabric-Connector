@@ -41,14 +41,41 @@ static class ConverterGapTests
         T.Run("converter gap: a base class's @onready is set when a subclass's own _ready does not call super", OnreadyThroughSubclass);
         T.Run("converter gap: ResourceSaver.save writes a game's own resource and ResourceLoader.load reads it back", ResourceSaverRoundTrip);
         T.Run("converter gap: get_node by name, a .gdshader held as a value, and Godot 4 properties scenes set (COGITO lobby)", ByNameRoundFour);
+        T.Run("converter gap: a script that does not compile is left out of the build, with what depends on it, and the rest builds (Molten Aim's addon tools)", LeaveOutFailing);
     });
 
     private static string Refs => AppContext.BaseDirectory;
 
-    private static ConversionResult Many(params (string Cls, string Gd)[] scripts) =>
+    private static ConversionResult Many(params (string Cls, string Gd)[] scripts) => ManyWith(false, scripts);
+
+    private static ConversionResult ManyWith(bool leaveOutFailing, params (string Cls, string Gd)[] scripts) =>
         ScriptConverter.Convert(
             scripts.Select(s => new ScriptSource { ResPath = "res://" + s.Cls.ToLowerInvariant() + ".gd", Text = s.Gd, Kind = "gdscript", ClassName = s.Cls, Output = "Content/Scripts/" + s.Cls + ".cs" }).ToList(),
-            new ConvertSettings { RefsDir = Refs, KeepAssembly = true, ExtraSources = System.Array.Empty<(string, string)>() });
+            new ConvertSettings { RefsDir = Refs, KeepAssembly = true, ExtraSources = System.Array.Empty<(string, string)>(), LeaveOutFailing = leaveOutFailing });
+
+    private static void LeaveOutFailing()
+    {
+        // A plugin class Aver has not got (a GDExtension's), a script that uses the broken one, and one that has nothing to do with either.
+        var scripts = new[]
+        {
+            ("GapLeaveGood", "extends Node\nfunc answer() -> int:\n\treturn 42\n"),
+            ("GapLeaveBroken", "extends Node\nfunc go():\n\tvar t: NoSuchPluginClass = null\n\tprint(t)\n"),
+            ("GapLeaveUser", "extends Node\nfunc go(b: GapLeaveBroken):\n\tb.go()\n"),   // typed by the broken class: it goes in the second round
+        };
+        ConversionResult strict = ManyWith(false, scripts);
+        T.Check("without it, one script that does not compile fails the whole set", !strict.Success && strict.LeftOutScripts.Count == 0);
+        ConversionResult r = ManyWith(true, scripts);
+        T.Check("with it, the set succeeds", r.Success, Errors(r));
+        T.Check("the broken script and the one that used it are left out, the other is not",
+                r.LeftOutScripts.Contains("res://gapleavebroken.gd") && r.LeftOutScripts.Contains("res://gapleaveuser.gd") && !r.LeftOutScripts.Contains("res://gapleavegood.gd"),
+                string.Join(", ", r.LeftOutScripts));
+        string broken = r.Scripts.First(s => s.ResPath == "res://gapleavebroken.gd").Text;
+        T.Check("a left-out file is kept, marked, inside #if FABRIC_LEFT_OUT", broken.StartsWith("// FABRIC: left out of the game's build") && broken.Contains("#if FABRIC_LEFT_OUT") &&
+                broken.TrimEnd().EndsWith("#endif") && broken.Contains("NoSuchPluginClass"));
+        Assembly asm = Assembly.Load(r.Assembly!);
+        T.Check("and the built assembly has the good script's class only", asm.GetType("GapLeaveGood") != null && asm.GetType("GapLeaveBroken") == null);
+        T.Check("the report names why", r.Items.Any(i => i.File == "res://gapleavebroken.gd" && i.Reason.Contains("left out of the game's build")));
+    }
 
     private static string Errors(ConversionResult r) => string.Join("; ", r.Errors.Take(4).Select(e => e.ToString())) + string.Join("; ", r.GeneralErrors);
 

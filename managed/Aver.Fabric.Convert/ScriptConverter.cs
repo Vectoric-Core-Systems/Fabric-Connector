@@ -39,6 +39,7 @@ public static class ScriptConverter
         public string Newline = "\n";
         public string Registry = "";
         public string Declared = "";
+        public bool LeftOut;   // did not compile, and LeaveOutFailing left it out of the build
         public int NamespaceRewrites;
         public int Exports;
         public int Signals, MethodNames, PropertyNames;
@@ -211,24 +212,48 @@ public static class ScriptConverter
             if (!changed) break;
         }
 
-        // 3. The verdict: emit, so the errors only the emitter finds count too.
-        CSharpCompilation final = Compile(files, refs, settings);
-        using var ms = new MemoryStream();
-        var emit = final.Emit(ms);
-        foreach (Diagnostic d in emit.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
+        // 3. The verdict: emit, so the errors only the emitter finds count too. With LeaveOutFailing, the files that do not compile are left out and
+        // the rest emitted again, until it compiles (a file that used a left-out file's class fails in the next round and goes too).
+        CompileError ToError(Diagnostic d, FileState f)
         {
-            FileState? f = files.FirstOrDefault(x => x.Tree == d.Location.SourceTree);
-            if (f == null) { result.GeneralErrors.Add($"{d.Id}: {d.GetMessage()}"); continue; }
             FileLinePositionSpan span = d.Location.GetLineSpan();
             string member = f.Tree.GetText().ToString(d.Location.SourceSpan).Trim();
             if (member.Length > 80 || member.Contains('\n')) member = QuotedName(d.GetMessage());
-            result.Errors.Add(new CompileError
+            return new CompileError
             {
                 ResPath = f.Source.ResPath, Output = f.Source.Output, Line = span.StartLinePosition.Line + 1, Column = span.StartLinePosition.Character + 1,
                 Id = d.Id, Message = d.GetMessage(System.Globalization.CultureInfo.InvariantCulture), Member = member,
-            });
+            };
         }
-        if (emit.Success && settings.KeepAssembly) result.Assembly = ms.ToArray();
+        var building = new List<FileState>(files);
+        while (true)
+        {
+            CSharpCompilation final = Compile(building, refs, settings);
+            using var ms = new MemoryStream();
+            var emit = final.Emit(ms);
+            List<Diagnostic> errors = emit.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+            var failing = errors.Select(d => building.FirstOrDefault(x => x.Tree == d.Location.SourceTree)).Where(f => f != null).Select(f => f!).Distinct().ToList();
+            bool general = errors.Any(d => building.All(x => x.Tree != d.Location.SourceTree));
+            if (settings.LeaveOutFailing && failing.Count > 0 && !general && failing.Count < building.Count)
+            {
+                foreach (FileState f in failing)
+                {
+                    f.LeftOut = true;
+                    result.LeftOutScripts.Add(f.Source.ResPath);
+                    foreach (Diagnostic d in errors.Where(d => d.Location.SourceTree == f.Tree)) result.LeftOutErrors.Add(ToError(d, f));
+                }
+                building.RemoveAll(f => f.LeftOut);
+                continue;
+            }
+            foreach (Diagnostic d in errors)
+            {
+                FileState? f = building.FirstOrDefault(x => x.Tree == d.Location.SourceTree);
+                if (f == null) { result.GeneralErrors.Add($"{d.Id}: {d.GetMessage()}"); continue; }
+                result.Errors.Add(ToError(d, f));
+            }
+            if (emit.Success && settings.KeepAssembly) result.Assembly = ms.ToArray();
+            break;
+        }
     }
 
     private static string QuotedName(string message)
@@ -277,7 +302,7 @@ public static class ScriptConverter
                 if (note.Comment) AddComment(comments, line, "FABRIC: " + note.Reason);
             }
 
-            foreach (CompileError e in result.Errors.Where(e => e.ResPath == f.Source.ResPath))
+            foreach (CompileError e in result.Errors.Concat(result.LeftOutErrors).Where(e => e.ResPath == f.Source.ResPath))
             {
                 script.ErrorCount++;
                 items.Add(new ReportItem
@@ -321,11 +346,22 @@ public static class ScriptConverter
                 script.Text = System.Text.RegularExpressions.Regex.Replace(script.Text, @"FABRIC\[\d+\]:", "FABRIC:");
             }
 
+            // Left out of the build: kept, whole and marked, inside a symbol nothing defines, so the project's own build skips it.
+            if (f.LeftOut)
+            {
+                string nl = f.Newline;
+                script.Text = $"// FABRIC: left out of the game's build: it does not compile in Aver yet ({script.ErrorCount} error(s), marked // FABRIC: below)." + nl +
+                              "// The rest of the project's scripts build without it. When they are fixed, remove the #if FABRIC_LEFT_OUT line and the #endif at the end." + nl +
+                              "#if FABRIC_LEFT_OUT" + nl + script.Text + (script.Text.EndsWith('\n') ? "" : nl) + "#endif" + nl;
+            }
+
             // The script as a whole: unsupported only when it does not compile; approximated when something was dropped or it was not compiled.
             Rating whole = script.ErrorCount > 0 ? Rating.Unsupported : (worst != Rating.Converted || !result.Compiled) ? Rating.Approximated : Rating.Converted;
+            string summary = Summary(f, result.Compiled, script.ErrorCount);
+            if (f.LeftOut) summary += "; left out of the game's build (the file is kept inside #if FABRIC_LEFT_OUT), so the other scripts build";
             script.Items.Add(new ReportItem
             {
-                File = f.Source.ResPath, Node = f.Registry, Type = f.Gd != null ? "gdscript" : "csharp", Rating = whole, Reason = Summary(f, result.Compiled, script.ErrorCount),
+                File = f.Source.ResPath, Node = f.Registry, Type = f.Gd != null ? "gdscript" : "csharp", Rating = whole, Reason = summary,
             });
             script.Items.AddRange(items);
             result.Scripts.Add(script);

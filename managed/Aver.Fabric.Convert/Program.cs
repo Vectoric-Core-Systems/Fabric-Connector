@@ -9,7 +9,8 @@ public static class ConvertCli
 {
     private const string Usage =
         "usage: Aver.Fabric.Convert scripts --project <godot-dir> --out <aver-project-dir> [--manifest scripts.json] [--refs <managed-dir>[;<bin/Scripting>]]\n" +
-        "                                   [--report <FabricReport.jsonl>] [--engine <engine-checkout>]\n" +
+        "                                   [--report <FabricReport.jsonl>] [--engine <engine-checkout>] [--leave-out-failing]\n" +
+        "--leave-out-failing: a script that does not compile is left out of the build (kept inside #if FABRIC_LEFT_OUT) and the rest compiled\n" +
         "exit codes: 0 converted and compiled, 1 compile errors or unreadable project, 2 bad usage, 3 reference folder unusable (scripts written, not compiled)";
 
     public static int Run(string[] args, TextWriter stdout, TextWriter stderr)
@@ -30,6 +31,7 @@ public static class ConvertCli
                 case "--refs": o.RefsDir = Next(); break;
                 case "--report": o.ReportPath = Next(); break;
                 case "--engine": o.EnginePath = Next(); break;
+                case "--leave-out-failing": o.LeaveOutFailing = true; break;
                 default: stderr.WriteLine($"unknown option '{a}'\n{Usage}"); return 2;
             }
         }
@@ -39,6 +41,7 @@ public static class ConvertCli
         int conv = r.Items.Count(i => i.Rating == Rating.Converted), apx = r.Items.Count(i => i.Rating == Rating.Approximated), uns = r.Items.Count(i => i.Rating == Rating.Unsupported);
         stdout.WriteLine("{\"schemaVersion\":1,\"summary\":true,\"kind\":\"fabric-scripts\",\"scripts\":" + (r.Conversion?.Scripts.Count ?? 0) +
                          ",\"compiled\":" + ((r.Conversion?.Compiled ?? false) ? "true" : "false") + ",\"errors\":" + (r.Conversion?.Errors.Count ?? 0) +
+                         ",\"leftOut\":" + (r.Conversion?.LeftOutScripts.Count ?? 0) +
                          ",\"converted\":" + conv + ",\"approximated\":" + apx + ",\"unsupported\":" + uns + ",\"report\":" +
                          System.Text.Json.JsonSerializer.Serialize(r.ReportPath) + ",\"exitCode\":" + r.ExitCode + "}");
         return r.ExitCode;

@@ -20,6 +20,8 @@ public sealed class ProjectOptions
     public string? ReportPath { get; set; }
     /// <summary>The engine checkout: when given, a missing Content/Scripts/Scripts.csproj is written with references into it.</summary>
     public string? EnginePath { get; set; }
+    /// <summary>A script that does not compile is left out of the build and the rest compiled (the converter of a whole project asks for this).</summary>
+    public bool LeaveOutFailing { get; set; }
 }
 
 public sealed class ProjectResult
@@ -92,7 +94,7 @@ public static class ProjectConverter
         string? sceneNodes = null;
         try { if (File.Exists(nodesFile)) sceneNodes = File.ReadAllText(nodesFile); }
         catch (IOException) { }
-        ConversionResult conv = ScriptConverter.Convert(sources, new ConvertSettings { RefsDir = refs, ProjectDir = projectDir, SceneNodes = sceneNodes });
+        ConversionResult conv = ScriptConverter.Convert(sources, new ConvertSettings { RefsDir = refs, ProjectDir = projectDir, SceneNodes = sceneNodes, LeaveOutFailing = o.LeaveOutFailing });
         res.Conversion = conv;
 
         foreach (ConvertedScript s in conv.Scripts)

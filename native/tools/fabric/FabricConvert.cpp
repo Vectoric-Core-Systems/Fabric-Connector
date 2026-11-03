@@ -460,6 +460,11 @@ int Converter::run() {
                           std::to_string(report_.count(Rating::Unsupported)) + " unsupported; " + std::to_string(sceneLevels_.size()) + " level(s), " +
                           std::to_string(scripts_.size()) + " script(s), " + std::to_string(extensions_.size()) + " GDExtension(s).";
     if (!scripts_.empty() && !scriptsRan_) message += " The scripts were not converted; see the report.";
+    // The script step's own outcome, so "0 errors" never stands beside scripts that did not build.
+    if (scriptsRan_ && scriptErrors_ > 0) message += " The scripts have " + std::to_string(scriptErrors_) + " compile error(s) and were not built; see the report.";
+    else if (scriptsRan_ && !options_.dryRun && !scriptsBuilt_ && !scripts_.empty()) message += " The scripts were not built; see the report.";
+    if (scriptsLeftOut_ > 0)
+        message += " " + std::to_string(scriptsLeftOut_) + " script(s) that do not compile in Aver yet were left out of the build; the report lists them.";
     if (options_.dryRun) message += " (report only)";
     emitResult(ok, options_.dryRun || !ok ? std::string() : projectDir_ + "/" + name_ + ".ocproject", reportOut + "/FabricReport.md", report_.count(Rating::Unsupported),
                ok ? 0 : 1, ok ? message : "The conversion did not finish; see the report. " + message);

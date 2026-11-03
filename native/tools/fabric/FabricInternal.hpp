@@ -262,6 +262,8 @@ public:
     // Builds Content/Scripts/Scripts.csproj into <project>/Binaries/Scripts as Tools > Compile Scripts does; a failure is a report entry.
     void buildScripts(const std::string& dotnet);
     bool scriptsRan_ = false;
+    bool scriptsBuilt_ = false;   // Binaries/Scripts was written
+    long scriptErrors_ = 0, scriptsLeftOut_ = 0;   // the script step's compile errors left in the build, and the scripts it left out
     // This extension's installed folder: the host's extensionDir, else <executable dir>/Extensions/FabricConnector.
     std::string extensionDir() const;
 

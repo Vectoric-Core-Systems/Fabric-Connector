@@ -83,7 +83,7 @@ bool Converter::convertScripts() {
     std::error_code ec;
     const std::string godotAbs = fsys::absolute(godotDir_, ec).string();
     std::vector<std::string> args = {tool, "scripts", "--project", godotAbs, "--out", projectDir_, "--manifest", fabricDir_ + "/scripts.json",
-                                     "--refs", refs, "--report", outDir_ + "/FabricReport.jsonl"};
+                                     "--refs", refs, "--report", outDir_ + "/FabricReport.jsonl", "--leave-out-failing"};
     if (const std::string engine = engineCheckout(); !engine.empty()) {
         args.push_back("--engine");
         args.push_back(engine);
@@ -110,9 +110,14 @@ bool Converter::convertScripts() {
         return false;
     }
     scriptsRan_ = true;
+    scriptErrors_ = jsonNumber(summary, "errors", 0);
+    scriptsLeftOut_ = jsonNumber(summary, "leftOut", 0);
     if (!summary.empty())
-        AVER_INFO("fabric: scripts: {} compiled={} errors={}", jsonNumber(summary, "scripts", 0), summary.find("\"compiled\":true") != std::string::npos ? "yes" : "no",
-                  jsonNumber(summary, "errors", 0));
+        AVER_INFO("fabric: scripts: {} compiled={} errors={} left out={}", jsonNumber(summary, "scripts", 0), summary.find("\"compiled\":true") != std::string::npos ? "yes" : "no",
+                  scriptErrors_, scriptsLeftOut_);
+    if (scriptsLeftOut_ > 0)
+        AVER_WARN("fabric: {} script(s) do not compile in Aver yet and were left out of the build (kept inside #if FABRIC_LEFT_OUT; the report lists their errors)",
+                  scriptsLeftOut_);
     // The tool merged its entries into the report file; ours is read back from it.
     Report merged;
     if (merged.readJsonl(outDir_ + "/FabricReport.jsonl")) report_ = std::move(merged);
@@ -152,6 +157,7 @@ void Converter::buildScripts(const std::string& dotnet) {
     });
     if (out.started && out.exitCode == 0) {
         AVER_INFO("fabric: scripts built into {}", outDir);
+        scriptsBuilt_ = true;
         return;
     }
     for (const std::string& line : errors.empty() ? tail : errors) AVER_ERROR("fabric: dotnet build: {}", line);

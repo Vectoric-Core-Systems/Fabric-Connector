@@ -87,6 +87,10 @@ public sealed class ConversionResult
     /// <summary>The compiled assembly, when it compiled with no errors and the caller asked for it.</summary>
     public byte[]? Assembly { get; set; }
     public bool Success => Compiled && Errors.Count == 0 && GeneralErrors.Count == 0;
+    /// <summary>With <see cref="ConvertSettings.LeaveOutFailing"/>: the scripts (res:// paths) left out of the build because they did not compile, and
+    /// their errors, which stay out of <see cref="Errors"/> so the rest builds.</summary>
+    public List<string> LeftOutScripts { get; } = new();
+    public List<CompileError> LeftOutErrors { get; } = new();
     /// <summary>The scripts left out of the game, one item each (editor-only scripts: see GdScript.EditorOnly).</summary>
     public List<ReportItem> LeftOut { get; } = new();
     public IEnumerable<ReportItem> Items => Scripts.SelectMany(s => s.Items).Concat(LeftOut);
@@ -107,4 +111,7 @@ public sealed class ConvertSettings
     public string? SceneNodes { get; init; }
     /// <summary>Extra C# source the compile sees besides the scripts and the reference folder (tests stub classes the runtime lacks).</summary>
     public IReadOnlyList<(string Path, string Text)>? ExtraSources { get; init; }
+    /// <summary>A script that does not compile is left out of the build (written inside #if FABRIC_LEFT_OUT) and what is left compiled again, until it
+    /// compiles: one broken addon tool no longer stops a whole game's scripts from building.</summary>
+    public bool LeaveOutFailing { get; init; }
 }
