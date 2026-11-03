@@ -502,6 +502,9 @@ internal static class InputBridge
         return made;
     }
 
+    // A mouse event's position is in the root viewport's space, past the stretch (Godot's InputEventMouse.position), not window pixels.
+    private static Vector2 Pointer() => SceneTree.Instance.Root.WindowToContent(Input.MousePosition);
+
     private static InputEvent Make(Aver.Framework.InputEvent e)
     {
         switch (e)
@@ -512,11 +515,11 @@ internal static class InputBridge
                 return new InputEventKey { Keycode = g, PhysicalKeycode = g, KeyLabel = g, Pressed = k.IsPressed, ShiftPressed = Input.HeldModifier(KeyModifierMask.Shift), CtrlPressed = Input.HeldModifier(KeyModifierMask.Ctrl), AltPressed = Input.HeldModifier(KeyModifierMask.Alt) };
             }
             case Aver.Framework.InputEventMouseButton b:
-                return new InputEventMouseButton { ButtonIndex = ToMouseButton(b.Button), Pressed = b.IsPressed, Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
+                return new InputEventMouseButton { ButtonIndex = ToMouseButton(b.Button), Pressed = b.IsPressed, Position = Pointer(), GlobalPosition = Pointer() };
             case Aver.Framework.InputEventMouseWheel w when w.Horizontal != 0f && w.Delta == 0f:
-                return new InputEventMouseButton { ButtonIndex = w.Horizontal > 0 ? MouseButton.WheelRight : MouseButton.WheelLeft, Pressed = true, Factor = MathF.Abs(w.Horizontal), Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
+                return new InputEventMouseButton { ButtonIndex = w.Horizontal > 0 ? MouseButton.WheelRight : MouseButton.WheelLeft, Pressed = true, Factor = MathF.Abs(w.Horizontal), Position = Pointer(), GlobalPosition = Pointer() };
             case Aver.Framework.InputEventMouseWheel w:
-                return new InputEventMouseButton { ButtonIndex = w.Delta > 0 ? MouseButton.WheelUp : MouseButton.WheelDown, Pressed = true, Factor = MathF.Abs(w.Delta), Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
+                return new InputEventMouseButton { ButtonIndex = w.Delta > 0 ? MouseButton.WheelUp : MouseButton.WheelDown, Pressed = true, Factor = MathF.Abs(w.Delta), Position = Pointer(), GlobalPosition = Pointer() };
             case Aver.Framework.InputEventTouch t:
                 return new InputEventScreenTouch { Index = t.Finger, Position = new Vector2(t.X, t.Y), Pressed = t.IsPressed };
             case Aver.Framework.InputEventTouchMotion tm:
@@ -529,7 +532,7 @@ internal static class InputBridge
             {
                 var rel = new Vector2(m.RelativeX, m.RelativeY);
                 float dt = Input.FrameDelta > 0 ? (float)Input.FrameDelta : 1f / 60f;
-                return new InputEventMouseMotion { Relative = rel, ScreenRelative = rel, Velocity = rel / dt, ScreenVelocity = rel / dt, Position = Input.MousePosition, GlobalPosition = Input.MousePosition };
+                return new InputEventMouseMotion { Relative = rel, ScreenRelative = rel, Velocity = rel / dt, ScreenVelocity = rel / dt, Position = Pointer(), GlobalPosition = Pointer() };
             }
             case Aver.Framework.InputEventJoypadButton jb:
                 return new InputEventJoypadButton { ButtonIndex = ToJoyButton(jb.Button), Pressed = jb.IsPressed, Pressure = jb.IsPressed ? 1f : 0f, Device = jb.Pad };

@@ -513,6 +513,12 @@ public partial class SceneTree : GodotObject
     {
         if (NodeHost.Current.IsEngine)
         {
+            // Godot refuses a scene that is not there with an error and stays put; the engine would travel nowhere without a word.
+            if (ResourceLoader.ContentRoot.Length > 0 && !ResourceLoader.Exists(path))
+            {
+                Aver.Scripting.Log.Error($"[Fabric] change_scene_to_file: '{path}' has no level ({ScenePathMapper(path)} is not in the content folder); the scene stays");
+                return Error.FileNotFound;
+            }
             _currentScenePath = path;
             Game.ChangeLevel(ScenePathMapper(path));
             return Error.Ok;

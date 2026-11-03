@@ -758,6 +758,19 @@ internal static class Gui
     private static Vector2 s_lastEnginePointer;
     private static int s_engineButtons;
 
+    /// <summary>True when Controls get the pointer from <see cref="PollEnginePointer"/>.</summary>
+    internal static bool PollsEnginePointer => NodeHost.Current.IsEngine && UiNative.Available;
+
+    /// <summary>A left, right or middle press or release from the engine's input events. The pointer poll sees the same click as a held button, so
+    /// whichever comes first gives it to the Controls and the other is skipped: a second press would close the popup the first opened.</summary>
+    internal static bool HandleEngineButton(InputEventMouseButton b)
+    {
+        int bit = 1 << ((int)b.ButtonIndex - 1);
+        if (((s_engineButtons & bit) != 0) == b.Pressed) return s_mouseFocus != null || s_dragging || FindControl(b.Position) != null;
+        s_engineButtons = b.Pressed ? s_engineButtons | bit : s_engineButtons & ~bit;
+        return HandleInput(b);
+    }
+
     /// <summary>The idle frame's GUI work: the engine's pointer (when there is one), layout, tooltips, and drawing.</summary>
     internal static void FrameUpdate(double delta)
     {
@@ -1107,6 +1120,10 @@ internal sealed class GuiDriver : Node
     public override void OnUnhandledInput(Aver.Framework.InputEvent e)
     {
         InputEvent ge = InputBridge.FromFramework(e);
-        if (Gui.HandleInput(ge)) Aver.Framework.Hosting.ExtensionHost.MarkHandled(e);
+        if (Gui.PollsEnginePointer && ge is InputEventMouseMotion) return;   // the pointer poll moves the pointer
+        bool handled = Gui.PollsEnginePointer && ge is InputEventMouseButton { ButtonIndex: MouseButton.Left or MouseButton.Right or MouseButton.Middle } b
+            ? Gui.HandleEngineButton(b)
+            : Gui.HandleInput(ge);
+        if (handled) Aver.Framework.Hosting.ExtensionHost.MarkHandled(e);
     }
 }

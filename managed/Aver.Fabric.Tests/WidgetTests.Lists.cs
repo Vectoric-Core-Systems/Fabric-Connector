@@ -160,6 +160,20 @@ static partial class WidgetTests
         Tap(30, 30);
         T.Check("a button with no items opens nothing", !ob.GetPopup().IsPopupShown);
 
+        // In the engine a click comes twice, as an input event and as the pointer poll's held button: it presses once and the popup stays open.
+        ob.AddItem("Easy");
+        ob.AddItem("Hard");
+        int downs = 0;
+        ob.ButtonDown += () => downs++;
+        var press = new InputEventMouseButton { Position = new Vector2(30, 30), GlobalPosition = new Vector2(30, 30), Pressed = true, ButtonIndex = MouseButton.Left };
+        var release = new InputEventMouseButton { Position = new Vector2(30, 30), GlobalPosition = new Vector2(30, 30), Pressed = false, ButtonIndex = MouseButton.Left };
+        bool first = Gui.HandleEngineButton(press), again = Gui.HandleEngineButton(press);
+        Gui.HandleEngineButton(release);
+        bool late = Gui.HandleEngineButton(release);
+        T.Check("a click the engine reports twice presses once and leaves the popup open", downs == 1 && ob.GetPopup().IsPopupShown && first && again && late, $"{downs} {ob.GetPopup().IsPopupShown} {first} {again} {late}");
+        ob.GetPopup().Hide();
+        ob.Clear();
+
         var mb = new MenuButton { Text = "File" };
         mb.GetPopup().AddItem("New", 1);
         mb.GetPopup().AddCheckItem("Auto", 2);
