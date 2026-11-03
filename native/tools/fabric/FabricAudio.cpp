@@ -5,6 +5,7 @@
 // property names. A Godot AudioBusLayout becomes an .ocbus (aver/formats/OcBusLayout.hpp) that the project names with AUDIO.BUSLAYOUT. The engine's own effect
 // tables decide which effect parameters are carried, so the converter cannot drift from what the mixer implements.
 #include "FabricInternal.hpp"
+#include "aver/core/Log.hpp"
 
 #include "aver/audio/Effects.hpp"
 #include "aver/formats/OcBusLayout.hpp"
@@ -117,6 +118,7 @@ std::string Converter::audioFileAsset(const std::string& resPath, const Where& w
         }
     }
     audioAssets_[resPath] = asset;
+    if (!asset.empty()) AVER_INFO("fabric: sound {} -> {}", resPath, asset);
     return asset;
 }
 

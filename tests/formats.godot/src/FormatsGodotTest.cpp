@@ -9,6 +9,7 @@
 #include "aver/core/Log.hpp"
 #include "aver/formats/godot/GodotProjectFs.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <initializer_list>
 #include <string>
@@ -142,6 +143,24 @@ static void testMathTypes() {
     check(parseGodotVariant("PackedByteArray(\"AQID\")", v, &d) && v.type == GodotVType::PackedByteArray && v.bytes == std::vector<u8>({1, 2, 3}),
           "PackedByteArray from base64");
     check(parseGodotVariant("PackedByteArray(1, 2, 255)", v, &d) && v.bytes == std::vector<u8>({1, 2, 255}), "PackedByteArray from ints");
+    check(parseGodotVariant("PackedByteArray()", v, &d) && v.type == GodotVType::PackedByteArray && v.bytes.empty(), "an empty PackedByteArray");
+    {
+        GodotDiagnostics bd;
+        check(!parseGodotVariant("PackedByteArray(1, 256)", v, &bd), "a PackedByteArray value past 255 is refused");
+    }
+    {
+        // An image embedded in a .tres is millions of bytes written out as numbers (a PolyHaven material: 40 MB of them). Each byte used to become a
+        // whole GodotVariant first: gigabytes and minutes per file.
+        std::string big = "PackedByteArray(";
+        constexpr usize kBytes = 2'000'000;
+        big.reserve(kBytes * 5);
+        for (usize i = 0; i < kBytes; ++i) big += std::to_string(i % 256) + (i + 1 < kBytes ? ", " : ")");
+        const auto t0 = std::chrono::steady_clock::now();
+        const bool ok = parseGodotVariant(big, v, &d);
+        const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        check(ok && v.bytes.size() == kBytes && v.bytes[255] == 255 && v.bytes[256] == 0 && s < 20.0,
+              "two million bytes as numbers parse into the byte buffer (" + std::to_string(s) + " s)");
+    }
     check(parseGodotVariant("PackedInt32Array(1, -2, 3)", v, &d) && v.type == GodotVType::PackedInt32Array && numsAre(&v, {1, -2, 3}), "PackedInt32Array");
     check(parseGodotVariant("PackedInt64Array(4294967296, 2)", v, &d) && numsAre(&v, {4294967296.0, 2}), "PackedInt64Array");
     check(parseGodotVariant("PackedFloat32Array(0.5, 1.5)", v, &d) && v.type == GodotVType::PackedFloat32Array && numsAre(&v, {0.5, 1.5}), "PackedFloat32Array");

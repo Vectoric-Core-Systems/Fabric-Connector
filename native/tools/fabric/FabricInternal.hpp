@@ -12,6 +12,7 @@
 #include "aver/formats/godot/GodotProjectFs.hpp"
 #include "aver/formats/godot/GodotShaderEngine.hpp"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -28,6 +29,12 @@ using VType = gd::GodotVType;
 // ---- progress, for the tool that runs this command (FabricConvert.cpp) ----------------------------------------------
 void emitProgress(double fraction, const std::string& text);
 void emitProgressText(const std::string& text);   // the bar stays where it is; the text says what is being done
+
+// ---- running work side by side (FabricConvert.cpp) -----------------------------------------------------------------
+// body(i) for every i in [0, n), on up to `threads` threads; returns when all are done. body must not touch the Converter's shared state.
+void parallelFor(size_t n, unsigned threads, const std::function<void(size_t)>& body);
+// Threads for a parallel step: AVER_FABRIC_JOBS when it is set (1 runs everything in order), else the machine's cores, at most `cap`.
+unsigned fabricJobs(unsigned cap);
 
 // ---- Variant helpers (FabricResources.cpp) -------------------------------------------------------------------------
 Var makeNil();
@@ -239,6 +246,16 @@ public:
     void convertExtensions();
     std::vector<ExtensionInfo> extensions_;
 
+    // ---- reading ahead, side by side ---------------------------------------------------------------------------------
+    // Every text scene and resource of the project parsed on a thread pool into the caches sceneDoc / resourceDoc read, each logged with its
+    // size and time (FabricScene.cpp). A 55 MB scene takes minutes to parse; the steps after it then read it from the cache.
+    void prefetchDocuments();
+    // Every model file a scene names, imported on a thread pool before the scenes (FabricResources.cpp): meshlets and LODs for dense meshes are
+    // the slowest part of a run. modelFor finishes each one (root scale, material overrides, report) in the order the scenes reach it.
+    void prefetchModels();
+    std::map<std::string, ModelResult> prefetchedModels_;
+    ModelResult importModelOnly(const std::string& resPath) const;   // the import itself, safe on several threads at once
+
     // ---- the script step (FabricScripts.cpp) -----------------------------------------------------------------------
     // Runs Aver.Fabric.Convert on the manifest and folds its report into ours. Returns false on a hard failure.
     bool convertScripts();
@@ -359,6 +376,7 @@ public:
     void writeRagdollAuthoring(FNode& root, const std::string& sceneRes);
     std::map<std::string, std::unique_ptr<ModelTree>> modelTrees_;
     const gd::GodotResource* resourceDoc(const std::string& resPath);
+    const gd::GodotResource* storeResourceDoc(const std::string& resPath, std::unique_ptr<gd::GodotResource> doc, bool ok, const gd::GodotDiagnostics& d);
     std::map<std::string, std::unique_ptr<gd::GodotResource>> resourceDocs_;
     std::map<std::string, std::string> meshAssets_, materialAssets_, textureAssets_;
     std::map<std::string, ModelResult> models_;
@@ -459,6 +477,7 @@ public:
     // ---- FabricScene.cpp -------------------------------------------------------------------------------------------
     bool convertScenes();
     const gd::GodotScene* sceneDoc(const std::string& resPath);
+    const gd::GodotScene* storeSceneDoc(const std::string& resPath, std::unique_ptr<gd::GodotScene> doc, bool ok, const gd::GodotDiagnostics& d);
     std::unique_ptr<FNode> buildScene(const std::string& resPath, int depth, const Where& from);
     bool emitLevel(const std::string& sceneRes, FNode& root, fmt::OcWorldData& level, bool isStart);
     // Places `fn` and everything below it; `parent` indexes level.placements (-1 for a top-level node).

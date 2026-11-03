@@ -17,6 +17,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -307,6 +308,7 @@ std::string Converter::copyTexture(const std::string& resPath, const Where& w) {
         report_.add("resource", resPath, w.node, "Texture2D", "", Rating::Unsupported, "unknown texture file type " + e, 0);
     }
     textureAssets_[resPath] = asset;
+    if (!asset.empty()) AVER_INFO("fabric: texture {} -> {}", resPath, asset);
     return asset;
 }
 
@@ -1077,6 +1079,7 @@ std::string Converter::materialAsset(const std::string& materialKey, const std::
     const std::string asset = "Materials/" + res.materialSlotNames[0] + ".ocmat";
     report_.add("resource", file, "", type, "", Rating::Converted, key + " written as " + asset, 0);
     materialAssets_[key] = asset;
+    AVER_INFO("fabric: material {} -> {}", key, asset);
     return asset;
 #else
     (void)type; (void)props; (void)doc; (void)nameHint;
@@ -1196,40 +1199,98 @@ std::string Converter::primitiveMeshAsset(const std::string& type, const std::ve
 
 // ---- imported model files --------------------------------------------------------------------------------------------
 
-const ModelResult* Converter::modelFor(const std::string& resPath, const Where& w) {
-    if (const auto it = models_.find(resPath); it != models_.end()) return it->second.ok ? &it->second : nullptr;
+namespace {
+// Where a model's meshes go (Meshes/<rel>) and the stem its files share.
+struct ModelNames { std::string rel, base; };
+ModelNames modelNames(const std::string& resPath) {
+    ModelNames n;
+    n.rel = resPath.rfind("res://", 0) == 0 ? resPath.substr(6) : resPath;
+    const size_t dot = n.rel.find_last_of('.');
+    if (dot != std::string::npos) n.rel.erase(dot);
+    n.base = n.rel;
+    for (char& c : n.base) if (c == '/') c = '_';
+    n.base = safeName(n.base, "model");
+    return n;
+}
+}  // namespace
+
+ModelResult Converter::importModelOnly(const std::string& resPath) const {
     ModelResult r;
     if (!host_.importModel) {
         r.error = "this AverAssetC has no model importer";
-    } else {
-        const std::string disk = fs_.toDiskPath(resPath);
-        std::string rel = resPath.rfind("res://", 0) == 0 ? resPath.substr(6) : resPath;
-        const size_t dot = rel.find_last_of('.');
-        if (dot != std::string::npos) rel.erase(dot);
-        std::string base = rel;
-        for (char& c : base) if (c == '/') c = '_';
-        base = safeName(base, "model");
-        // A dense model takes minutes (meshlets and LODs for every mesh): say which one, and afterwards how long it took.
-        std::error_code sizeEc;
-        const auto bytes = std::filesystem::file_size(disk, sizeEc);
-        emitProgressText("model: " + resPath);
-        AVER_INFO("fabric: importing model {} ({:.1f} MB)", resPath, sizeEc ? 0.0 : static_cast<double>(bytes) / (1024.0 * 1024.0));
-        const auto t0 = std::chrono::steady_clock::now();
-        r = host_.importModel(disk, contentDir_, "Meshes/" + rel, base);
-        AVER_INFO("fabric: model {} {} in {:.1f} s", resPath, r.ok ? "imported" : "failed",
-                  std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
-        if (r.ok) {
-            // The importer writes the model's skeletons beside its meshes; the converter finds them there (the host contract has no field for them).
-            std::error_code ec;
-            const std::string sub = "Meshes/" + rel;
-            for (const auto& entry : std::filesystem::directory_iterator(contentDir_ + "/" + sub, ec)) {
-                if (!entry.is_regular_file(ec) || entry.path().extension() != ".ocskel") continue;
-                r.skeletons.push_back(sub + "/" + entry.path().filename().string());
-            }
-            std::sort(r.skeletons.begin(), r.skeletons.end());
-            applyRootScale(resPath, r);
-            applyMaterialOverrides(resPath, r, base);
+        return r;
+    }
+    const ModelNames names = modelNames(resPath);
+    const std::string disk = fs_.toDiskPath(resPath);
+    // A dense model takes minutes (meshlets and LODs for every mesh): say which one, and afterwards how long it took.
+    std::error_code sizeEc;
+    const auto bytes = std::filesystem::file_size(disk, sizeEc);
+    AVER_INFO("fabric: importing model {} ({:.1f} MB)", resPath, sizeEc ? 0.0 : static_cast<double>(bytes) / (1024.0 * 1024.0));
+    const auto t0 = std::chrono::steady_clock::now();
+    r = host_.importModel(disk, contentDir_, "Meshes/" + names.rel, names.base);
+    AVER_INFO("fabric: model {} {} in {:.1f} s", resPath, r.ok ? "imported" : "failed",
+              std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+    if (r.ok) {
+        // The importer writes the model's skeletons beside its meshes; the converter finds them there (the host contract has no field for them).
+        std::error_code ec;
+        const std::string sub = "Meshes/" + names.rel;
+        for (const auto& entry : std::filesystem::directory_iterator(contentDir_ + "/" + sub, ec)) {
+            if (!entry.is_regular_file(ec) || entry.path().extension() != ".ocskel") continue;
+            r.skeletons.push_back(sub + "/" + entry.path().filename().string());
         }
+        std::sort(r.skeletons.begin(), r.skeletons.end());
+    }
+    return r;
+}
+
+void Converter::prefetchModels() {
+    // The model files the scenes (and resources) name: each is imported into its own Meshes/<rel> and Textures/<stem> folders, so they can run at once.
+    std::set<std::string> wanted;
+    const auto collect = [&](const gd::GodotDocBase& doc) {
+        for (const gd::GodotExtResource& e : doc.extResources) {
+            const std::string res = fs_.resolve(e, nullptr, doc.file);
+            if (res.empty() || !isModelExt(extOf(res)) || models_.count(res) || prefetchedModels_.count(res) || !fs_.exists(res)) continue;
+            wanted.insert(res);
+        }
+    };
+    for (const auto& [res, doc] : sceneDocs_) if (doc) collect(*doc);
+    for (const auto& [res, doc] : resourceDocs_) if (doc) collect(*doc);
+    if (wanted.empty()) return;
+    std::vector<std::pair<uintmax_t, std::string>> list;
+    for (const std::string& res : wanted) {
+        std::error_code ec;
+        const uintmax_t bytes = std::filesystem::file_size(fs_.toDiskPath(res), ec);
+        list.emplace_back(ec ? 0 : bytes, res);
+    }
+    std::sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.first > b.first; });   // the largest first
+    // Fewer threads than cores: a dense model holds gigabytes while its LODs are built.
+    const unsigned jobs = fabricJobs(4);
+    AVER_INFO("fabric: importing {} model(s) on {} thread(s)", list.size(), jobs);
+    std::vector<ModelResult> results(list.size());
+    std::atomic<size_t> done{0};
+    const std::string total = std::to_string(list.size());
+    parallelFor(list.size(), jobs, [&](size_t i) {
+        results[i] = importModelOnly(list[i].second);
+        const size_t n = ++done;
+        emitProgress(0.13 + 0.27 * static_cast<double>(n) / static_cast<double>(list.size()), "model " + std::to_string(n) + "/" + total + ": " + list[i].second);
+    });
+    for (size_t i = 0; i < list.size(); ++i) prefetchedModels_[list[i].second] = std::move(results[i]);
+}
+
+const ModelResult* Converter::modelFor(const std::string& resPath, const Where& w) {
+    if (const auto it = models_.find(resPath); it != models_.end()) return it->second.ok ? &it->second : nullptr;
+    ModelResult r;
+    if (const auto pre = prefetchedModels_.find(resPath); pre != prefetchedModels_.end()) {
+        r = std::move(pre->second);
+        prefetchedModels_.erase(pre);
+    } else {
+        emitProgressText("model: " + resPath);
+        r = importModelOnly(resPath);
+    }
+    // What reads the converter's own state (the model's .import settings, the project's materials), in the order the scenes reach the model.
+    if (r.ok) {
+        applyRootScale(resPath, r);
+        applyMaterialOverrides(resPath, r, modelNames(resPath).base);
     }
     models_[resPath] = r;
     if (!r.ok) {
@@ -1381,7 +1442,12 @@ const gd::GodotResource* Converter::resourceDoc(const std::string& resPath) {
     if (const auto it = resourceDocs_.find(resPath); it != resourceDocs_.end()) return it->second.get();
     auto doc = std::make_unique<gd::GodotResource>();
     gd::GodotDiagnostics d;
-    if (!fs_.loadResource(resPath, *doc, d)) {
+    const bool ok = fs_.loadResource(resPath, *doc, d);
+    return storeResourceDoc(resPath, std::move(doc), ok, d);
+}
+
+const gd::GodotResource* Converter::storeResourceDoc(const std::string& resPath, std::unique_ptr<gd::GodotResource> doc, bool ok, const gd::GodotDiagnostics& d) {
+    if (!ok) {
         for (const gd::GodotDiag& x : d.items) report_.add("resource", resPath, "", "", "", Rating::Unsupported, x.message, x.line);
         resourceDocs_[resPath] = nullptr;
         return nullptr;

@@ -15,6 +15,7 @@
 #include "aver/world/LevelTransform.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstring>
@@ -320,6 +321,10 @@ const gd::GodotScene* Converter::sceneDoc(const std::string& resPath) {
     auto doc = std::make_unique<gd::GodotScene>();
     gd::GodotDiagnostics d;
     const bool ok = fs_.loadScene(resPath, *doc, d);
+    return storeSceneDoc(resPath, std::move(doc), ok, d);
+}
+
+const gd::GodotScene* Converter::storeSceneDoc(const std::string& resPath, std::unique_ptr<gd::GodotScene> doc, bool ok, const gd::GodotDiagnostics& d) {
     for (const gd::GodotDiag& x : d.items) {
         const Rating r = x.severity == gd::GodotSeverity::Error ? Rating::Unsupported : Rating::Approximated;
         if (x.severity != gd::GodotSeverity::Info) report_.add("scene", resPath, "", "", "", r, x.message, x.line);
@@ -331,6 +336,61 @@ const gd::GodotScene* Converter::sceneDoc(const std::string& resPath) {
     const gd::GodotScene* p = doc.get();
     sceneDocs_[resPath] = std::move(doc);
     return p;
+}
+
+void Converter::prefetchDocuments() {
+    struct Item {
+        std::string res;
+        bool scene = false;
+        uintmax_t bytes = 0;
+        std::unique_ptr<gd::GodotScene> sceneDoc;
+        std::unique_ptr<gd::GodotResource> resourceDoc;
+        gd::GodotDiagnostics diag;
+        bool ok = false;
+    };
+    std::vector<Item> items;
+    for (const std::string& res : fs_.files()) {
+        const std::string l = lower(res);
+        const bool scene = endsWith(l, ".tscn"), resource = endsWith(l, ".tres");   // binary .scn / .res go through the caches as before
+        if ((!scene && !resource) || (scene ? sceneDocs_.count(res) : resourceDocs_.count(res))) continue;
+        Item it;
+        it.res = res;
+        it.scene = scene;
+        std::error_code ec;
+        it.bytes = std::filesystem::file_size(fs_.toDiskPath(res), ec);
+        if (ec) it.bytes = 0;
+        items.push_back(std::move(it));
+    }
+    if (items.empty()) return;
+    // The largest first, so a 55 MB scene starts at once instead of last.
+    std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.bytes > b.bytes; });
+    const unsigned jobs = fabricJobs(8);
+    AVER_INFO("fabric: reading {} scene and resource file(s) on {} thread(s)", items.size(), jobs);
+    std::atomic<size_t> done{0};
+    const std::string total = std::to_string(items.size());
+    parallelFor(items.size(), jobs, [&](size_t i) {
+        Item& it = items[i];
+        const double mb = static_cast<double>(it.bytes) / (1024.0 * 1024.0);
+        if (mb >= 1.0) AVER_INFO("fabric: reading {} ({:.1f} MB)", it.res, mb);
+        const auto t0 = std::chrono::steady_clock::now();
+        if (it.scene) {
+            it.sceneDoc = std::make_unique<gd::GodotScene>();
+            it.ok = fs_.loadScene(it.res, *it.sceneDoc, it.diag);
+        } else {
+            it.resourceDoc = std::make_unique<gd::GodotResource>();
+            it.ok = fs_.loadResource(it.res, *it.resourceDoc, it.diag);
+        }
+        const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        const size_t n = ++done;
+        if (mb >= 1.0 || s >= 0.5) AVER_INFO("fabric: read {} ({:.1f} MB) in {:.1f} s{}", it.res, mb, s, it.ok ? "" : ", unreadable");
+        emitProgressText("read " + std::to_string(n) + "/" + total + ": " + it.res);
+    });
+    // Into the caches in a fixed order, with their diagnostics in the report, as sceneDoc and resourceDoc would have.
+    std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.res < b.res; });
+    for (Item& it : items) {
+        if (it.scene) storeSceneDoc(it.res, std::move(it.sceneDoc), it.ok, it.diag);
+        else storeResourceDoc(it.res, std::move(it.resourceDoc), it.ok, it.diag);
+    }
 }
 
 // ---- building the tree ---------------------------------------------------------------------------------------------
@@ -2128,7 +2188,7 @@ bool Converter::convertScenes() {
         const std::string& res = scenes[si];
         // Each scene by name, so a long one (its models' meshes, built here the first time a scene uses them) reads as work, not a hang.
         const std::string step = "scene " + std::to_string(si + 1) + "/" + std::to_string(scenes.size()) + ": " + res;
-        emitProgress(0.15 + 0.45 * static_cast<double>(si) / static_cast<double>(scenes.size()), step);
+        emitProgress(0.40 + 0.20 * static_cast<double>(si) / static_cast<double>(scenes.size()), step);
         AVER_INFO("fabric: {}", step);
         const Where w{res, "", ""};
         std::unique_ptr<FNode> root = buildScene(res, 0, w);

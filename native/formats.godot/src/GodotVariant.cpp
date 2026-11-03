@@ -760,7 +760,7 @@ bool GodotVariantReader::parseConstructor(const std::string& name, GodotVariant&
         while (true) {
             skipSpace(true);
             if (consume(')')) return true;
-            tmp = GodotVariant{};
+            tmp.type = GodotVType::Nil;   // reused: a mesh's vertex array is millions of numbers
             if (!parseValue(tmp)) return false;
             if (!tmp.isNumber()) {
                 error(name + " takes numbers");
@@ -797,9 +797,9 @@ bool GodotVariantReader::parseConstructor(const std::string& name, GodotVariant&
             }
             return true;
         }
-        std::vector<GodotVariant> args;
-        if (!parseArgs(args)) return false;
         if (packed->stride == -1) {
+            std::vector<GodotVariant> args;
+            if (!parseArgs(args)) return false;
             for (const GodotVariant& a : args) {
                 if (a.type != GodotVType::String && a.type != GodotVType::StringName) {
                     errorAt(a.line, "PackedStringArray takes strings");
@@ -809,22 +809,43 @@ bool GodotVariantReader::parseConstructor(const std::string& name, GodotVariant&
             }
             return true;
         }
-        // PackedByteArray: one base64 string (Godot 4.3+), or a list of integers.
-        if (args.size() == 1 && args[0].type == GodotVType::String) {
-            if (!base64Decode(args[0].s, out.bytes)) {
-                errorAt(args[0].line, "PackedByteArray: bad base64");
+        // PackedByteArray: one base64 string (Godot 4.3+), or a list of integers. The list is read straight into `bytes`: an embedded image is
+        // millions of them (a PolyHaven material holds 40 MB of these), and a whole GodotVariant per byte took gigabytes and minutes per file.
+        skipSpace(true);
+        if (peek() == '"') {
+            std::string b64;
+            const int at = line_;
+            if (!parseString(b64)) return false;
+            skipSpace(true);
+            if (!expect(')', "after PackedByteArray's base64 string")) return false;
+            if (!base64Decode(b64, out.bytes)) {
+                errorAt(at, "PackedByteArray: bad base64");
                 return false;
             }
             return true;
         }
-        for (const GodotVariant& a : args) {
-            if (a.type != GodotVType::Int || a.i < 0 || a.i > 255) {
-                errorAt(a.line, "PackedByteArray takes bytes (0..255) or one base64 string");
+        while (true) {
+            skipSpace(true);
+            if (consume(')')) return true;
+            // Plain decimal digits, the form Godot writes, read in place (no newline can be among them, so the cursor moves without counting lines).
+            u32 value = 0;
+            usize digits = 0;
+            while (pos_ < text_.size() && isDigit(text_[pos_]) && digits < 4) {
+                value = value * 10 + static_cast<u32>(text_[pos_] - '0');
+                ++pos_;
+                ++digits;
+            }
+            if (digits == 0 || value > 255 || (pos_ < text_.size() && (isDigit(text_[pos_]) || text_[pos_] == '.' || isIdentStart(text_[pos_])))) {
+                error("PackedByteArray takes bytes (0..255) or one base64 string");
                 return false;
             }
-            out.bytes.push_back(static_cast<u8>(a.i));
+            out.bytes.push_back(static_cast<u8>(value));
+            skipSpace(true);
+            if (consume(',')) continue;
+            if (consume(')')) return true;
+            error("expected ',' or ')' in PackedByteArray");
+            return false;
         }
-        return true;
     }
 
     std::vector<GodotVariant> args;

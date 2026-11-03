@@ -8,10 +8,14 @@
 #include "aver/platform/FileSystem.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <sstream>
+#include <thread>
 
 namespace aver::fabric {
 
@@ -266,7 +270,7 @@ bool Converter::writeProjectManifest() {
 // ---- the run ---------------------------------------------------------------------------------------------------------------
 
 namespace {
-double g_progressFraction = 0.0;   // where the bar is, so a step inside a stage can say what it is doing without moving it
+std::atomic<double> g_progressFraction{0.0};   // where the bar is, so a step inside a stage can say what it is doing without moving it
 }  // namespace
 
 // The engine's command protocol (aver_ext_protocol.h): one JSON line each, for the tool that runs this command.
@@ -276,7 +280,26 @@ void emitProgress(double fraction, const std::string& text) {
     std::fflush(stdout);
 }
 
-void emitProgressText(const std::string& text) { emitProgress(g_progressFraction, text); }
+void emitProgressText(const std::string& text) { emitProgress(g_progressFraction.load(), text); }
+
+void parallelFor(size_t n, unsigned threads, const std::function<void(size_t)>& body) {
+    if (n == 0) return;
+    threads = std::max(1u, std::min<unsigned>(threads, static_cast<unsigned>(n)));
+    std::atomic<size_t> next{0};
+    const auto work = [&] {
+        for (size_t i; (i = next.fetch_add(1)) < n;) body(i);
+    };
+    std::vector<std::thread> pool;
+    for (unsigned t = 1; t < threads; ++t) pool.emplace_back(work);
+    work();   // this thread is one of them
+    for (std::thread& t : pool) t.join();
+}
+
+unsigned fabricJobs(unsigned cap) {
+    if (const char* env = std::getenv("AVER_FABRIC_JOBS"); env && *env) return std::max(1, std::atoi(env));
+    const unsigned cores = std::thread::hardware_concurrency();
+    return std::max(1u, std::min(cap, cores == 0 ? 4u : cores));
+}
 
 namespace {
 
@@ -366,14 +389,28 @@ int Converter::run() {
     if (options_.scriptsOnly) {
         if (!fileExists(fabricDir_ + "/scripts.json")) writeScriptsManifest();
     } else {
-        emitProgress(0.10, "GDExtensions");
+        // Each stage's time in the log, so a slow run says where the time went.
+        auto stageStart = std::chrono::steady_clock::now();
+        std::string stageName;
+        const auto stage = [&](double fraction, const char* name) {
+            const auto now = std::chrono::steady_clock::now();
+            if (!stageName.empty()) AVER_INFO("fabric: {} took {:.1f} s", stageName, std::chrono::duration<double>(now - stageStart).count());
+            stageStart = now;
+            stageName = name ? name : "";
+            if (name) emitProgress(fraction, name);
+        };
+        stage(0.07, "reading the scenes and resources");
+        prefetchDocuments();
+        stage(0.12, "GDExtensions");
         convertExtensions();
-        emitProgress(0.15, "scenes");
+        stage(0.13, "models");
+        prefetchModels();
+        stage(0.40, "scenes");
         ok = convertScenes();
-        emitProgress(0.60, "resources");
+        stage(0.60, "resources");
         convertStandaloneResources();
         reportProjectFiles();
-        emitProgress(0.70, "project settings");
+        stage(0.70, "project settings");
         convertInput();
         convertLocalization();
         ok = convertProject(startLevelAsset_) && ok;
@@ -387,6 +424,7 @@ int Converter::run() {
         writeNodesManifest();
         writeProjectManifest();
         writeShadersManifest();   // G6 SH2
+        stage(0.0, nullptr);      // the last stage's time
     }
 
     emitProgress(0.80, "report");
