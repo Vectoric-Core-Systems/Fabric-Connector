@@ -103,7 +103,7 @@ public static class ProjectConverter
             res.Written.Add(target);
         }
         RemoveStaleScripts(Path.Combine(outDir, "Content", "Scripts"), res.Written);
-        if (o.EnginePath != null && sources.Count > 0) WriteScriptsProject(outDir, o.EnginePath, refs, res.Written);
+        if (sources.Count > 0) WriteScriptsProject(outDir, o.EnginePath, refs, res.Written);
 
         res.Items.AddRange(conv.Items);
         foreach (string g in conv.GeneralErrors)
@@ -202,7 +202,12 @@ public static class ProjectConverter
         }
     }
 
-    private static void WriteScriptsProject(string outDir, string engine, string refs, List<string> written)
+    // An installed editor's assemblies, for a project converted with no engine source tree: what Aver.Framework's project references bring in
+    // with it as well, since a DLL reference brings none.
+    private static readonly string[] s_installedEngineAssemblies =
+        { "Aver.Scripting", "Aver.Framework", "Aver.Scene", "Aver.Physics", "Aver.UI", "Aver.Synapse", "Aver.Materials" };
+
+    private static void WriteScriptsProject(string outDir, string? engine, string refs, List<string> written)
     {
         string dir = Path.Combine(outDir, "Content", "Scripts");
         string csproj = Path.Combine(dir, "Scripts.csproj");
@@ -211,17 +216,35 @@ public static class ProjectConverter
         // The relative paths are made between real locations (symlinks followed), so they hold wherever the build resolves them from: macOS's temp folder
         // (/var is /private/var) is a symlink, and a `..` run counted along the link's path leaves the wrong folder.
         string realDir = RealPath(dir);
-        engine = RealPath(engine);
         var sb = new StringBuilder();
         sb.Append("<Project Sdk=\"Microsoft.NET.Sdk\">\n\n");
         sb.Append("  <!-- Written by Aver.Fabric.Convert for a converted Godot project. Tools > Compile Scripts builds this file; the converted scripts\n");
         sb.Append("       compile against Aver.Fabric (the Godot-compatible node layer, from the installed Fabric Connector extension) and Aver.Framework. -->\n");
         sb.Append("  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n  </PropertyGroup>\n\n");
         sb.Append("  <ItemGroup>\n");
-        foreach (string name in new[] { "Aver.Scripting", "Aver.Framework", "Aver.UI", "Aver.Materials" })
+        if (engine != null)
         {
-            string target = Path.Combine(engine, "scripting", "csharp", name, name + ".csproj");
-            sb.Append("    <ProjectReference Include=\"").Append(Path.GetRelativePath(realDir, target).Replace('/', '\\')).Append("\" />\n");
+            engine = RealPath(engine);
+            foreach (string name in new[] { "Aver.Scripting", "Aver.Framework", "Aver.UI", "Aver.Materials" })
+            {
+                string target = Path.Combine(engine, "scripting", "csharp", name, name + ".csproj");
+                sb.Append("    <ProjectReference Include=\"").Append(Path.GetRelativePath(realDir, target).Replace('/', '\\')).Append("\" />\n");
+            }
+        }
+        else
+        {
+            // No engine source tree (an installed editor): its shipped assemblies, bin/Scripting and Aver.Materials in bin/Tools. Private=false: the
+            // editor loads its own copies.
+            string? framework = References.Find(refs, "Aver.Framework.dll");
+            string? scripting = framework != null ? Path.GetDirectoryName(framework) : null;
+            foreach (string name in s_installedEngineAssemblies)
+            {
+                string? dll = References.Find(refs, name + ".dll");
+                if (dll == null && scripting != null && File.Exists(Path.Combine(scripting, "..", "Tools", name + ".dll"))) dll = Path.Combine(scripting, "..", "Tools", name + ".dll");
+                if (dll == null) { sb.Append("    <!-- ").Append(name).Append(".dll was not found beside the editor. -->\n"); continue; }
+                sb.Append("    <Reference Include=\"").Append(name).Append("\">\n      <HintPath>").Append(Path.GetRelativePath(realDir, RealPath(Path.GetFullPath(dll))).Replace('/', '\\'))
+                  .Append("</HintPath>\n      <Private>false</Private>\n    </Reference>\n");
+            }
         }
         sb.Append("  </ItemGroup>\n\n");
         // Aver.Fabric is the extension's file, not an engine project: a HintPath to the installed assembly, relative to this folder like the

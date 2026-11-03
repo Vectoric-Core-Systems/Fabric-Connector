@@ -234,8 +234,9 @@ int main() {
         fmt::ProjectDesc pd;
         check(fmt::loadOcproject(out2 + "/LightsGame/LightsGame.ocproject", pd, &err), "its project loads");
         check(pd.postTonemap < 0 && pd.postTonemapWhite < 0.0f && pd.postAdjustBrightness < 0.0f && pd.postAdjustContrast < 0.0f &&
-                  pd.postAdjustSaturation < 0.0f && pd.postAutoExposure < 0 && pd.postBloom < 0.0f && pd.postExposure < 0.0f,
-              "no tonemap, white, adjustments, eye-adaptation or bloom key is written");
+                  pd.postAdjustSaturation < 0.0f && pd.postBloom < 0.0f && pd.postExposure < 0.0f,
+              "no tonemap, white, adjustments or bloom key is written");
+        check(pd.postAutoExposure == 0, "and eye adaptation is off, as Godot's fixed exposure (a new Aver project would turn it on)");
         fmt::OcWorldData w;
         check(fmt::loadOcworld(out2 + "/LightsGame/Content/Maps/main.ocworld", w, &err) && w.postVolumes.empty(), "and its level has no post volume");
         const std::string text = slurp(out2 + "/LightsGame/LightsGame.ocproject");

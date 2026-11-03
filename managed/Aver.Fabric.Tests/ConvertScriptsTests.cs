@@ -32,6 +32,7 @@ static class ConvertScriptsTests
         T.Run("cli: errors give exit 1 with // FABRIC: lines, usage 2, a bad reference folder 3 with the scripts still written", CliExitCodes);
         T.Run("cli: --engine writes Scripts.csproj once, referencing Aver.Fabric", CliScriptsProject);
         T.Run("cli: --refs takes a list of folders, the first one's Aver.Fabric.dll wins", CliRefsList);
+        T.Run("cli: with no engine checkout (an installed editor) Scripts.csproj references the shipped assemblies", CliScriptsProjectInstalled);
     });
 
     // ---- helpers ----
@@ -517,6 +518,27 @@ static class ConvertScriptsTests
             T.Check("a list of folders compiles the scripts: exit 0", code == 0, se);
             string text = File.ReadAllText(Path.Combine(proj, "Content", "Scripts", "Scripts.csproj"));
             T.Check("and the HintPath names Aver.Fabric.dll in the first folder", text.Contains("managed\\Aver.Fabric.dll</HintPath>"), text);
+        }
+        finally { try { Directory.Delete(root, true); } catch (IOException) { } }
+    }
+
+    // An installed editor: no engine source tree for --engine; the project compiles against the assemblies in the --refs folders.
+    private static void CliScriptsProjectInstalled()
+    {
+        string root = Temp("cli5");
+        try
+        {
+            string proj = Path.Combine(root, "P");
+            int code = Cli(out _, out string se, "scripts", "--project", Path.Combine(T.DataDir(), "csharp"), "--out", proj, "--refs", Refs);
+            T.Check("exit 0 without --engine", code == 0, se);
+            string csproj = Path.Combine(proj, "Content", "Scripts", "Scripts.csproj");
+            string text = File.Exists(csproj) ? File.ReadAllText(csproj) : "";
+            T.Check("Scripts.csproj is written anyway", text.Length > 0);
+            T.Check("referencing Aver.Framework and what it brings in by HintPath, not as engine projects",
+                    text.Contains("<Reference Include=\"Aver.Framework\">") && text.Contains("<Reference Include=\"Aver.Scene\">") && !text.Contains("<ProjectReference"), text);
+            bool allExist = System.Text.RegularExpressions.Regex.Matches(text, "<HintPath>([^<]+)</HintPath>").All(m =>
+                File.Exists(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(csproj)!, m.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar)))));
+            T.Check("every HintPath resolves from the Scripts folder to a file that exists", allExist, text);
         }
         finally { try { Directory.Delete(root, true); } catch (IOException) { } }
     }

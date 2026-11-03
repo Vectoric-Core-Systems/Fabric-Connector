@@ -441,6 +441,14 @@ bool Converter::convertProject(const std::string& startLevelAsset) {
     d.createdWith = std::string(kEngineVersion);
     d.contentRoot = "Content";
     d.startMap = startLevelAsset;
+    // The engine's lighting as a new Aver project has it (ray-traced GI, ray-traced shadows and reflections, the denoiser, the upscaler); what the Godot
+    // project states (tonemap, exposure, glow, anti-aliasing, 3D scale, LOD) is set over it below. Godot exposes a fixed amount unless the start scene's
+    // CameraAttributes ask for auto exposure, so that starts off.
+    fmt::applyNewProjectRenderDefaults(d);
+    d.postAutoExposure = 0;
+    report_.add("setting", kProject, "", "", "rendering", Rating::Converted,
+                "RENDER.GI / RAYTRACING / GIMODE / DENOISER / AVERSR: the engine's own lighting, as a new Aver project starts with; the settings below that "
+                "the project states are applied over it", 0);
     // The project's scripts and nodes run on this extension's managed runtime; opening it without the extension installed says so by name.
     d.extensions.push_back({"FabricConnector", manifestVersion(extensionDir())});
     // Godot's rules: no default pawn and no drone, the view follows the current Camera3D (Aver.Fabric's FabricGameMode, declared by the extension).

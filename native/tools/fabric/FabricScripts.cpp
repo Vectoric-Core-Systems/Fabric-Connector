@@ -128,7 +128,7 @@ void Converter::buildScripts(const std::string& dotnet) {
     std::error_code ec;
     fsys::path csproj = fsys::absolute(fsys::path(projectDir_) / "Content" / "Scripts" / "Scripts.csproj", ec);
     if (!fileExists(csproj.string())) {
-        AVER_WARN("fabric: the scripts were not built into Binaries/Scripts: {} does not exist (the engine checkout was not found); use Tools > Compile Scripts", csproj.string());
+        AVER_WARN("fabric: the scripts were not built into Binaries/Scripts: {} does not exist; use Tools > Compile Scripts", csproj.string());
         return;
     }
     // The real path (symlinks followed): the project's relative references to the engine were counted from it, and a build that walks `..` along a link

@@ -185,6 +185,12 @@ int main() {
     check(pd.localeDefault == "en", "LOCALE.DEFAULT is the fallback locale");
     check(pd.inputScheme == "Input/ConvertGame.ocinput", "INPUT.SCHEME names the converted map");
     check(near(pd.postBloom, 0.6, 1e-5) && near(pd.postExposure, 1.25, 1e-5), "the start scene's glow and tonemap exposure became RENDER.BLOOM / RENDER.EXPOSURE");
+    {
+        fmt::ProjectDesc fresh;
+        fmt::applyNewProjectRenderDefaults(fresh);
+        check(pd.giQuality == fresh.giQuality && pd.giMode == fresh.giMode && pd.rayTracing == fresh.rayTracing && pd.denoiser == fresh.denoiser && pd.postAutoExposure == 0,
+              "the engine's lighting as a new project has it (GI, ray tracing, denoiser), with Godot's fixed exposure (no auto exposure)");
+    }
     const std::string projText = slurp(proj + "/ConvertGame.ocproject");
     check(projText.find("FABRIC.LAYER 3d_physics 2 player") != std::string::npos, "layer names are kept as FABRIC.LAYER comments");
     check(fileExists(content + "/Localization/fr/fr.po"), "the .po translation was copied under its culture");

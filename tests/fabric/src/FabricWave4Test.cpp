@@ -304,15 +304,19 @@ int main() {
         fmt::ProjectDesc pl;
         check(fmt::loadOcproject(outL + "/LightsGame/LightsGame.ocproject", pl, &err), "its project loads");
         check(pl.shadowCascades == 4 && near(pl.shadowDist, 8000.0) && pl.shadowSplit > 0.4 && pl.shadowSplit < 0.65, "a sun that states 80 m has four cascades to 8000 cm and the lambda fitted to Godot's default splits");
-        check(pl.msaa < 0 && pl.shadowRes < 0 && pl.shadowFilter < 0.0f && pl.volFogLength < 0.0f, "and nothing it did not state");
-        // EnvGame states no rendering setting of this wave: its project writes none of the keys.
+        // What a project does not state is a new Aver project's (fmt::applyNewProjectRenderDefaults); what is not among those stays unwritten.
+        fmt::ProjectDesc fresh;
+        fmt::applyNewProjectRenderDefaults(fresh);
+        check(pl.msaa == fresh.msaa && pl.shadowRes < 0 && pl.shadowFilter < 0.0f && pl.volFogLength < 0.0f, "and nothing it did not state beyond a new project's defaults");
+        // EnvGame states no rendering setting of this wave: a new project's values for them, and no other key.
         const std::string out = (outRoot / "env").string();
         check(convert(exe.string(), data + "/EnvGame", out, "", log), "EnvGame converts");
         fmt::ProjectDesc pd;
         check(fmt::loadOcproject(out + "/EnvGame/EnvGame.ocproject", pd, &err), "its project loads");
-        check(pd.msaa < 0 && pd.taa < 0 && pd.averSr < 0 && pd.lodThresholdPx < 0.0f && pd.occlusionCull < 0 && pd.shadowCascades < 0 && pd.shadowSplit < 0.0f && pd.shadowDist < 0.0f && pd.shadowRes < 0 &&
+        check(pd.msaa == fresh.msaa && pd.taa == fresh.taa && pd.averSr == fresh.averSr && pd.lodThresholdPx == fresh.lodThresholdPx && pd.occlusionCull == fresh.occlusionCull &&
+                  pd.shadowCascades < 0 && pd.shadowSplit < 0.0f && pd.shadowDist < 0.0f && pd.shadowRes < 0 &&
                   pd.shadowFilter < 0.0f && pd.volFogLength < 0.0f && !pd.hasVolFogAniso && pd.volFogTemporal < 0.0f,
-              "a project that states none of the new settings writes none of the new keys");
+              "a project that states none of the new settings has a new project's values for them, and writes no other key");
         fmt::OcWorldData w;
         check(fmt::loadOcworld(out + "/EnvGame/Content/Maps/main.ocworld", w, &err) && w.skyAmbientEnergy < 0.0, "its level has no ambient override");
         check(!w.postVolumes.empty() && postValue(w.postVolumes[0], "glowblend") == 2 && postValue(w.postVolumes[0], "deband", -1) == -1 && postValue(w.postVolumes[0], "glowstrength", -1) == -1 &&
