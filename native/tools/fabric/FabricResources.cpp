@@ -1,5 +1,6 @@
 // Godot resources to Aver assets: textures, materials, primitive meshes, imported models, collision shapes.
 #include "FabricInternal.hpp"
+#include "aver/core/Log.hpp"
 #include "FabricMeshGen.hpp"
 #include "FabricProcTex.hpp"
 
@@ -19,6 +20,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 
 namespace aver::fabric {
@@ -1207,7 +1209,15 @@ const ModelResult* Converter::modelFor(const std::string& resPath, const Where& 
         std::string base = rel;
         for (char& c : base) if (c == '/') c = '_';
         base = safeName(base, "model");
+        // A dense model takes minutes (meshlets and LODs for every mesh): say which one, and afterwards how long it took.
+        std::error_code sizeEc;
+        const auto bytes = std::filesystem::file_size(disk, sizeEc);
+        emitProgressText("model: " + resPath);
+        AVER_INFO("fabric: importing model {} ({:.1f} MB)", resPath, sizeEc ? 0.0 : static_cast<double>(bytes) / (1024.0 * 1024.0));
+        const auto t0 = std::chrono::steady_clock::now();
         r = host_.importModel(disk, contentDir_, "Meshes/" + rel, base);
+        AVER_INFO("fabric: model {} {} in {:.1f} s", resPath, r.ok ? "imported" : "failed",
+                  std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         if (r.ok) {
             // The importer writes the model's skeletons beside its meshes; the converter finds them there (the host contract has no field for them).
             std::error_code ec;

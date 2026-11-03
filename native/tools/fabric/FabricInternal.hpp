@@ -25,6 +25,10 @@ namespace gd = aver::fmt::godot;
 using Var = gd::GodotVariant;
 using VType = gd::GodotVType;
 
+// ---- progress, for the tool that runs this command (FabricConvert.cpp) ----------------------------------------------
+void emitProgress(double fraction, const std::string& text);
+void emitProgressText(const std::string& text);   // the bar stays where it is; the text says what is being done
+
 // ---- Variant helpers (FabricResources.cpp) -------------------------------------------------------------------------
 Var makeNil();
 Var makeString(const std::string& s);

@@ -266,12 +266,19 @@ bool Converter::writeProjectManifest() {
 // ---- the run ---------------------------------------------------------------------------------------------------------------
 
 namespace {
+double g_progressFraction = 0.0;   // where the bar is, so a step inside a stage can say what it is doing without moving it
+}  // namespace
 
 // The engine's command protocol (aver_ext_protocol.h): one JSON line each, for the tool that runs this command.
-void emitProgress(double fraction, const char* text) {
+void emitProgress(double fraction, const std::string& text) {
+    g_progressFraction = fraction;
     std::printf("{\"" AVER_EXT_MSG_KEY "\":\"" AVER_EXT_MSG_PROGRESS "\",\"fraction\":%.2f,\"text\":%s}\n", fraction, jsonString(text).c_str());
     std::fflush(stdout);
 }
+
+void emitProgressText(const std::string& text) { emitProgress(g_progressFraction, text); }
+
+namespace {
 
 void emitResult(bool ok, const std::string& open, const std::string& report, size_t warnings, size_t errors, const std::string& message) {
     std::printf("{\"" AVER_EXT_MSG_KEY "\":\"" AVER_EXT_MSG_RESULT "\",\"ok\":%s,\"open\":%s,\"report\":%s,\"warnings\":%zu,\"errors\":%zu,\"message\":%s}\n",

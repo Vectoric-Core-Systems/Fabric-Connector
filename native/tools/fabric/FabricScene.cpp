@@ -1,6 +1,7 @@
 // .tscn to .ocworld: the node tree (instances flattened, overrides applied), then one class placement per node
 // exactly as docs/plans/fabric/G3_RUNTIME.md section 1 says.
 #include "FabricInternal.hpp"
+#include "aver/core/Log.hpp"
 #include "FabricMeshGen.hpp"
 
 #include "aver/core/Hash.hpp"
@@ -17,6 +18,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 #include <functional>
 
@@ -2122,7 +2124,12 @@ bool Converter::convertScenes() {
     startSceneRes_ = start;
     std::stable_sort(scenes.begin(), scenes.end(), [&](const std::string& a, const std::string& b) { return a == start && b != start; });
 
-    for (const std::string& res : scenes) {
+    for (size_t si = 0; si < scenes.size(); ++si) {
+        const std::string& res = scenes[si];
+        // Each scene by name, so a long one (its models' meshes, built here the first time a scene uses them) reads as work, not a hang.
+        const std::string step = "scene " + std::to_string(si + 1) + "/" + std::to_string(scenes.size()) + ": " + res;
+        emitProgress(0.15 + 0.45 * static_cast<double>(si) / static_cast<double>(scenes.size()), step);
+        AVER_INFO("fabric: {}", step);
         const Where w{res, "", ""};
         std::unique_ptr<FNode> root = buildScene(res, 0, w);
         if (!root) {
