@@ -1,8 +1,10 @@
 [gd_resource type="Resource" script_class="Loadout" format=3]
 
 [ext_resource type="Script" path="res://scripts/loadout.gd" id="1_lo"]
+[ext_resource type="Shader" path="res://props/tint.gdshader" id="2_sh"]
 
 [resource]
 script = ExtResource("1_lo")
 label = "starter"
 count = 3
+shaders = Array[Shader]([ExtResource("2_sh")])

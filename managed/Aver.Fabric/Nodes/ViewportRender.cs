@@ -245,6 +245,9 @@ public partial class Viewport
     /// <summary>Stored, inert: XR rendering is not supported (the XR nodes are carriers).</summary>
     public bool UseXr { get; set; }
 
+    /// <summary>Stored, inert: every viewport's input goes through the one event path (Godot's input routing between nested viewports).</summary>
+    public bool HandleInputLocally { get; set; } = true;
+
     /// <summary>Stored: variable-rate shading is not used.</summary>
     public VrsModeEnum VrsMode
     {

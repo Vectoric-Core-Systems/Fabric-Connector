@@ -40,6 +40,7 @@ static class ConverterGapTests
         T.Run("converter gap: by-name accessors (set_visible, set_albedo), editor-only calls, and Aver.Fabric internals out of a name's reach", ByNameAccessors);
         T.Run("converter gap: a base class's @onready is set when a subclass's own _ready does not call super", OnreadyThroughSubclass);
         T.Run("converter gap: ResourceSaver.save writes a game's own resource and ResourceLoader.load reads it back", ResourceSaverRoundTrip);
+        T.Run("converter gap: get_node by name, a .gdshader held as a value, and Godot 4 properties scenes set (COGITO lobby)", ByNameRoundFour);
     });
 
     private static string Refs => AppContext.BaseDirectory;
@@ -786,6 +787,32 @@ static class ConverterGapTests
             three.Free();
         }
         finally { Aver.Fabric.Convert.GdScript.GodotApi.PathOverride = null; }
+    }
+
+    private static void ByNameRoundFour()
+    {
+        var player = new Node3D { Name = "Player" };
+        var body = new Node3D { Name = "Body", Position = new Vector3(1, 2, 3) };
+        player.AddChild(body);
+        Variant found = GDScript.CallMethod(Variant.From(player), "get_node", "Body");
+        T.Check("get_node called by name is GetNode(path), not the generic GetNode<T>",
+                ReferenceEquals(found.AsGodotObject(), body) && GDScript.GetMember(found, "transform").AsTransform3D().Origin == new Vector3(1, 2, 3));
+        player.Free();
+        Resource? shader = ResourceLoader.Load("res://gap/tint.gdshader");
+        T.Check("a .gdshader loads as a Shader that knows its path", shader is Shader && shader.ResourcePath == "res://gap/tint.gdshader", shader?.GetType().Name ?? "null");
+        var light = new OmniLight3D();
+        var ray = new RayCast3D();
+        var cast = new ShapeCast3D();
+        var view = new SubViewport();
+        T.Check("shadow_opacity, debug_shape_custom_color and handle_input_locally are kept",
+                MemberAccess.TrySet(light, "shadow_opacity", 0.5f) && light.ShadowOpacity == 0.5f &&
+                MemberAccess.TrySet(ray, "debug_shape_custom_color", new Color(1, 0, 0)) && ray.DebugShapeCustomColor.R == 1f &&
+                MemberAccess.TrySet(cast, "debug_shape_custom_color", new Color(0, 1, 0)) && cast.DebugShapeCustomColor.G == 1f &&
+                MemberAccess.TrySet(view, "handle_input_locally", false) && !view.HandleInputLocally);
+        light.Free();
+        ray.Free();
+        cast.Free();
+        view.Free();
     }
 
     private static void RuntimeCallsRoundThree()

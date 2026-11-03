@@ -158,7 +158,7 @@ internal static class MemberAccess
             {
                 foreach (MethodInfo m in k.GetMethods(All | BindingFlags.DeclaredOnly))
                 {
-                    if (m.Name != c || !Reachable(m)) continue;
+                    if (m.Name != c || !Reachable(m) || m.IsGenericMethodDefinition) continue;   // get_node by name is GetNode(path), not GetNode<T>
                     ParameterInfo[] ps = m.GetParameters();
                     int required = ps.Count(x => !x.IsOptional);
                     if (argc < required || argc > ps.Length) continue;

@@ -615,6 +615,8 @@ int main() {
         check(loadout.find("\"__class\": \"Loadout\"") != std::string::npos && loadout.find("\"label\": \"starter\"") != std::string::npos &&
                   loadout.find("\"count\": 3") != std::string::npos,
               "a custom resource file is written as its value, so a script's load() of it builds the class");
+        check(loadout.find("Array[Shader]([Resource(\"res://props/tint.gdshader\")])") != std::string::npos,
+              "a .gdshader the resource holds is its res:// path (a Shader at run time), not null");
     }
 
     AVER_INFO("=== {} checks, {} failed ===", g_checks, g_failures);

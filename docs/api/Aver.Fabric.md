@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-899 public types and 9756 public members, read from `managed/Aver.Fabric/` (175 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+899 public types and 9761 public members, read from `managed/Aver.Fabric/` (175 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -6095,6 +6095,7 @@ Values: `None = 0`, `CodeMask = 8388607`, `ModifierMask = 532676608`, `Shift = 3
 - `public float ShadowBias { get; set; }`
 - `public float ShadowNormalBias { get; set; }`
 - `public float ShadowBlur { get; set; }`
+- `public float ShadowOpacity { get; set; }` - Kept, not applied: Godot's shadow darkness scale; Aver's shadows are always full strength.
 - `public bool ShadowReverseCullFace { get; set; }` - Kept, not applied: Godot's switch to draw back faces into the shadow map (a bias fix for the OpenGL renderer); Aver's shadows have no such mode.
 - `public bool DistanceFadeEnabled { get; set; }`
 - `public float DistanceFadeBegin { get; set; }`
@@ -8685,6 +8686,8 @@ Values: `None = 0`, `Range = 1`, `Enum = 2`, `EnumSuggestion = 3`, `ExpRange = 4
 - `public bool CollideWithBodies { get; set; }`
 - `public bool HitFromInside { get; set; }`
 - `public bool HitBackFaces { get; set; }`
+- `public Color DebugShapeCustomColor { get; set; }` - Kept for the editor's debug drawing, which Aver does not do for rays.
+- `public int DebugShapeThickness { get; set; }`
 - `public bool GetCollisionMaskValue(int layerNumber)`
 - `public void SetCollisionMaskValue(int layerNumber, bool value)`
 - `public void AddException(CollisionObject3D node)`
@@ -9514,6 +9517,7 @@ Values: `Spatial = 0`, `CanvasItem = 1`, `Particles = 2`, `Sky = 3`, `Fog = 4`
 - `public Vector3 TargetPosition { get; set; }` - The displacement to sweep by, in this node's own space (metres).
 - `public float Margin { get; set; }`
 - `public int MaxResults { get; set; }`
+- `public Color DebugShapeCustomColor { get; set; }` - Kept for the editor's debug drawing, which Aver does not do for shape casts.
 - `public uint CollisionMask { get; set; }`
 - `public bool CollideWithAreas { get; set; }`
 - `public bool CollideWithBodies { get; set; }`
@@ -12204,6 +12208,7 @@ Values: `Top = 0`, `Center = 1`, `Bottom = 2`, `Fill = 3`
 - `public DebugDrawEnum DebugDraw { get; set; }` - Stored: the engine has no per-viewport debug draw modes in the game.
 - `public bool UseHdr2D { get; set; }` - Stored: the engine renders 2D in the display format.
 - `public bool UseXr { get; set; }` - Stored, inert: XR rendering is not supported (the XR nodes are carriers).
+- `public bool HandleInputLocally { get; set; }` - Stored, inert: every viewport's input goes through the one event path (Godot's input routing between nested viewports).
 - `public VrsModeEnum VrsMode { get; set; }` - Stored: variable-rate shading is not used.
 - `public VrsUpdateModeEnum VrsUpdateMode { get; set; }` - Stored.
 - `public Texture2D? VrsTexture { get; set; }` - Stored.

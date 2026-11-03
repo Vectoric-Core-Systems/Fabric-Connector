@@ -279,6 +279,9 @@ public class RayCast3D : Node3D
     public bool CollideWithBodies { get; set; } = true;
     public bool HitFromInside { get; set; }
     public bool HitBackFaces { get; set; } = true;
+    /// <summary>Kept for the editor's debug drawing, which Aver does not do for rays.</summary>
+    public Color DebugShapeCustomColor { get; set; } = new(0, 0, 0, 1);
+    public int DebugShapeThickness { get; set; } = 2;
 
     public bool GetCollisionMaskValue(int layerNumber) => (CollisionMask & (1u << (layerNumber - 1))) != 0;
     public void SetCollisionMaskValue(int layerNumber, bool value) =>
@@ -347,6 +350,8 @@ public class ShapeCast3D : Node3D
     public Vector3 TargetPosition { get; set; } = new(0, -1, 0);
     public float Margin { get; set; }
     public int MaxResults { get; set; } = 32;
+    /// <summary>Kept for the editor's debug drawing, which Aver does not do for shape casts.</summary>
+    public Color DebugShapeCustomColor { get; set; } = new(0, 0, 0, 1);
     public uint CollisionMask { get; set; } = 1;
     public bool CollideWithAreas { get; set; }
     public bool CollideWithBodies { get; set; } = true;

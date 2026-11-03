@@ -1724,6 +1724,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 }
                 return genericResourceDict(rt, r->props, *r, w, "no Aver counterpart for this resource class; its properties are kept as a dictionary");
             }
+            if (ext == ".gdshader" || ext == ".shader") return makeResource(res);   // a text shader held as a value (Array[Shader]): its res:// path, loaded as a Shader
             report_.add("resource", res, w.node, t, "", Rating::Unsupported, "a " + t + " resource (" + ext + ") is not converted yet", v.line);
             return makeNil();
         }

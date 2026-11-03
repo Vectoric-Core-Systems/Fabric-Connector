@@ -144,6 +144,7 @@ public static class ResourceLoader
         ".ogg" => typeof(AudioStreamOggVorbis),
         ".mp3" => typeof(AudioStreamMP3),
         ".png" or ".jpg" or ".jpeg" or ".webp" or ".bmp" or ".tga" or ".dds" or ".exr" or ".hdr" or ".svg" => typeof(Texture2D),
+        ".gdshader" or ".shader" => typeof(Shader),   // a text shader held as a value (Array[Shader]): its path; the engine runs the converted HLSL
         _ => typeof(Resource),
     };
 
