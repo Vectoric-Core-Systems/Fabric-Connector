@@ -167,10 +167,16 @@ static partial class WidgetTests
         ob.ButtonDown += () => downs++;
         var press = new InputEventMouseButton { Position = new Vector2(30, 30), GlobalPosition = new Vector2(30, 30), Pressed = true, ButtonIndex = MouseButton.Left };
         var release = new InputEventMouseButton { Position = new Vector2(30, 30), GlobalPosition = new Vector2(30, 30), Pressed = false, ButtonIndex = MouseButton.Left };
+        int beforeEvents = Gui.PolledButtons(1);
         bool first = Gui.HandleEngineButton(press), again = Gui.HandleEngineButton(press);
         Gui.HandleEngineButton(release);
         bool late = Gui.HandleEngineButton(release);
         T.Check("a click the engine reports twice presses once and leaves the popup open", downs == 1 && ob.GetPopup().IsPopupShown && first && again && late, $"{downs} {ob.GetPopup().IsPopupShown} {first} {again} {late}");
+        // The poll reads the same click a frame apart from the events (up while they press, held after they release): once the events carry
+        // the buttons, the poll goes by them and never presses again over the popup.
+        int lagging = Gui.PolledButtons(1), early = Gui.PolledButtons(0);
+        T.Check("the poll has the buttons until the input events carry them, then only moves the pointer",
+                beforeEvents == 1 && lagging == 0 && early == 0 && ob.GetPopup().IsPopupShown, $"{beforeEvents} {lagging} {early} {ob.GetPopup().IsPopupShown}");
         ob.GetPopup().Hide();
         ob.Clear();
 

@@ -118,6 +118,7 @@ internal static class Gui
         s_mousePos = default;
         s_lastEnginePointer = default;
         s_engineButtons = 0;
+        s_buttonsFromEvents = false;
         TooltipDelaySeconds = -1;
     }
 
@@ -757,19 +758,26 @@ internal static class Gui
 
     private static Vector2 s_lastEnginePointer;
     private static int s_engineButtons;
+    // Set once the engine's input events have carried a mouse button: from then on they alone press and release, and the pointer poll only
+    // moves the pointer. The two see one click a frame apart, so taking both pressed twice and closed the popup the click had opened.
+    private static bool s_buttonsFromEvents;
 
     /// <summary>True when Controls get the pointer from <see cref="PollEnginePointer"/>.</summary>
     internal static bool PollsEnginePointer => NodeHost.Current.IsEngine && UiNative.Available;
 
-    /// <summary>A left, right or middle press or release from the engine's input events. The pointer poll sees the same click as a held button, so
-    /// whichever comes first gives it to the Controls and the other is skipped: a second press would close the popup the first opened.</summary>
+    /// <summary>A left, right or middle press or release from the engine's input events.</summary>
     internal static bool HandleEngineButton(InputEventMouseButton b)
     {
+        s_buttonsFromEvents = true;
         int bit = 1 << ((int)b.ButtonIndex - 1);
+        // The poll gave this one already (it had the buttons until the first event came).
         if (((s_engineButtons & bit) != 0) == b.Pressed) return s_mouseFocus != null || s_dragging || FindControl(b.Position) != null;
         s_engineButtons = b.Pressed ? s_engineButtons | bit : s_engineButtons & ~bit;
         return HandleInput(b);
     }
+
+    /// <summary>The buttons the pointer poll goes by: what it reads, until the input events carry them.</summary>
+    internal static int PolledButtons(int down) => s_buttonsFromEvents ? s_engineButtons : down;
 
     /// <summary>The idle frame's GUI work: the engine's pointer (when there is one), layout, tooltips, and drawing.</summary>
     internal static void FrameUpdate(double delta)
@@ -802,6 +810,7 @@ internal static class Gui
             Vector2 prev = s_lastEnginePointer;
             int down = 0;
             for (int b = 0; b < 3; b++) if (UiNative.aver_ui_pointer_down(b) != 0) down |= 1 << b;
+            down = PolledButtons(down);
             if (pos != prev)
             {
                 s_lastEnginePointer = pos;
