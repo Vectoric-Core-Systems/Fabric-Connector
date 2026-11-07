@@ -79,90 +79,6 @@ void addNote(GdEngineShader& r, const char* severity, const std::string& subject
     r.notes.push_back(GdEngineNote{severity, subject, reason});
 }
 
-
-// ---- viewmodel recognition ----
-bool isBuiltinVar(const GdExpr* e, const char* name) { return e && e->kind == GdExprKind::Var && e->ref == GdRefKind::Builtin && e->name == name; }
-
-// Counts the references to the built-in `name` in an expression / statement tree.
-int countRefs(const GdExpr* e, const char* name) {
-    if (!e) return 0;
-    int n = isBuiltinVar(e, name) ? 1 : 0;
-    for (const GdExprP& a : e->args) n += countRefs(a.get(), name);
-    return n;
-}
-int countRefs(const GdStmt* s, const char* name) {
-    if (!s) return 0;
-    int n = countRefs(s->expr.get(), name) + countRefs(s->step.get(), name) + countRefs(s->init.get(), name) + countRefs(s->thenS.get(), name) + countRefs(s->elseS.get(), name);
-    for (const GdDeclarator& d : s->decls) n += countRefs(d.init.get(), name);
-    for (const std::unique_ptr<GdStmt>& b : s->body) n += countRefs(b.get(), name);
-    return n;
-}
-
-// The root variable of an lvalue chain (a[i][j], a.x).
-const GdExpr* lvalueRoot(const GdExpr* e) {
-    while (e && (e->kind == GdExprKind::Index || e->kind == GdExprKind::Swizzle || e->kind == GdExprKind::Member) && !e->args.empty()) e = e->args[0].get();
-    return e;
-}
-
-void flattenProduct(const GdExpr* e, std::vector<const GdExpr*>& out) {
-    if (e->kind == GdExprKind::Binary && e->op == "*" && e->args.size() == 2) { flattenProduct(e->args[0].get(), out); flattenProduct(e->args[1].get(), out); }
-    else out.push_back(e);
-}
-
-// POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX[.xyz], 1.0), or with MODELVIEW_MATRIX as VIEW_MATRIX * MODEL_MATRIX.
-bool isStandardProjection(const GdExpr* rhs) {
-    std::vector<const GdExpr*> f;
-    flattenProduct(rhs, f);
-    if (f.size() < 3 || f.size() > 4 || !isBuiltinVar(f[0], "PROJECTION_MATRIX")) return false;
-    if (f.size() == 3 ? !isBuiltinVar(f[1], "MODELVIEW_MATRIX") : !(isBuiltinVar(f[1], "VIEW_MATRIX") && isBuiltinVar(f[2], "MODEL_MATRIX"))) return false;
-    const GdExpr* c = f.back();
-    if (c->kind != GdExprKind::Construct || c->name != "vec4" || c->args.size() != 2) return false;
-    const GdExpr* v = c->args[0].get();
-    if (v->kind == GdExprKind::Swizzle && v->swizzle == "xyz" && !v->args.empty()) v = v->args[0].get();
-    const GdExpr* w = c->args[1].get();
-    return isBuiltinVar(v, "VERTEX") && (w->kind == GdExprKind::FloatLit || w->kind == GdExprKind::IntLit) && w->num == 1.0;
-}
-
-// Drops a viewmodel vertex function's clip-space work (the standard projection, the projection-matrix edits before it, the POSITION.z writes
-// after it) so the engine's own transform stands. All or nothing: any other reference to POSITION leaves the module untouched.
-bool stripViewmodelProjection(GdShaderModule& m) {
-    GdFunction* vf = nullptr;
-    for (GdFunction& f : m.functions) if (f.processor == GdProcessor::Vertex) { vf = &f; break; }
-    if (!vf || !vf->body || vf->body->kind != GdStmtKind::Block) return false;
-    std::vector<std::unique_ptr<GdStmt>>& body = vf->body->body;
-    usize at = body.size();
-    for (usize i = 0; i < body.size(); ++i) {
-        const GdStmt* s = body[i].get();
-        if (s->kind != GdStmtKind::Expr || !s->expr || s->expr->kind != GdExprKind::Assign || s->expr->op != "=" || !isBuiltinVar(s->expr->args[0].get(), "POSITION")) continue;
-        if (at != body.size()) return false;   // two full assignments
-        if (!isStandardProjection(s->expr->args[1].get())) return false;
-        at = i;
-    }
-    if (at == body.size()) return false;
-    std::vector<bool> drop(body.size(), false);
-    drop[at] = true;
-    for (usize i = 0; i < at; ++i) {
-        const GdStmt* s = body[i].get();
-        if (s->kind == GdStmtKind::Expr && s->expr && s->expr->kind == GdExprKind::Assign && isBuiltinVar(lvalueRoot(s->expr->args[0].get()), "PROJECTION_MATRIX")) drop[i] = true;
-    }
-    for (usize i = at + 1; i < body.size(); ++i) {
-        const GdStmt* s = body[i].get();
-        if (s->kind == GdStmtKind::Expr && s->expr && s->expr->kind == GdExprKind::Assign) {
-            const GdExpr* l = s->expr->args[0].get();
-            if (l->kind == GdExprKind::Swizzle && l->swizzle == "z" && isBuiltinVar(l->args[0].get(), "POSITION")) drop[i] = true;
-        }
-    }
-    // Nothing that stays may touch POSITION (any function, any shape).
-    int left = 0;
-    for (usize i = 0; i < body.size(); ++i) if (!drop[i]) left += countRefs(body[i].get(), "POSITION");
-    for (const GdFunction& f : m.functions) if (&f != vf) left += countRefs(f.body.get(), "POSITION");
-    if (left) return false;
-    std::vector<std::unique_ptr<GdStmt>> kept;
-    for (usize i = 0; i < body.size(); ++i) if (!drop[i]) kept.push_back(std::move(body[i]));
-    body = std::move(kept);
-    return true;
-}
-
 }  // namespace
 
 void gdPackUniform(const GdUniformSlot& slot, const GdUniform& u, const std::vector<double>& value, std::vector<float>& regs) {
@@ -239,10 +155,6 @@ bool gdShaderForEngine(std::string_view source, std::string_view fileName, const
     r.hasVertex = m.processor(GdProcessor::Vertex) != nullptr;
     r.hasLight = m.processor(GdProcessor::Light) != nullptr;
     if (r.hasLight) addNote(r, "unsupported", "light()", "the per-light function is not run: the material is lit by the engine's own lights (a toon or custom light() shader loses its look)");
-
-    // A viewmodel's own projection and depth push become the engine's first-person pass.
-    if (r.hasVertex && stripViewmodelProjection(m))
-        r.firstPerson = true, addNote(r, "approximated", "POSITION", "a viewmodel shader (its own projection and depth push) is drawn by the engine's first-person pass");
 
     // ---- samplers -> material texture slots ----
     std::vector<int> sRgbPool(std::begin(kGdEngineSrgbSlots), std::end(kGdEngineSrgbSlots));

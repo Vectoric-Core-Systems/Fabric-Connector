@@ -386,10 +386,6 @@ public:
     std::map<std::string, std::string> meshAssets_, materialAssets_, textureAssets_;
     std::map<std::string, ModelResult> models_;
     std::set<std::string> materialStemsUsed_;
-    // Stems of the converted ShaderMaterials whose shader is a viewmodel (GdEngineShader::firstPerson): a mesh drawing one gets `aver_first_person`.
-    std::set<std::string> firstPersonMaterials_;
-    // True when a MeshInstance3D's effective materials (material_override, else the mesh's slots with surface_material_override/N applied) include one of them.
-    bool drawsFirstPersonMaterial(const std::vector<std::pair<std::string, Var>>& props);
     std::set<std::string> materialTextureSources_;   // res:// textures a cooked material already carries
     Var shapeObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w);
     // Environment, Sky, the sky materials and CameraAttributes as `Object(Class, ...)` for Aver.Fabric's WorldEnvironment node (G4 R3).

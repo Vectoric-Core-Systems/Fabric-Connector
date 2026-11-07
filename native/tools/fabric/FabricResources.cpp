@@ -1329,13 +1329,12 @@ void Converter::applyMaterialOverrides(const std::string& resPath, ModelResult& 
         }
         const Where w{resPath, "", "PackedScene"};
         const gd::GodotResource* mr = res.empty() ? nullptr : resourceDoc(res);
-        if (!mr || (!isMaterial3DType(mr->header.type) && mr->header.type != "ShaderMaterial")) {
+        if (!mr || !isMaterial3DType(mr->header.type)) {
             report_.add("resource", resPath, "", "PackedScene", "_subresources/materials/" + name, Rating::Approximated,
-                        "the import replaces this material with " + (res.empty() ? std::string("a file that could not be found") : res + " (not a StandardMaterial3D, ORMMaterial3D or ShaderMaterial)") + "; the model keeps the material of the file", 0);
+                        "the import replaces this material with " + (res.empty() ? std::string("a file that could not be found") : res + " (not a StandardMaterial3D or ORMMaterial3D)") + "; the model keeps the material of the file", 0);
             continue;
         }
-        const std::string asset = mr->header.type == "ShaderMaterial" ? shaderMaterialAsset(res, mr->props, *mr, stemOf(res), w)
-                                                                     : materialAsset(res, mr->header.type, mr->props, *mr, stemOf(res), w);
+        const std::string asset = materialAsset(res, mr->header.type, mr->props, *mr, stemOf(res), w);
         if (asset.empty()) continue;
         remap[base + "_" + name] = stemOf(asset);
         report_.add("resource", resPath, "", "PackedScene", "_subresources/materials/" + name, Rating::Converted, "the import uses the project material " + res + " (" + asset + ") in place of the file's", 0);
