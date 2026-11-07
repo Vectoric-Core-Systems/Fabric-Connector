@@ -3,6 +3,7 @@
 // file's three animations (LINEAR, CUBICSPLINE and STEP) written as property clips on bone paths in the engine's axes, and a scene's PhysicalBone3D nodes
 // must become the skeleton's .ocragdoll. An Animation resource's markers must be saved with its clip.
 #include "aver/core/ErrorCodes.hpp"
+#include "aver/core/Hash.hpp"
 #include "aver/core/Log.hpp"
 #include "aver/formats/OcAnim.hpp"
 #include "aver/formats/OcMesh.hpp"
@@ -89,7 +90,11 @@ int main() {
     check(code == 0, "the converter exits 0 (got " + std::to_string(code) + ")");
     if (code != 0) AVER_INFO("{}", log);
     const std::string content = (root / "out" / "SkinGame" / "Content").string();
-    const std::string skelAsset = "Meshes/models/skin/models_skin.ocskel";
+    // The model's files share its own name and six hex digits of its path's hash (the converter's modelNames).
+    char hash[16];
+    std::snprintf(hash, sizeof hash, "%08x", static_cast<unsigned>(fnv1a64(std::string_view("models/skin")) & 0xffffffffu));
+    const std::string base = std::string("skin_") + std::string(hash, 6);
+    const std::string skelAsset = "Meshes/models/skin/" + base + ".ocskel";
 
     fmt::OcWorldData w;
     std::string err;
@@ -105,7 +110,7 @@ int main() {
               propOf(w, {"Main", "Hero", "Armature", "Skeleton3D", "Body"}, "aver_skinned"));
         const std::string meshProp = propOf(w, {"Main", "Hero", "Armature", "Skeleton3D", "Body"}, "mesh");
         fmt::OcMeshData m;
-        const std::string meshAsset = "Meshes/models/skin/models_skin.ocmesh";
+        const std::string meshAsset = "Meshes/models/skin/" + base + ".ocmesh";
         check(fmt::loadOcMesh(content + "/" + meshAsset, m, &err) && m.hasSkin(), "the mesh carries its skinning weights");
     }
 
@@ -115,7 +120,7 @@ int main() {
         check(libs.find("Rise") != std::string::npos && libs.find("Spin") != std::string::npos && libs.find("Pop") != std::string::npos, "the model's AnimationPlayer holds the three clips: " + libs);
 
         fmt::OcAnimation rise;
-        check(fmt::loadOcAnim(content + "/Animations/models_skin_Rise.ocanim", rise, &err) && rise.propClip && rise.propTracks.size() == 1, "Rise is a property clip of one track: " + err);
+        check(fmt::loadOcAnim(content + "/Animations/" + base + "_Rise.ocanim", rise, &err) && rise.propClip && rise.propTracks.size() == 1, "Rise is a property clip of one track: " + err);
         if (!rise.propTracks.empty()) {
             const fmt::OcPropTrack& t = rise.propTracks[0];
             check(t.type == fmt::OcPropTrackType::Position3D && t.path == "Armature/Skeleton3D:Spine.001", "on the Spine.001 bone (a bone name keeps its dot), by its path from the model root: " + t.path);
@@ -125,7 +130,7 @@ int main() {
         }
 
         fmt::OcAnimation spin;
-        check(fmt::loadOcAnim(content + "/Animations/models_skin_Spin.ocanim", spin, &err) && spin.propTracks.size() == 1, "Spin is one track: " + err);
+        check(fmt::loadOcAnim(content + "/Animations/" + base + "_Spin.ocanim", spin, &err) && spin.propTracks.size() == 1, "Spin is one track: " + err);
         if (!spin.propTracks.empty()) {
             const fmt::OcPropTrack& t = spin.propTracks[0];
             check(t.type == fmt::OcPropTrackType::Rotation3D && t.path == "Armature/Skeleton3D:Hips", "a rotation on the Hips");
@@ -141,7 +146,7 @@ int main() {
         }
 
         fmt::OcAnimation pop;
-        check(fmt::loadOcAnim(content + "/Animations/models_skin_Pop.ocanim", pop, &err) && pop.propTracks.size() == 1, "Pop is one track: " + err);
+        check(fmt::loadOcAnim(content + "/Animations/" + base + "_Pop.ocanim", pop, &err) && pop.propTracks.size() == 1, "Pop is one track: " + err);
         if (!pop.propTracks.empty()) {
             const fmt::OcPropTrack& t = pop.propTracks[0];
             check(t.type == fmt::OcPropTrackType::Scale3D && t.interp == fmt::OcPropInterp::Nearest && t.keys.size() == 2, "a STEP scale channel holds its key (nearest)");
@@ -149,10 +154,40 @@ int main() {
         }
     }
 
+    AVER_INFO("-- the import settings slice an animation (Godot's _create_slices) --");
+    {
+        // models/sliced.gltf.import: 4 frames per second, Rise cut into "up" (frames 0-2) and "top" (2-4, looping); Spin ping-pongs.
+        fmt::OcWorldData sw;
+        check(fmt::loadOcworld(content + "/Maps/sliced.ocworld", sw, &err), "the sliced scene loads: " + err);
+        const std::string libs = propOf(sw, {"Sliced", "Hero", "AnimationPlayer"}, "libraries");
+        check(libs.find("up") != std::string::npos && libs.find("top") != std::string::npos && libs.find("Rise") == std::string::npos &&
+                  libs.find("Spin") != std::string::npos,
+              "the player holds the slices and not the animation they were cut from: " + libs);
+        std::snprintf(hash, sizeof hash, "%08x", static_cast<unsigned>(fnv1a64(std::string_view("models/sliced")) & 0xffffffffu));
+        const std::string sbase = std::string("sliced_") + std::string(hash, 6);
+        fmt::OcAnimation up, top, spin;
+        check(fmt::loadOcAnim(content + "/Animations/" + sbase + "_up.ocanim", up, &err) && up.propTracks.size() == 1, "up is written: " + err);
+        check(fmt::loadOcAnim(content + "/Animations/" + sbase + "_top.ocanim", top, &err) && top.propTracks.size() == 1, "top is written: " + err);
+        check(fmt::loadOcAnim(content + "/Animations/" + sbase + "_Spin.ocanim", spin, &err) && spin.propLoop == fmt::OcPropLoop::PingPong,
+              "an unsliced animation takes its import loop mode (ping-pong)");
+        if (!up.propTracks.empty() && !top.propTracks.empty()) {
+            const auto& uk = up.propTracks[0].keys;
+            const auto& tk = top.propTracks[0].keys;
+            check(near(up.duration, 0.5) && up.propLoop == fmt::OcPropLoop::None && uk.size() == 2 && near(uk[0].time, 0) && near(uk[1].time, 0.5),
+                  "up is the first half second: the key at 0 and one sampled at its end");
+            check(near(top.duration, 0.5) && top.propLoop == fmt::OcPropLoop::Linear && tk.size() == 2 && near(tk[0].time, 0) && near(tk[1].time, 0.5),
+                  "top is the second half, looping, baked at both ends since no key falls inside it");
+            if (uk.size() == 2 && tk.size() == 2)
+                check(near(uk[0].value.n[2], 100) && near(uk[1].value.n[2], 150) && near(tk[0].value.n[2], 150) && near(tk[1].value.n[2], 200),
+                      "Rise climbs 1 m to 2 m: the cut is at 1.5 m, and top ends at the file's last key: " + std::to_string(uk[0].value.n[2]) + " " +
+                          std::to_string(uk[1].value.n[2]) + " " + std::to_string(tk[0].value.n[2]) + " " + std::to_string(tk[1].value.n[2]));
+        }
+    }
+
     AVER_INFO("-- the ragdoll the scene authors --");
     {
         std::string text;
-        check(readFileText(content + "/Meshes/models/skin/models_skin.ocragdoll", text), "the skeleton has an .ocragdoll");
+        check(readFileText(content + "/Meshes/models/skin/" + base + ".ocragdoll", text), "the skeleton has an .ocragdoll");
         check(text.find("bone Hips on") != std::string::npos && text.find("radius 20.0000") != std::string::npos, "the Hips part has the capsule's radius in centimetres");
         check(text.find("mass 12.0000") != std::string::npos && text.find("friction 0.5000") != std::string::npos && text.find("bounce 0.2500") != std::string::npos, "and its mass, friction and bounce");
         check(text.find("bone Spine.001 on") != std::string::npos && text.find("joint swingtwist limits 25.0000 25.0000 15.0000") != std::string::npos, "the Spine part is a cone joint with the scene's spans");
@@ -174,7 +209,7 @@ int main() {
     {
         std::string report;   // converted rows are in the JSON lines, only the approximated and unsupported ones in the markdown
         readFileText((root / "out" / "FabricReport.jsonl").string(), report);
-        check(report.find("bound to Meshes/models/skin/models_skin.ocskel") != std::string::npos, "the report says the skeleton is bound");
+        check(report.find("bound to " + skelAsset) != std::string::npos, "the report says the skeleton is bound");
         check(report.find("3 glTF animation(s)") != std::string::npos, "and how many animations were read");
         check(report.find("2 marker(s) saved with the clip") != std::string::npos, "and the markers");
         check(report.find("physical bone(s) written to") != std::string::npos, "and the ragdoll file");

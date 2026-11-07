@@ -55,6 +55,9 @@ std::string safeName(const std::string& in, const std::string& fallback);   // [
 std::string pascalCase(const std::string& in);
 std::string stemOf(const std::string& path);
 std::string fnvHex(const std::string& s);   // 8 hex digits, for generated file names
+// The stem an imported model's files share: its own name and six hex digits of its res path's hash, so two models of one name stay apart
+// without the folders repeated in every file name.
+std::string modelFileBase(const std::string& resPath);
 
 // ---- scripts (FabricConvert.cpp) -----------------------------------------------------------------------------------
 struct ScriptInfo {

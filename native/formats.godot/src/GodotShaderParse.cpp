@@ -1435,6 +1435,47 @@ private:
     }
 
     // ---- calls
+    // Godot converts a constant scalar argument to the parameter's type when no overload takes it as it is (shader_language.cpp,
+    // convert_constant): int or uint to float, int to uint when not negative, uint to int when it fits. A negated literal is a
+    // constant there too, since Godot folds it. Returns the converted literal, or null when the argument is not such a constant.
+    static GdExprP convertedConstant(const GdExpr& a, GdBase to) {
+        const GdExpr* lit = &a;
+        double sign = 1.0;
+        if (a.kind == GdExprKind::Unary && a.op == "-" && a.args.size() == 1 && a.args[0]->kind == GdExprKind::IntLit) {
+            lit = a.args[0].get();
+            sign = -1.0;
+        }
+        if (lit->kind != GdExprKind::IntLit && lit->kind != GdExprKind::UIntLit) return nullptr;
+        const bool fromInt = lit->kind == GdExprKind::IntLit;
+        const double v = sign * lit->num;
+        GdExprKind kind;
+        if (to == B::Float) kind = GdExprKind::FloatLit;
+        else if (to == B::UInt && fromInt && v >= 0.0) kind = GdExprKind::UIntLit;
+        else if (to == B::Int && !fromInt && v <= 2147483647.0) kind = GdExprKind::IntLit;
+        else return nullptr;
+        auto c = std::make_unique<GdExpr>();
+        c->kind = kind;
+        c->type.base = to;
+        c->num = v;
+        c->line = a.line;
+        c->col = a.col;
+        return c;
+    }
+
+    // Whether args fit params: each exactly, or (where convert[k]) as a convertible constant. Converts those constants in place.
+    static bool fitArgs(std::vector<GdExprP>& args, const std::vector<GdType>& params, const std::vector<bool>& convert) {
+        if (params.size() != args.size()) return false;
+        for (usize k = 0; k < args.size(); ++k) {
+            if (args[k]->type == params[k]) continue;
+            if (!convert[k] || params[k].isArray() || args[k]->type.isArray()) return false;
+            GdExprP c = convertedConstant(*args[k], params[k].base);
+            if (!c || params[k] != c->type) return false;
+        }
+        for (usize k = 0; k < args.size(); ++k)
+            if (args[k]->type != params[k]) args[k] = convertedConstant(*args[k], params[k].base);
+        return true;
+    }
+
     GdExprP parseCall() {
         const Token t = next();
         const Token open = peek();
@@ -1442,38 +1483,48 @@ private:
         auto e = mk(GdExprKind::Call, t);
         e->name = t.text;
 
-        // user functions (exact parameter types; overloads allowed)
+        // user functions (overloads allowed): exact parameter types first, then with constants converted
         bool anyUser = false;
-        for (usize i = 0; i < m_.functions.size(); ++i) {
-            const GdFunction& f = m_.functions[i];
-            if (f.name != t.text) continue;
-            anyUser = true;
-            if (f.params.size() != args.size()) continue;
-            bool match = true;
-            for (usize k = 0; k < args.size() && match; ++k) match = f.params[k].type == args[k]->type;
-            if (!match) continue;
-            for (usize k = 0; k < args.size(); ++k)
-                if (f.params[k].qual != GdParamQual::In) requireAssignable(*args[k], open);
-            e->functionIdx = static_cast<int>(i);
-            e->type = f.ret;
-            e->args = std::move(args);
-            return e;
-        }
-        if (!anyUser) {
-            const std::vector<int>& ids = detail::builtinOverloadIds(t.text);
-            const auto& all = detail::builtinOverloads();
-            for (int id : ids) {
-                const detail::BuiltinOverload& o = all[static_cast<usize>(id)];
-                if (o.params.size() != args.size()) continue;
-                bool match = true;
-                for (usize k = 0; k < args.size() && match; ++k) match = !args[k]->type.isArray() && o.params[k] == args[k]->type.base;
-                if (!match) continue;
-                for (usize k = 0; k < args.size(); ++k) if (o.outParam[k]) requireAssignable(*args[k], open);
-                e->builtinOverload = id;
-                e->type = o.ret;
+        for (int pass = 0; pass < 2; ++pass)
+            for (usize i = 0; i < m_.functions.size(); ++i) {
+                const GdFunction& f = m_.functions[i];
+                if (f.name != t.text) continue;
+                anyUser = true;
+                std::vector<GdType> params;
+                std::vector<bool> convert;   // an out or inout parameter takes a variable, never a converted constant
+                for (const auto& p : f.params) {
+                    params.push_back(p.type);
+                    convert.push_back(pass == 1 && p.qual == GdParamQual::In);
+                }
+                if (!fitArgs(args, params, convert)) continue;
+                for (usize k = 0; k < args.size(); ++k)
+                    if (f.params[k].qual != GdParamQual::In) requireAssignable(*args[k], open);
+                e->functionIdx = static_cast<int>(i);
+                e->type = f.ret;
                 e->args = std::move(args);
                 return e;
             }
+        if (!anyUser) {
+            const std::vector<int>& ids = detail::builtinOverloadIds(t.text);
+            const auto& all = detail::builtinOverloads();
+            for (int pass = 0; pass < 2; ++pass)
+                for (int id : ids) {
+                    const detail::BuiltinOverload& o = all[static_cast<usize>(id)];
+                    std::vector<GdType> params;
+                    std::vector<bool> convert;
+                    for (usize k = 0; k < o.params.size(); ++k) {
+                        GdType p;
+                        p.base = o.params[k];
+                        params.push_back(p);
+                        convert.push_back(pass == 1 && !o.outParam[k]);
+                    }
+                    if (!fitArgs(args, params, convert)) continue;
+                    for (usize k = 0; k < args.size(); ++k) if (o.outParam[k]) requireAssignable(*args[k], open);
+                    e->builtinOverload = id;
+                    e->type = o.ret;
+                    e->args = std::move(args);
+                    return e;
+                }
             if (ids.empty()) typeFail(t, "unknown function '" + t.text + "'");
         }
         std::string sig;

@@ -1103,7 +1103,9 @@ internal sealed class Parser
             else
             {
                 entry.Key = ParseExpr();
-                ExpectOp(":", "after the dictionary key");
+                // Godot takes a string literal as a Lua-style key too: { "name" = 1 }.
+                if (entry.Key is Literal { Kind: LitKind.String } && MatchOp("=")) d.LuaStyle = true;
+                else ExpectOp(":", "after the dictionary key");
             }
             entry.Value = ParseExpr();
             d.Entries.Add(Fin(entry, ks));

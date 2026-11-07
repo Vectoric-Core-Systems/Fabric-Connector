@@ -158,7 +158,8 @@ public class AnimationNodeAnimation : AnimationRootNode
     /// <summary>Stored; the first pass always includes the key at the start.</summary>
     public bool AdvanceOnStart { get; set; }
 
-    /// <summary>Stored: the timeline of the animation itself is used (a custom start, length and stretch are not applied).</summary>
+    /// <summary>The node runs on its own timeline (<see cref="TimelineLength"/>, <see cref="LoopMode"/>) instead of the animation's: its time plus
+    /// <see cref="StartOffset"/>, stretched to the animation's length when <see cref="StretchTimeScale"/>, is where the animation plays.</summary>
     public bool UseCustomTimeline { get; set; }
     public double TimelineLength { get; set; } = 1.0;
     public bool StretchTimeScale { get; set; } = true;
@@ -180,6 +181,7 @@ public class AnimationNodeAnimation : AnimationRootNode
             tree.WarnOnce("a", Animation.ToString(), $"there is no animation '{Animation}' in the tree's libraries");
             return default;
         }
+        if (UseCustomTimeline) return RunCustomTimeline(f, anim, time, seek, external, testOnly);
         double len = anim.Length;
         bool backward = PlayMode == PlayModeEnum.Backward;
         LeafState st = tree.StateOf<LeafState>(f.Base + "time");
@@ -213,6 +215,59 @@ public class AnimationNodeAnimation : AnimationRootNode
         st.Fresh = false;
         if (r.Flipped) st.Dir = -st.Dir;
         return new NodeTime(len, r.Next, (backward ? -st.Dir : st.Dir) < 0, anim.LoopMode != Aver.Fabric.Animation.LoopModeEnum.None);
+    }
+
+    // Godot's custom timeline: the node's clock runs over TimelineLength under the node's LoopMode, and the animation plays at that time plus
+    // StartOffset, scaled by animation length / TimelineLength when stretched. A step the mapping carries straight over is stepped in the
+    // animation (its keys, sounds and calls fire); one where the node's clock wraps or bounces puts the animation at the mapped time.
+    private NodeTime RunCustomTimeline(Frame f, Animation anim, double time, bool seek, bool external, bool testOnly)
+    {
+        AnimationTree tree = f.Tree;
+        double animLen = anim.Length;
+        double len = TimelineLength > 0 ? TimelineLength : animLen;
+        double mlt = StretchTimeScale && len > 0 ? animLen / len : 1;
+        int loop = (int)LoopMode;
+        bool backward = PlayMode == PlayModeEnum.Backward;
+        LeafState st = tree.StateOf<LeafState>(f.Base + "time");
+
+        double prev, step = 0;
+        bool seeked = false, includeStart = false;
+        if (st.Fresh)
+        {
+            prev = backward ? len : 0;
+            st.Dir = 1;
+            includeStart = true;
+        }
+        else prev = st.Time;
+        if (seek) { prev = time; seeked = true; includeStart = false; }
+        else step = time * (backward ? -st.Dir : st.Dir);
+
+        PropStepper.Step(len, loop, prev, seeked ? 0 : step, out double next, out bool wrapped, out int bounces);
+        bool heading = (backward ? -st.Dir : st.Dir) < 0;
+        if (testOnly)
+        {
+            double peek = wrapped ? (heading ? 0 : len) : next;
+            bool pback = wrapped ? heading : heading ^ ((bounces & 1) != 0);
+            return new NodeTime(len, peek, pback, loop != 0);
+        }
+
+        double AnimTime(double t)
+        {
+            double a = (t + StartOffset) * mlt;
+            if (animLen <= 0) return 0;
+            if (anim.LoopMode == Aver.Fabric.Animation.LoopModeEnum.None) return Math.Clamp(a, 0, animLen);
+            a %= animLen;
+            return a < 0 ? a + animLen : a;
+        }
+        double[]? tw = tree.TrackWeights(anim, f.Layers);
+        var r = !seeked && !wrapped
+            ? tree.TreeAdd(Animation.ToString(), AnimTime(prev), (next - prev) * mlt, f.Blend, tw, false, external, includeStart)
+            : tree.TreeAdd(Animation.ToString(), AnimTime(next), 0, f.Blend, tw, true, external, includeStart);
+        if (!r.Ok) return default;
+        st.Time = next;
+        st.Fresh = false;
+        if ((bounces & 1) != 0) st.Dir = -st.Dir;
+        return new NodeTime(len, next, (backward ? -st.Dir : st.Dir) < 0, loop != 0);
     }
 }
 
@@ -486,11 +541,12 @@ public class AnimationTree : AnimationMixer
 
     public AnimationTree()
     {
-        // The tree starts inactive and mixes deterministically (an additive node adds to the initial value instead of averaging).
+        // Godot 4's AnimationTree: active like every mixer, deterministic (an additive node adds to the initial value instead of averaging),
+        // and discrete tracks blended as continuous.
         if (Player != 0)
         {
-            PplayerNative.aver_pplayer_set_active(Player, 0);
             PplayerNative.aver_pplayer_set_deterministic(Player, 1);
+            PplayerNative.aver_pplayer_set_discrete_mode(Player, (int)AnimationCallbackModeDiscrete.ForceContinuous);
         }
     }
 

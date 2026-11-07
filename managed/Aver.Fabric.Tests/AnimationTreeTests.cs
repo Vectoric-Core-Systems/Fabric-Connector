@@ -25,7 +25,7 @@ static class AnimationTreeTests
         }
         return T.Suite(() =>
         {
-            T.Run("AnimationTree: a leaf plays, loops, plays backwards, and the tree is inactive until asked", Leaf);
+            T.Run("AnimationTree: a leaf plays, loops, plays backwards, on a custom timeline, and an inactive tree does nothing", Leaf);
             T.Run("AnimationTree: the playhead maths matches the engine player's", StepperMatchesEngine);
             T.Run("Blend2, Blend3, Add2, Add3, Sub2: weights and filters", BlendNodes);
             T.Run("Blend2: sync decides whether an input at weight 0 stands still", SyncFlag);
@@ -156,9 +156,10 @@ static class AnimationTreeTests
 
         // A tree drives bones through the same path.
         var tree = new AnimationTree { Name = "Tree", CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual };
+        T.Check("a new tree is active and blends discrete tracks as continuous, as in Godot 4",
+                tree.Active && tree.CallbackModeDiscrete == AnimationMixer.AnimationCallbackModeDiscrete.ForceContinuous);
         tree.AddAnimationLibrary("", lib);
         tree.TreeRoot = new AnimationNodeAnimation { Animation = "bones" };
-        tree.Active = true;
         root.AddChild(tree);
         skel.ResetBonePoses();
         tree.Advance(0.5);
@@ -298,6 +299,24 @@ static class AnimationTreeTests
         T.CheckNum("playing backwards starts at the end: 0.75 of the ramp", 7.5f, target.Energy);
         Advance(tree, 0.25);
         T.CheckNum("and runs down", 5f, target.Energy);
+
+        // A custom timeline (Godot's use_custom_timeline): 0.5 s of node time stretched over the 1 s ramp plays it at double speed.
+        tree.TreeRoot = new AnimationNodeAnimation { Animation = "ramp", UseCustomTimeline = true, TimelineLength = 0.5, StretchTimeScale = true };
+        Advance(tree, 0.125);
+        T.CheckNum("a stretched custom timeline: 0.125 s of 0.5 is a quarter of the ramp", 2.5f, target.Energy);
+        Advance(tree, 0.25);
+        T.CheckNum("and three quarters at 0.375 s", 7.5f, target.Energy);
+        Advance(tree, 1.0);
+        T.CheckNum("it ends with its timeline, on the ramp's last value", 10f, target.Energy);
+        // Unstretched, from a start offset, looping over its own length.
+        tree.TreeRoot = new AnimationNodeAnimation
+        {
+            Animation = "ramp", UseCustomTimeline = true, TimelineLength = 0.4, StretchTimeScale = false, StartOffset = 0.5, LoopMode = Animation.LoopModeEnum.Linear,
+        };
+        Advance(tree, 0.1);
+        T.CheckNum("an offset timeline plays from its offset: 0.5 + 0.1 of the ramp", 6f, target.Energy);
+        Advance(tree, 0.4);
+        T.CheckNum("and loops over its own 0.4 s, back to 0.5 + 0.1", 6f, target.Energy);
 
         tree.TreeRoot = Leaf("missing");
         target.Energy = -3f;

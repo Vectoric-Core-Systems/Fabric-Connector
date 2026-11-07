@@ -343,8 +343,25 @@ void fragment() {
     };
     walkS(*m.functions[4].body);
     check(picked == std::set<int>({0, 1, 2, 3}), "each call picks its own overload by exact argument types");
-    expectErrorAt("shader_type spatial;\nfloat f(float x) { return x; }\nvoid fragment() { ALBEDO = vec3(f(1u)); }\n", "f(1u)", "no overload of 'f'");
-    expectErrorAt("shader_type spatial;\nfloat f(float x) { return x; }\nfloat f(float y) { return y; }\nvoid fragment() {}\n", "f(float y)", "already defined");
+    expectErrorAt("shader_type spatial;\nfloat f(float x) { return x; }\nvoid fragment() { int i = 1; ALBEDO = vec3(f(i)); }\n", "f(i)", "no overload of 'f'");
+    // Godot converts a constant scalar argument when no overload takes it as it is; a variable is never converted.
+    {
+        GdShaderModule cm;
+        check(compilesClean("shader_type spatial;\nfloat f(float x) { return x; }\nvoid vertex() { VERTEX.z = mix(VERTEX.z, 0, -2); VERTEX.x = f(1u) + f(-3); }\n",
+                            "constant int and uint arguments convert to float", &cm), "constant arguments convert");
+        int converted = 0;
+        std::function<void(const GdExpr&)> walk = [&](const GdExpr& e) {
+            if (e.kind == GdExprKind::Call)
+                for (const GdExprP& a : e.args) if (a->kind == GdExprKind::FloatLit && a->type.base == GdBase::Float) ++converted;
+            for (const GdExprP& a : e.args) walk(*a);
+        };
+        std::function<void(const GdStmt&)> walkS = [&](const GdStmt& s) {
+            if (s.expr) walk(*s.expr);
+            for (const GdStmtP& b : s.body) walkS(*b);
+        };
+        for (const GdFunction& fn : cm.functions) if (fn.body) walkS(*fn.body);
+        check(converted == 4, "each converted constant becomes a float literal (" + std::to_string(converted) + ")");
+    }    expectErrorAt("shader_type spatial;\nfloat f(float x) { return x; }\nfloat f(float y) { return y; }\nvoid fragment() {}\n", "f(float y)", "already defined");
 
     check(gdBuiltinOverloads("mix").size() == 11, "mix has 11 distinct overloads");
     check(gdBuiltinOverloads("texture").size() == 22, "texture: two forms for each of the 11 sampler types");

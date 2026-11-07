@@ -338,6 +338,8 @@ static class GdScriptParserTests
         ExEq("{}", "(dict)");
         ExEq("{a: 1, \"b\": 2, 3: 4}", "(dict (a 1) (\"b\" 2) (3 4))");
         ExEq("{a = 1, b = 2}", "(dict-lua (\"a\" 1) (\"b\" 2))");
+        ExEq("{ \"w\" = [[0, -1],], \"a\" = {\"n\" = 0} }", "(dict-lua (\"w\" (array (array 0 (- 1)))) (\"a\" (dict-lua (\"n\" 0))))");
+        ExEq("{1 = 2}", "ERR:1:4: Expected \":\" after the dictionary key but found \"=\"");
         ExEq("{\n\t\"k\": [1],\n\t\"j\": {},\n}", "(dict (\"k\" (array 1)) (\"j\" (dict)))");
         ExEq("Array[int]()", "(call ([] Array int))");
         ExEq("Vector3(1, 2.5, -3)", "(call Vector3 1 2.5 (- 3))");

@@ -1200,19 +1200,24 @@ std::string Converter::primitiveMeshAsset(const std::string& type, const std::ve
 // ---- imported model files --------------------------------------------------------------------------------------------
 
 namespace {
-// Where a model's meshes go (Meshes/<rel>) and the stem its files share.
+// Where a model's meshes go (Meshes/<rel>) and the stem its files share (modelFileBase).
 struct ModelNames { std::string rel, base; };
 ModelNames modelNames(const std::string& resPath) {
     ModelNames n;
     n.rel = resPath.rfind("res://", 0) == 0 ? resPath.substr(6) : resPath;
     const size_t dot = n.rel.find_last_of('.');
     if (dot != std::string::npos) n.rel.erase(dot);
-    n.base = n.rel;
-    for (char& c : n.base) if (c == '/') c = '_';
-    n.base = safeName(n.base, "model");
+    n.base = modelFileBase(resPath);
     return n;
 }
 }  // namespace
+
+std::string modelFileBase(const std::string& resPath) {
+    std::string rel = resPath.rfind("res://", 0) == 0 ? resPath.substr(6) : resPath;
+    if (const size_t dot = rel.find_last_of('.'); dot != std::string::npos) rel.erase(dot);
+    const size_t slash = rel.find_last_of('/');
+    return safeName(slash == std::string::npos ? rel : rel.substr(slash + 1), "model") + "_" + fnvHex(rel).substr(0, 6);
+}
 
 ModelResult Converter::importModelOnly(const std::string& resPath) const {
     ModelResult r;

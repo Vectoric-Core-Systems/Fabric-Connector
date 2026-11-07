@@ -1,0 +1,42 @@
+[remap]
+
+importer="scene"
+importer_version=1
+type="PackedScene"
+uid="uid://csliced00001"
+path="res://.godot/imported/sliced.gltf-0000.scn"
+
+[deps]
+
+source_file="res://models/sliced.gltf"
+dest_files=["res://.godot/imported/sliced.gltf-0000.scn"]
+
+[params]
+
+animation/fps=4
+_subresources={
+"animations": {
+"Rise": {
+"settings/loop_mode": 0,
+"slice_1/end_frame": 2,
+"slice_1/loop_mode": 0,
+"slice_1/name": "up",
+"slice_1/save_to_file/enabled": false,
+"slice_1/save_to_file/keep_custom_tracks": false,
+"slice_1/save_to_file/path": "",
+"slice_1/start_frame": 0,
+"slice_2/end_frame": 4,
+"slice_2/loop_mode": 1,
+"slice_2/name": "top",
+"slice_2/save_to_file/enabled": false,
+"slice_2/save_to_file/keep_custom_tracks": false,
+"slice_2/save_to_file/path": "",
+"slice_2/start_frame": 2,
+"slices/amount": 2
+},
+"Spin": {
+"settings/loop_mode": 2,
+"slices/amount": 0
+}
+}
+}

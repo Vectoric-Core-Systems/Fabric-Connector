@@ -40,6 +40,80 @@ std::vector<std::string> boneNames(const FNode& sk) {
     return names;
 }
 
+// A track's value at time t: linear (rotations slerped) between the keys either side, the nearest earlier key for a step track,
+// and the first or last key outside them.
+fmt::OcPropValue sampleTrack(const fmt::OcPropTrack& t, double time) {
+    const auto& k = t.keys;
+    if (time <= k.front().time) return k.front().value;
+    if (time >= k.back().time) return k.back().value;
+    size_t i = 1;
+    while (i < k.size() && k[i].time < time) ++i;
+    const fmt::OcPropKey& a = k[i - 1];
+    const fmt::OcPropKey& b = k[i];
+    if (t.interp == fmt::OcPropInterp::Nearest || b.time <= a.time) return a.value;
+    const double f = (time - a.time) / (b.time - a.time);
+    fmt::OcPropValue v = a.value;
+    if (a.value.kind == fmt::OcPropKind::Quat) {
+        double d = 0;
+        for (int c = 0; c < 4; ++c) d += a.value.n[c] * b.value.n[c];
+        const double sign = d < 0 ? -1.0 : 1.0;
+        d = std::min(1.0, std::abs(d));
+        double wa = 1.0 - f, wb = f;
+        if (d < 0.9995) {
+            const double th = std::acos(d), st = std::sin(th);
+            wa = std::sin((1.0 - f) * th) / st;
+            wb = std::sin(f * th) / st;
+        }
+        double len = 0;
+        for (int c = 0; c < 4; ++c) { v.n[c] = wa * a.value.n[c] + wb * sign * b.value.n[c]; len += v.n[c] * v.n[c]; }
+        len = std::sqrt(len);
+        if (len > 0) for (int c = 0; c < 4; ++c) v.n[c] /= len;
+    } else {
+        for (int c = 0; c < 4; ++c) v.n[c] = a.value.n[c] + (b.value.n[c] - a.value.n[c]) * f;
+    }
+    return v;
+}
+
+// Godot's import slice (ResourceImporterScene::_create_slices with bake_all): each track's keys in [from, to) moved to start at 0, a key
+// at 0 when the first one in range comes later and an earlier key exists, a key at the end when the track goes on past it, and a track
+// with no key in range given its values at both ends.
+fmt::OcAnimation sliceClip(const fmt::OcAnimation& whole, double from, double to, fmt::OcPropLoop loop) {
+    fmt::OcAnimation c;
+    c.propClip = true;
+    c.duration = static_cast<float>(to - from);
+    c.propLoop = loop;
+    c.propStep = whole.propStep;
+    for (const fmt::OcPropTrack& t : whole.propTracks) {
+        if (t.keys.empty()) continue;
+        fmt::OcPropTrack nt = t;
+        nt.keys.clear();
+        auto at = [&](double time, double when) {
+            fmt::OcPropKey key;
+            key.time = when;
+            key.transition = 1.0;
+            key.value = sampleTrack(t, time);
+            nt.keys.push_back(std::move(key));
+        };
+        bool any = false;
+        for (size_t k = 0; k < t.keys.size(); ++k) {
+            const double kt = t.keys[k].time;
+            if (kt >= from && kt < to) {
+                if (!any && kt > from + 0.01 && k > 0) at(from, 0.0);
+                any = true;
+                fmt::OcPropKey key = t.keys[k];
+                key.time = kt - from;
+                nt.keys.push_back(std::move(key));
+            }
+            if (any && kt >= to) { at(to, to - from); break; }
+        }
+        if (!any) { at(from, 0.0); at(to, to - from); }
+        c.propTracks.push_back(std::move(nt));
+    }
+    return c;
+}
+
+fmt::OcPropLoop loopOf(int mode) { return mode == 1 ? fmt::OcPropLoop::Linear : mode == 2 ? fmt::OcPropLoop::PingPong : fmt::OcPropLoop::None; }
+
 }  // namespace
 
 void Converter::bindModelRuntime(FNode& root, const ModelTree* tree, const ModelResult& model, const std::string& modelRes) {
@@ -108,11 +182,30 @@ void Converter::bindModelRuntime(FNode& root, const ModelTree* tree, const Model
         if (c->fromModel && c->type == "AnimationPlayer") { player = c.get(); break; }
     if (!player) return;
 
-    std::string base = modelRes.rfind("res://", 0) == 0 ? modelRes.substr(6) : modelRes;
-    if (const size_t dot = base.find_last_of('.'); dot != std::string::npos) base.erase(dot);
-    for (char& c : base) if (c == '/') c = '_';
-    base = safeName(base, "model");
+    const std::string base = modelFileBase(modelRes);
     createDirectories(contentDir_ + "/Animations");
+
+    // The model's import settings: its frame rate and, per glTF animation (_subresources > animations > <name>), a loop mode and the slices
+    // Godot cuts it into.
+    gd::GodotImport imp;
+    gd::GodotDiagnostics impDiag;
+    const bool haveImport = fs_.loadImport(modelRes, imp, impDiag);
+    const double fps = haveImport ? std::max(1.0, numOf(imp.param("animation/fps"), 30.0)) : 30.0;
+    const Var* subres = haveImport ? imp.param("_subresources") : nullptr;
+    const Var* animSettings = subres && subres->type == VType::Dictionary ? subres->find("animations") : nullptr;
+    auto writeClip = [&](const std::string& name, const fmt::OcAnimation& clip) -> std::string {
+        const std::string stem = safeName(base + "_" + name, "animation");
+        std::string unique = stem;
+        for (int n = 2; animationStemsUsed_.count(unique); ++n) unique = stem + "_" + std::to_string(n);
+        animationStemsUsed_.insert(unique);
+        const std::string asset = "Animations/" + unique + ".ocanim";
+        std::string err;
+        if (!fmt::saveOcAnim(contentDir_ + "/" + asset, clip, &err)) {
+            note(player->reportPath, "AnimationPlayer", name, Rating::Unsupported, "the .ocanim could not be written: " + err);
+            return "";
+        }
+        return asset;
+    };
 
     std::vector<std::pair<std::string, Var>> entries;
     size_t tracksWritten = 0;
@@ -148,17 +241,42 @@ void Converter::bindModelRuntime(FNode& root, const ModelTree* tree, const Model
         }
         if (clip.propTracks.empty()) continue;
         tracksWritten += clip.propTracks.size();
-        const std::string stem = safeName(base + "_" + a.name, "animation");
-        std::string unique = stem;
-        for (int n = 2; animationStemsUsed_.count(unique); ++n) unique = stem + "_" + std::to_string(n);
-        animationStemsUsed_.insert(unique);
-        const std::string asset = "Animations/" + unique + ".ocanim";
-        std::string err;
-        if (!fmt::saveOcAnim(contentDir_ + "/" + asset, clip, &err)) {
-            note(player->reportPath, "AnimationPlayer", a.name, Rating::Unsupported, "the .ocanim could not be written: " + err);
+        const Var* cfg = animSettings && animSettings->type == VType::Dictionary ? animSettings->find(a.name) : nullptr;
+        if (cfg && cfg->type != VType::Dictionary) cfg = nullptr;
+        if (cfg) clip.propLoop = loopOf(static_cast<int>(numOf(cfg->find("settings/loop_mode"), 0)));
+        const int slices = cfg ? static_cast<int>(numOf(cfg->find("slices/amount"), 0)) : 0;
+        if (slices <= 0) {
+            const std::string asset = writeClip(a.name, clip);
+            if (!asset.empty()) entries.emplace_back(a.name, makeResource(asset));
             continue;
         }
-        entries.emplace_back(a.name, makeResource(asset));
+        // Sliced, the clips are the slices and the whole animation is dropped, as Godot's importer does. A slice saved to a file is that
+        // file's clip: Godot loads the saved animation back, with the tracks its author added (sounds, method calls) when it keeps custom tracks.
+        size_t made = 0, fromFile = 0;
+        for (int i = 1; i <= slices; ++i) {
+            const std::string key = "slice_" + std::to_string(i) + "/";
+            const std::string name = stringOf(cfg->find(key + "name"));
+            const double from = numOf(cfg->find(key + "start_frame"), 0) / fps;
+            const double to = numOf(cfg->find(key + "end_frame"), 0) / fps;
+            if (name.empty() || from >= to) continue;
+            std::string asset;
+            const std::string saved = boolOf(cfg->find(key + "save_to_file/enabled"), false) ? stringOf(cfg->find(key + "save_to_file/path")) : std::string{};
+            if (!saved.empty()) {
+                const std::string res = gd::GodotProjectFs::isUid(saved) ? fs_.resolve(saved, "") : gd::GodotProjectFs::normalizeRes(saved);
+                const gd::GodotResource* r = res.empty() || !fs_.exists(res) ? nullptr : resourceDoc(res);
+                if (r && r->header.type == "Animation") {
+                    asset = animationAsset(res, r->props, *r, stemOf(res), Where{res, "", "Animation"});
+                    if (!asset.empty()) ++fromFile;
+                }
+            }
+            if (asset.empty()) asset = writeClip(name, sliceClip(clip, from, to, loopOf(static_cast<int>(numOf(cfg->find(key + "loop_mode"), 0)))));
+            if (asset.empty()) continue;
+            entries.emplace_back(name, makeResource(asset));
+            ++made;
+        }
+        note(player->reportPath, "AnimationPlayer", a.name, Rating::Converted,
+             "sliced by the import settings into " + std::to_string(made) + " clip(s) at " + std::to_string(static_cast<int>(fps)) + " frames per second" +
+                 (fromFile ? ", " + std::to_string(fromFile) + " of them the animation file the slice is saved to" : std::string{}));
     }
     if (entries.empty()) return;
     const size_t clipCount = entries.size();
