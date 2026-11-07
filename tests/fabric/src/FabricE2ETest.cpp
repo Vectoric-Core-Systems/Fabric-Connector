@@ -260,8 +260,8 @@ int main() {
     for (const Entry& e : report)
         if (e.rating == "unsupported") unsupported.insert(e.kind + ":" + e.type + ":" + e.node + ":" + e.property);
     // The renderer setting has no Aver key but is kept for ProjectSettings, so it is no longer lost (approximated).
-    const std::set<std::string> wantUnsupported = {"node:XRFaceModifier3D:Music:","node:Sprite2D:Logo:"};
-    check(unsupported == wantUnsupported, "exactly the XR node and the 2D sprite are unsupported (" + std::to_string(unsupported.size()) + " item(s))");
+    const std::set<std::string> wantUnsupported = {"node:XRFaceModifier3D:Music:","node:AnimatedSprite2D:Logo:"};
+    check(unsupported == wantUnsupported, "exactly the XR node and the 2D animated sprite are unsupported (" + std::to_string(unsupported.size()) + " item(s))");
     check(std::any_of(report.begin(), report.end(), [](const Entry& e) {
               return e.kind == "setting" && e.property == "rendering/renderer/rendering_method" && e.rating == "approximated";
           }),

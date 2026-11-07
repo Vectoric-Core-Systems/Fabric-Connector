@@ -336,6 +336,17 @@ target_compile_definitions(FabricUiTest PRIVATE
 set_target_properties(FabricUiTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricCanvas2DTest -- 2D scenes through the converter on tests/fabric/data/Menu2DGame: Node2D, Sprite2D and CanvasLayer placed as their classes with the engine's COMPONENT C2DTransform /
+# CSprite2D / C2DLayer records (read back with the engine's parser), the tree order, hidden and transparent sprites, and the report.
+add_executable(FabricCanvas2DTest src/FabricCanvas2DTest.cpp)
+target_link_libraries(FabricCanvas2DTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricCanvas2DTest)
+target_compile_definitions(FabricCanvas2DTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricCanvas2DTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricWidgetTest -- G5 U2 (widgets and rich text) through the converter on tests/fabric/data/WidgetGame: widgets placed as their classes, every property rated, LabelSettings /
 # FontVariation / SystemFont / ButtonGroup / Shortcut as Object(...) values or one shared Resource(), and UI/Fonts.ocfonts the engine's font set parser reads.
 add_executable(FabricWidgetTest src/FabricWidgetTest.cpp)

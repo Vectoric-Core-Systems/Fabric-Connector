@@ -93,6 +93,8 @@ public class CanvasItem : Node
     public Color Modulate { get; set; } = new(1, 1, 1, 1);
     public Color SelfModulate { get; set; } = new(1, 1, 1, 1);
     public int ZIndex { get; set; }
+    /// <summary>This item's place in the tree, counted from 1 over every node (Godot's tree order): the third part of the draw order the sprites and the Controls share.</summary>
+    internal int GuiOrder;
     /// <summary>Whether <see cref="ZIndex"/> is added to the parent's (Godot's z_as_relative, on by default).</summary>
     public bool ZAsRelative { get; set; } = true;
     public bool TopLevel { get; set; }

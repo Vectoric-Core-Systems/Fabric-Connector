@@ -280,8 +280,8 @@ internal sealed partial class GdEmitter
         return Obj(full);
     }
 
-    // The 2D classes Aver.Fabric has as placeholders (Nodes2D.cs): a type hint that names one is reported unsupported.
-    private static readonly HashSet<string> s_placeholder2D = new(StringComparer.Ordinal) { "Node2D", "CollisionObject2D", "PhysicsBody2D", "StaticBody2D", "Sprite2D" };
+    // The 2D classes Aver.Fabric has only as placeholders (Nodes2D.cs; Node2D and Sprite2D are real): a type hint that names one is reported unsupported.
+    private static readonly HashSet<string> s_placeholder2D = new(StringComparer.Ordinal) { "CollisionObject2D", "PhysicsBody2D", "StaticBody2D" };
     private readonly HashSet<TypeRef> _noted2D = new();
 
     private GdType Obj(string apiName)

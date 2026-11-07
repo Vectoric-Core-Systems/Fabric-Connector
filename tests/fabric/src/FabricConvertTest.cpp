@@ -393,7 +393,7 @@ int main() {
         const int hud = find(w, {"Main", "Hud"});
         check(hud >= 0 && w.placements[static_cast<usize>(hud)].className == "Label" && propIs(w, hud, "text", "\"Hello\""), "a Label is placed as Aver.Fabric's Label (G5 U2: no longer a Control placeholder)");
         const int icon = find(w, {"Main", "Icon"});
-        check(icon >= 0 && w.placements[static_cast<usize>(icon)].className == "Node" && propIs(w, icon, "_class", "\"Sprite2D\""), "a 2D node is kept as a plain node");
+        check(icon >= 0 && w.placements[static_cast<usize>(icon)].className == "Node" && propIs(w, icon, "_class", "\"AnimatedSprite2D\""), "a 2D class with no equivalent is kept as a plain node");
         const int hum = find(w, {"Main", "Hum"});
         check(hum >= 0 && w.placements[static_cast<usize>(hum)].className == "Node3D" && propIs(w, hum, "_class", "\"XRFaceModifier3D\""), "an unsupported 3D class is a Node3D carrier");
         const int route = find(w, {"Main", "Route"});
@@ -538,7 +538,7 @@ int main() {
                 if (line.find(a) != std::string::npos && line.find(b) != std::string::npos && line.find(c) != std::string::npos) return true;
             return false;
         };
-        check(has("\"type\":\"Sprite2D\"", "\"rating\":\"unsupported\"", "2D nodes are out of scope"), "a 2D node is reported unsupported");
+        check(has("\"type\":\"AnimatedSprite2D\"", "\"rating\":\"unsupported\"", "has no equivalent yet"), "a 2D class with no equivalent is reported unsupported");
         check(has("\"type\":\"HingeJoint3D\"", "\"rating\":\"approximated\"", "\"kind\":\"node\""), "a joint is reported approximated: Jolt builds it, the limits are measured from the bodies' pose");
         check(has("\"type\":\"Label\"", "\"property\":\"text\"", "\"rating\":\"converted\""), "a UI control's text is reported converted (G5 U2: Aver.Fabric's Label reads it)");
         check(has("\"type\":\"StandardMaterial3D\"", "\"property\":\"uv1_scale\"", "\"rating\":\"converted\""), "uv1_scale is converted now (the .ocmat FX record, G4 R6)");
@@ -596,7 +596,7 @@ int main() {
             return false;
         };
         check(reported("\"type\":\"CanvasLayer\"", "\"rating\":\"approximated\"") && !reported("\"type\":\"CanvasLayer\"", "2D nodes are out of scope"),
-              "CanvasLayer is rated approximated (layer order, offset, rotation and scale are kept, not applied), not out of scope");
+              "CanvasLayer is rated approximated (follow_viewport is kept for the 2D camera), not out of scope");
         std::string log6;
         runCapture("\"" + exe.string() + "\" fabric \"" + std::string(AVER_FABRIC_DATA) + "/ScriptGame\" \"" + (outRoot / "scriptgame2").string() + "\" --scenes-only", log6);
         check(slurp((outRoot / "scriptgame2").string() + "/ScriptGame/Fabric/nodes.json") == nodes, "nodes.json is the same on a second run");

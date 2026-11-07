@@ -76,7 +76,7 @@ set_target_properties(Aver.Fabric.Convert PROPERTIES FOLDER "extensions")
 # The native libraries the managed suites load beside their assembly (the engine's ABI libraries Aver.Fabric P/Invokes), built with the rest: the
 # engine is added without its own `all`, so nothing else asks for them. A suite whose library is missing skips and says so.
 add_custom_target(Aver.Fabric.TestLibs)
-foreach(_aver_fabric_lib Aver.Anim.Abi Aver.Audio.Abi Aver.Nav.Abi Aver.Net.Abi Aver.UI.Abi)
+foreach(_aver_fabric_lib Aver.Anim.Abi Aver.Audio.Abi Aver.Nav.Abi Aver.Net.Abi Aver.UI.Abi Aver.Scene)
   if(TARGET ${_aver_fabric_lib})
     add_dependencies(Aver.Fabric.TestLibs ${_aver_fabric_lib})
   endif()

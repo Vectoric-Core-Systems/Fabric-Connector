@@ -63,4 +63,4 @@ speed = 2.5
 
 [node name="Music" type="XRFaceModifier3D" parent="."]
 
-[node name="Logo" type="Sprite2D" parent="."]
+[node name="Logo" type="AnimatedSprite2D" parent="."]

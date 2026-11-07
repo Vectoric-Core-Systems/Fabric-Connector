@@ -1,0 +1,18 @@
+; Engine configuration file.
+; A fixture for the 2D scene conversion (FabricCanvas2DTest, Aver.Fabric.Tests Canvas2DTests): a menu with a canvas layer, sprites behind, between and over its buttons,
+; a nested Node2D, flips, a region and a sheet. The PNGs are written by the tests.
+
+config_version=5
+
+[application]
+
+config/name="Menu 2D Game"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"

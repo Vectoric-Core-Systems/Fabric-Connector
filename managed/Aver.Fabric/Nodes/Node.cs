@@ -255,6 +255,15 @@ public partial class Node : GodotObject
         node.OnLinked();
         node._Notification(NotificationParented);
         if (_insideTree) NodeHost.Current.Enter(node);
+        ChildOrderTouched();
+    }
+
+    /// <summary>Counts every change to the shape of the tree (a child added, removed or moved). The 2D canvas numbers the tree again when it moves.</summary>
+    internal static int OrderVersion { get; private set; }
+
+    private void ChildOrderTouched()
+    {
+        OrderVersion++;
         EmitSignal(SignalName.ChildOrderChanged);
     }
 
@@ -282,7 +291,7 @@ public partial class Node : GodotObject
         node.OnUnlinked();
         node._Notification(NotificationUnparented);
         if (node._owner != null && !IsInsideOwnerScene(node._owner)) node.Owner = null;
-        EmitSignal(SignalName.ChildOrderChanged);
+        ChildOrderTouched();
     }
 
     private bool IsInsideOwnerScene(Node owner) => owner == this || owner.IsAncestorOf(this);
@@ -307,7 +316,7 @@ public partial class Node : GodotObject
         toIndex = Math.Clamp(toIndex, 0, _children.Count - 1);
         _children.Remove(childNode);
         _children.Insert(toIndex, childNode);
-        EmitSignal(SignalName.ChildOrderChanged);
+        ChildOrderTouched();
     }
 
     /// <summary>This node's position among its parent's children.</summary>
@@ -673,7 +682,7 @@ public partial class Node : GodotObject
             parent.EmitSignal(SignalName.ChildExitingTree, this);
         }
         NodeHost.Current.Destroy(this);
-        if (parent != null) { parent._children.Remove(this); parent.EmitSignal(SignalName.ChildOrderChanged); }
+        if (parent != null) { parent._children.Remove(this); parent.ChildOrderTouched(); }
         _parent = null;
         FreeSubtreeMarks();
     }

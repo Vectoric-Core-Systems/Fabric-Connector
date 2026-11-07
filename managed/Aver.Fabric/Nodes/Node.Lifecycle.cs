@@ -247,6 +247,7 @@ public partial class Node
         if (this == root || _parent != null) return;
         _parent = root;
         if (!root._children.Contains(this)) root._children.Add(this);
+        OrderVersion++;
         _name = root.UniqueChildName(this, _name, false);
     }
 

@@ -794,7 +794,7 @@ internal static class Gui
                 ShowTooltip();
             }
         }
-        if (NodeHost.Current.IsEngine && UiNative.Available) DrawAll();
+        if (NodeHost.Current.IsEngine && UiNative.Available) DrawAll(canvas: Canvas2D.Backend.Available);
     }
 
     /// <summary>The engine gives scripts no absolute pointer, so the GUI reads the one the host set for the UI (window pixels), maps it through the
@@ -837,10 +837,21 @@ internal static class Gui
     // ---- drawing ----
 
     /// <summary>Replays every visible Control's recorded drawing into the engine's UI draw list: runs the draw pass of the ones that asked, applies
-    /// the stretch, modulate and clipping, then draws the tooltip and the drag preview on top.</summary>
-    internal static void DrawAll()
+    /// the stretch, modulate and clipping, then draws the tooltip and the drag preview on top. With <paramref name="canvas"/> the Controls are not drawn here:
+    /// each is queued in the engine's 2D canvas under its (canvas layer, z, tree order) and drawn when the host flushes the canvas, in one order with the sprites
+    /// (a sprite under, between and over Controls). The letterbox bars, popups and the tooltip are drawn at once, as they are above or outside the canvas.</summary>
+    internal static void DrawAll(bool canvas = false)
     {
         FlushLayout();
+        Canvas2D.RefreshOrder();
+        s_canvas = canvas;
+        s_clips.Clear();
+        try { DrawAllNow(); }
+        finally { s_canvas = false; s_clips.Clear(); }
+    }
+
+    private static void DrawAllNow()
+    {
         Window window = SceneTree.Instance.Root;
         Vector2 origin = Window.EngineOrigin;
         Transform2D toWindow = window.ContentToWindowTransform();
@@ -849,17 +860,53 @@ internal static class Gui
         content.Position += origin;
         if (window.IsLetterboxed()) DrawLetterbox(origin, window.WindowPixels, content);
         // Godot shows nothing of the UI outside the content rectangle: a control larger than the window stops at its edge, not in a letterbox bar.
-        UiNative.aver_ui_push_clip((int)MathF.Floor(content.Position.X), (int)MathF.Floor(content.Position.Y), (int)MathF.Ceiling(content.End.X), (int)MathF.Ceiling(content.End.Y));
+        PushClip((int)MathF.Floor(content.Position.X), (int)MathF.Floor(content.Position.Y), (int)MathF.Ceiling(content.End.X), (int)MathF.Ceiling(content.End.Y), immediate: true);
         DrawPasses(window, toWindow);
         if (s_popups.Count > 0)
         {
             int previous = UiNative.aver_ui_layer();
             UiNative.aver_ui_set_layer(2);   // AVER_UI_LAYER_OVERLAY
-            foreach (PopupWindow p in s_popups.ToArray()) DrawNode(p, toWindow, p);
+            bool queued = s_canvas;
+            s_canvas = false;   // the overlay layer is above the canvas: drawn at once
+            try { foreach (PopupWindow p in s_popups.ToArray()) DrawNode(p, toWindow, p); }
+            finally { s_canvas = queued; }
             UiNative.aver_ui_set_layer(previous);
         }
         if (s_tooltipVisible && s_customTooltip == null) DrawDefaultTooltip(window, toWindow);
-        UiNative.aver_ui_pop_clip();
+        PopClip(immediate: true);
+    }
+
+    // ---- the engine's canvas (docs/plans/RENDER_2D.md in the engine) ----
+
+    // True while DrawAll queues the Controls in the canvas instead of drawing them. The clips in force are then kept here, and each queued item pushes them again when it draws.
+    private static bool s_canvas;
+    private static readonly List<(int X0, int Y0, int X1, int Y1)> s_clips = new();
+
+    private static void PushClip(int x0, int y0, int x1, int y1, bool immediate)
+    {
+        if (s_canvas) s_clips.Add((x0, y0, x1, y1));
+        if (immediate || !s_canvas) UiNative.aver_ui_push_clip(x0, y0, x1, y1);
+    }
+
+    private static void PopClip(bool immediate)
+    {
+        if (s_canvas) s_clips.RemoveAt(s_clips.Count - 1);
+        if (immediate || !s_canvas) UiNative.aver_ui_pop_clip();
+    }
+
+    // One Control's draw: now, or queued in the canvas under (layer, z, tree order) with the clips it sits in.
+    private static void EmitItem(CanvasItem ci, Transform2D xf, Color mod, int layer, int z)
+    {
+        if (!s_canvas) { ReplayItem(ci, xf, mod); return; }
+        var clips = s_clips.ToArray();
+        bool queued = Canvas2D.Backend.SubmitExternal(layer, z, ci.GuiOrder, () =>
+        {
+            foreach (var c in clips) UiNative.aver_ui_push_clip(c.X0, c.Y0, c.X1, c.Y1);
+            s_stateDirty = false;   // the canvas hands every item the default sampler and blend
+            ReplayItem(ci, xf, mod);
+            for (int i = 0; i < clips.Length; i++) UiNative.aver_ui_pop_clip();
+        });
+        if (!queued) ReplayItem(ci, xf, mod);
     }
 
     // The bars of a letterboxed window are black, over whatever the scene drew there.
@@ -886,8 +933,8 @@ internal static class Gui
     private static void DrawPasses(Window window, Transform2D toWindow)
     {
         var keys = new SortedSet<(int Layer, int Z)>();
-        foreach (Node n in window.ChildrenSnapshot()) CollectDrawKeys(n, 0, 0, keys);
-        if (keys.Count <= 1)
+        if (!s_canvas) foreach (Node n in window.ChildrenSnapshot()) CollectDrawKeys(n, 0, 0, keys);
+        if (s_canvas || keys.Count <= 1)
         {
             s_passFilter = false;
             foreach (Node n in window.ChildrenSnapshot()) DrawNode(n, toWindow, layer: 0, zParent: 0);
@@ -940,17 +987,17 @@ internal static class Gui
             {
                 Transform2D xf = toWindow * ci.GlobalCanvasTransform;
                 Color mod = ci.GetCombinedModulate();
-                if (ci.Commands.Count > 0) ReplayItem(ci, xf, mod);
+                if (ci.Commands.Count > 0) EmitItem(ci, xf, mod, layer, z);
             }
             if (ci.ClipsChildren)
             {
                 Rect2 r = toWindow * ci.ClipRectGlobal;
-                UiNative.aver_ui_push_clip((int)MathF.Floor(r.Position.X), (int)MathF.Floor(r.Position.Y), (int)MathF.Ceiling(r.End.X), (int)MathF.Ceiling(r.End.Y));
+                PushClip((int)MathF.Floor(r.Position.X), (int)MathF.Floor(r.Position.Y), (int)MathF.Ceiling(r.End.X), (int)MathF.Ceiling(r.End.Y), immediate: false);
                 clips++;
             }
         }
         foreach (Node c in node.ChildrenSnapshot()) DrawNode(c, toWindow, popupRoot, layer, zParent);
-        for (; clips > 0; clips--) UiNative.aver_ui_pop_clip();
+        for (; clips > 0; clips--) PopClip(immediate: false);
     }
 
     // ---- one item's commands: sampler and blend state (P41), the transform (P40), then each command ----

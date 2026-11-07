@@ -1,23 +1,110 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// A minimal 2D family, so that a converted script which names a 2D type (a field, a cast, an `is` check) compiles. 2D is out of scope: these nodes keep their properties and
-// do nothing else (nothing is drawn, no body is simulated), and the converter reports a script's use of one as unsupported. Path2D and PathFollow2D are the exception:
-// 3D games use a Curve2D as data (recoil and spray patterns), so its points, baking and sampling are real.
+// The 2D family. Node2D and Sprite2D are real: they keep their state on the engine's 2D components, which the engine's canvas draws (docs/plans/RENDER_2D.md in the engine).
+// The rest of the family exists so that a converted script which names a 2D type (a field, a cast, an `is` check) compiles; those nodes keep their properties and
+// do nothing else (no body is simulated), and the converter reports a script's use of one as unsupported. Path2D and PathFollow2D are the exception: 3D games use a
+// Curve2D as data (recoil and spray patterns), so its points, baking and sampling are real.
+
+using Aver.Framework;
 
 namespace Aver.Fabric;
 
-/// <summary>A node with a 2D transform (Godot's Node2D). Unsupported: the values are kept for scripts and nothing uses them.</summary>
-public class Node2D : CanvasItem
+/// <summary>A node with a 2D transform (Godot's Node2D). The position, rotation, scale, z_index, z_as_relative, top_level and visible flag are kept on the engine's 2D
+/// transform component, which composes them down the tree; a script that changes one is seen by the next frame. A node that is not a sprite draws nothing by itself.</summary>
+public class Node2D : CanvasItem, ICanvas2DNode
 {
-    public Vector2 Position { get; set; }
-    public float Rotation { get; set; }
-    public Vector2 Scale { get; set; } = Vector2.One;
-    public int ZIndex { get; set; }
+    private Vector2 _position, _scale = Vector2.One;
+    private float _rotation;
+    private readonly Canvas2DLink _link = new();
 
-    /// <summary>Same as <see cref="Position"/>: there is no 2D parent chain to compose with.</summary>
-    public Vector2 GlobalPosition { get => Position; set => Position = value; }
-    public float GlobalRotation { get => Rotation; set => Rotation = value; }
+    public Vector2 Position { get => _position; set => _position = value; }
+    public float Rotation { get => _rotation; set => _rotation = value; }
+    public float RotationDegrees { get => _rotation * (180f / Mathf.Pi); set => _rotation = value * (Mathf.Pi / 180f); }
+    public Vector2 Scale { get => _scale; set => _scale = value; }
+    /// <summary>Godot's skew: kept, and not drawn (the engine's 2D transform has none).</summary>
+    public float Skew { get; set; }
+
+    /// <summary>The position, rotation and scale as one transform, relative to the parent.</summary>
+    public Transform2D Transform
+    {
+        get => new(_rotation, _scale, Skew, _position);
+        set { _position = value.Origin; _rotation = value.GetRotation(); _scale = value.GetScale(); Skew = value.GetSkew(); }
+    }
+
+    /// <summary>The transform in the canvas: the parents' composed with this one, stopping at a top-level node.</summary>
+    public Transform2D GlobalTransform
+    {
+        get
+        {
+            Transform2D t = Transform;
+            if (TopLevel) return t;
+            return GetParent() is Node2D p ? p.GlobalTransform * t : t;
+        }
+        set
+        {
+            Transform2D parent = !TopLevel && GetParent() is Node2D p ? p.GlobalTransform : Transform2D.Identity;
+            Transform = parent.AffineInverse() * value;
+        }
+    }
+
+    public Vector2 GlobalPosition { get => GlobalTransform.Origin; set { Transform2D t = GlobalTransform; t.Origin = value; GlobalTransform = t; } }
+    public float GlobalRotation { get => GlobalTransform.GetRotation(); set => GlobalTransform = new Transform2D(value, GlobalTransform.GetScale(), 0f, GlobalPosition); }
+    public float GlobalRotationDegrees { get => GlobalRotation * (180f / Mathf.Pi); set => GlobalRotation = value * (Mathf.Pi / 180f); }
+    public Vector2 GlobalScale { get => GlobalTransform.GetScale(); set => GlobalTransform = new Transform2D(GlobalRotation, value, 0f, GlobalPosition); }
+
+    /// <summary>Moves by an offset in the node's own axes.</summary>
+    public void Translate(Vector2 offset) => _position += Transform.BasisXform(offset);
+    public void GlobalTranslate(Vector2 offset) => GlobalPosition += offset;
+    public void Rotate(float radians) => _rotation += radians;
+    public void ApplyScale(Vector2 ratio) => _scale *= ratio;
+    public Vector2 ToLocal(Vector2 globalPoint) => GlobalTransform.AffineInverse() * globalPoint;
+    public Vector2 ToGlobal(Vector2 localPoint) => GlobalTransform * localPoint;
+
+    internal override Transform2D GlobalCanvasTransform => GlobalTransform;
+
+    Node ICanvas2DNode.Node => this;
+    Canvas2DLink ICanvas2DNode.Link => _link;
+    internal Canvas2DLink Link2D => _link;
+
+    internal override void OnEnteringTree()
+    {
+        base.OnEnteringTree();
+        Canvas2D.Enter(this);
+    }
+
+    internal override void OnExitingTree()
+    {
+        Canvas2D.Exit(this);
+        base.OnExitingTree();
+    }
+
+    void ICanvas2DNode.Push2D() => Push2D();
+
+    /// <summary>Writes this node's state to its entity if it changed.</summary>
+    internal virtual void Push2D()
+    {
+        int e = Canvas2D.Backing(this);
+        if (e != 0) PushTransform(e);
+    }
+
+    private void PushTransform(int e)
+    {
+        var flags = Transform2DFlags.None;
+        if (!ZAsRelative) flags |= Transform2DFlags.ZAbsolute;
+        if (TopLevel) flags |= Transform2DFlags.TopLevel;
+        if (!Visible) flags |= Transform2DFlags.Hidden;
+        var t = new Aver.Framework.Transform2D
+        {
+            Position = Canvas2D.N(_position),
+            Rotation = _rotation,
+            Scale = Canvas2D.NScale(_scale),
+            ZIndex = Math.Clamp(ZIndex, -4096, 4096),
+            Flags = flags,
+            TreeOrder = (uint)Math.Max(0, _link.Order),
+        };
+        Canvas2D.Write(e, _link, t);
+    }
 }
 
 /// <summary>A node holding a curve in 2D (Godot's Path2D). The curve is data a script can read (spray patterns, waypoints); nothing is drawn.</summary>
@@ -83,7 +170,9 @@ public class StaticBody2D : PhysicsBody2D
     public float ConstantAngularVelocity { get; set; }
 }
 
-/// <summary>A 2D image node (Godot's Sprite2D). Unsupported: its texture, frames and region are kept for scripts; nothing is drawn.</summary>
+/// <summary>A 2D image node (Godot's Sprite2D), drawn by the engine's 2D canvas in one draw order with the Controls: canvas layer, then z, then tree order. The texture
+/// must be a file in the project (a generated or atlas texture draws nothing); the region, frames, flips, offset, centering, nearest filtering, modulate and self_modulate
+/// apply, and the modulate of every ancestor multiplies in.</summary>
 public class Sprite2D : Node2D
 {
     public new class SignalName : Node2D.SignalName
@@ -111,4 +200,37 @@ public class Sprite2D : Node2D
     public bool RegionEnabled { get; set; }
     public Rect2 RegionRect { get; set; }
     public bool RegionFilterClipEnabled { get; set; }
+
+    internal override void Push2D()
+    {
+        int e = Canvas2D.Backing(this);
+        if (e == 0) return;
+        base.Push2D();
+
+        var flags = Sprite2DFlags.None;
+        if (FlipH) flags |= Sprite2DFlags.FlipH;
+        if (FlipV) flags |= Sprite2DFlags.FlipV;
+        if (!Centered) flags |= Sprite2DFlags.NotCentered;
+        if (ResolvedFilter() == UiFilterId.Nearest) flags |= Sprite2DFlags.Nearest;
+        uint packed = Canvas2D.Pack(GetCombinedModulate());
+        if (!IsVisibleInTree() || (packed >> 24) == 0)
+        {
+            flags |= Sprite2DFlags.Hidden;   // alpha 0 packs to 0 at worst, which the engine reads as white
+            if (packed == 0) packed = 0xFFFFFFFFu;
+        }
+        Rect2 r = RegionEnabled ? RegionRect : default;
+        var s = new Aver.Framework.Sprite2D
+        {
+            Texture = Canvas2D.AssetIdOf(_texture),
+            Region = new System.Numerics.Vector4(r.Position.X, r.Position.Y, Math.Max(0f, r.Size.X), Math.Max(0f, r.Size.Y)),
+            Offset = Canvas2D.N(Offset),
+            Modulate = packed,
+            Flags = flags,
+            HFrames = Math.Max(1, Hframes),
+            VFrames = Math.Max(1, Vframes),
+            Frame = _frame,
+            Blend = ResolvedBlend() switch { UiBlendId.Add => Sprite2DBlend.Add, UiBlendId.Sub => Sprite2DBlend.Sub, UiBlendId.Mul => Sprite2DBlend.Mul, _ => Sprite2DBlend.Mix },
+        };
+        Canvas2D.Write(e, Link2D, s);
+    }
 }

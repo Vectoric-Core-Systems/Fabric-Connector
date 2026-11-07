@@ -57,6 +57,8 @@ const std::set<std::string>& supportedClasses() {
                                             "AnimationTree", "Skeleton3D", "BoneAttachment3D", "SkeletonIK3D", "Path3D", "PathFollow3D", "SpringArm3D",
                                             // 2D curves that 3D games read as data (spray and recoil patterns); nothing of them is drawn
                                             "Path2D", "PathFollow2D",
+                                            // the engine's 2D scenes (docs/plans/RENDER_2D.md in the engine): the transform node and the sprite; CanvasLayer is below
+                                            "Node2D", "Sprite2D",
                                             // wave 7: the ragdoll nodes
                                             "PhysicalBone3D", "PhysicalBoneSimulator3D",
                                             "LookAtModifier3D", "CopyTransformModifier3D", "AimModifier3D", "ConvertTransformModifier3D",
@@ -196,7 +198,21 @@ ClassChoice chooseClass(const std::string& t) {
     if (t == "CanvasLayer") {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
-        c.reason = "its visible flag hides what is drawn on it; the layer number, offset, rotation and scale are kept but not applied (the GUI draws every Control in tree order, in viewport space)";
+        c.reason = "a COMPONENT C2DLayer record: the layer number orders the sprites and the Controls on it (a lower layer draws first), and its visible flag, offset, rotation and scale apply to both; "
+                   "follow_viewport is kept for the 2D camera that comes later";
+        return c;
+    }
+    if (t == "Node2D") {
+        c.fabricClass = t;
+        c.rating = Rating::Converted;
+        c.reason = "a COMPONENT C2DTransform record on the engine's 2D transform: position, rotation, scale, z_index, z_as_relative, top_level and visible compose down the tree";
+        return c;
+    }
+    if (t == "Sprite2D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "drawn by the engine's 2D canvas with COMPONENT C2DTransform and CSprite2D records, in one draw order with the Controls (canvas layer, z, tree order); the texture, region, frames, flips, offset, "
+                   "centering, nearest filtering and modulate apply, a texture must be a file in the project (a generated or atlas texture draws nothing), and skew, 2D lights and shader materials do not apply";
         return c;
     }
     if (t == "XROrigin3D" || t == "XRCamera3D" || t == "XRController3D" || t == "XRAnchor3D" || t == "XRNode3D") {
@@ -288,7 +304,8 @@ ClassChoice chooseClass(const std::string& t) {
     if (is2DClass(t)) {
         c.fabricClass = "Node";
         c.rating = Rating::Unsupported;
-        c.reason = "2D nodes are out of scope; the node is kept as a plain node so the tree and its script survive";
+        c.reason = "the engine's 2D covers Node2D, Sprite2D and CanvasLayer; this 2D class has no equivalent yet (animated sprites, cameras, parallax, tile maps, 2D physics and lights are later work), "
+                   "so the node is kept as a plain node and the tree and its script survive";
         return c;
     }
     if (isNode3DClass(t)) {
@@ -1473,6 +1490,10 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     for (auto& [k, v] : props) comp.kv.emplace_back(k, gd::godotVariantToText(v));
     p.components.push_back(std::move(comp));
     if (fn.type == "GPUParticles3D" || fn.type == "CPUParticles3D") emitParticles(fn, props, p, scan.prefabPass);   // G6 SH3 (a particles shader), wave 6 (a ParticleProcessMaterial, CPUParticles3D)
+    if (is2DSceneClass(fn.type) && cc.fabricClass == fn.type) {
+        for (const Note2D& n : emit2DRecords(fn.type, props, static_cast<int>(level.placements.size()), p))
+            report_.add("property", fn.reportFile, fn.reportPath, fn.type, n.key, n.rating, n.why, fn.line);
+    }
     if (!fn.groups.empty()) {
         fmt::OcPlacedComponent g;
         g.type = "Groups";

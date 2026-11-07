@@ -136,6 +136,11 @@ bool isAudioExt(const std::string& ext);                // G5 S1: ".wav", ".ogg"
 bool isAudioStreamResourceType(const std::string& type);   // G5 S1: AudioStreamRandomizer, Playlist, Synchronized, Interactive, Polyphonic, Generator, WAV
 bool isStyleBoxType(const std::string& type);              // G5 U1: StyleBoxFlat, StyleBoxTexture, StyleBoxLine, StyleBoxEmpty (FabricUi.cpp)
 bool isFontExt(const std::string& ext);                    // G5 U1: ".ttf", ".otf", ".woff", ".woff2"
+// FabricCanvas2D.cpp: Node2D, Sprite2D and CanvasLayer as the engine's 2D records (docs/plans/RENDER_2D.md in the engine).
+bool is2DSceneClass(const std::string& type);
+struct Note2D { std::string key; Rating rating; std::string why; };
+// Appends the COMPONENT C2DTransform / CSprite2D / C2DLayer records to `p` from the node's converted properties. `treeIndex` is the node's place in the tree.
+std::vector<Note2D> emit2DRecords(const std::string& type, const std::vector<std::pair<std::string, Var>>& props, int treeIndex, fmt::OcWorldPlacement& p);
 bool isProceduralTextureType(const std::string& type);     // F26: GradientTexture1D/2D, NoiseTexture2D/3D, CurveTexture, CurveXYZTexture, AtlasTexture, CanvasTexture
 // Classes a project's GDExtension plugins register (FabricExtensions.cpp), name -> whether it is spatial. Such a node is placed as a
 // GDExtensionNode / GDExtensionNode3D with the Prop extension_class (docs/plans/fabric/G3_GDEXT.md section 7).

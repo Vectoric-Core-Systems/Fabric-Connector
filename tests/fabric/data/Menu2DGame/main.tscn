@@ -1,0 +1,87 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://art/bg.png" id="1"]
+[ext_resource type="Texture2D" path="res://art/sheet.png" id="2"]
+
+[node name="Main" type="Node"]
+
+[node name="Back" type="Sprite2D" parent="."]
+position = Vector2(640, 360)
+z_index = -5
+texture = ExtResource("1")
+
+[node name="Menu" type="CanvasLayer" parent="."]
+layer = 2
+offset = Vector2(8, 4)
+
+[node name="Bg" type="Sprite2D" parent="Menu"]
+texture_filter = 1
+position = Vector2(320, 180)
+texture = ExtResource("1")
+centered = false
+
+[node name="Wrap" type="Node2D" parent="Menu"]
+position = Vector2(100, 50)
+rotation = 0.5
+scale = Vector2(2, 3)
+z_index = 1
+
+[node name="Logo" type="Sprite2D" parent="Menu/Wrap"]
+modulate = Color(1, 0.5, 0.25, 0.5)
+self_modulate = Color(1, 1, 1, 0.5)
+texture = ExtResource("2")
+offset = Vector2(4, 0)
+flip_h = true
+hframes = 4
+vframes = 2
+frame = 5
+
+[node name="Crop" type="Sprite2D" parent="Menu/Wrap"]
+texture = ExtResource("2")
+region_enabled = true
+region_rect = Rect2(8, 8, 32, 16)
+flip_v = true
+top_level = true
+
+[node name="Panel" type="Control" parent="Menu"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 400.0
+offset_bottom = 300.0
+
+[node name="Play" type="Button" parent="Menu/Panel"]
+layout_mode = 0
+offset_right = 120.0
+offset_bottom = 30.0
+text = "Play"
+
+[node name="Mid" type="Sprite2D" parent="Menu/Panel"]
+position = Vector2(60, 15)
+texture = ExtResource("2")
+hframes = 4
+vframes = 2
+frame_coords = Vector2i(2, 1)
+
+[node name="Quit" type="Button" parent="Menu/Panel"]
+layout_mode = 0
+offset_top = 40.0
+offset_right = 120.0
+offset_bottom = 70.0
+text = "Quit"
+
+[node name="Top" type="Sprite2D" parent="Menu"]
+z_index = 5
+z_as_relative = false
+position = Vector2(60, 15)
+texture = ExtResource("1")
+
+[node name="Ghost" type="Sprite2D" parent="Menu"]
+visible = false
+texture = ExtResource("1")
+
+[node name="Veil" type="Sprite2D" parent="Menu"]
+modulate = Color(0, 0, 0, 0)
+texture = ExtResource("1")
+
+[node name="Fx" type="AnimatedSprite2D" parent="."]
+position = Vector2(1, 2)

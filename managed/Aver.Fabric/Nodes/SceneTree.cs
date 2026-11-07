@@ -346,6 +346,17 @@ public class Window : Viewport
         return new Vector2(p.X * r.Scale.X + r.Screen.Position.X, p.Y * r.Scale.Y + r.Screen.Position.Y);
     }
 
+    /// <summary>Tells the engine's 2D canvas the stretch rules and the window rectangle, with the numbers <see cref="Compute"/> uses, so a sprite and a Control
+    /// land in the same place at any window shape. Does nothing without the 2D library.</summary>
+    internal void PublishCanvas()
+    {
+        if (!Canvas2D.Backend.Available) return;
+        Vector2 px = WindowPixels, origin = EngineOrigin;
+        Vector2I b = ContentScaleSize;
+        Canvas2D.Backend.SetCanvas((CanvasStretchMode)(int)ContentScaleMode, (CanvasStretchAspect)(int)ContentScaleAspect, (CanvasScaleMode)(int)ContentScaleStretch,
+                          b.X, b.Y, ContentScaleFactor, new System.Numerics.Vector4(origin.X, origin.Y, px.X, px.Y));
+    }
+
     /// <summary>UI space to window pixels as a transform: scale, then the letterbox offset.</summary>
     internal Transform2D ContentToWindowTransform()
     {
@@ -447,6 +458,7 @@ public partial class SceneTree : GodotObject
         Engine.ResetSingletons();
         Node.ResetGroups();
         Gui.ResetForTests();
+        Canvas2D.ResetForTests();
         UiImages.ResetForTests();
         ThemeDB.ResetForTests();
         Input.ResetForTests();
@@ -794,6 +806,7 @@ public partial class SceneTree : GodotObject
         else
         {
             long g0 = Stopwatch.GetTimestamp();
+            Canvas2D.FrameUpdate();   // the sprites and 2D layers: their state to the engine's canvas, which the host flushes after this frame
             Gui.FrameUpdate(dt);   // G5 U1: layout, tooltips and Control drawing at the end of the idle frame
             long g1 = Stopwatch.GetTimestamp();
             Cost("UI layout and drawing", g1 - g0);

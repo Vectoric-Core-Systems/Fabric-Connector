@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-899 public types and 9762 public members, read from `managed/Aver.Fabric/` (175 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+899 public types and 9773 public members, read from `managed/Aver.Fabric/` (176 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -2441,7 +2441,7 @@ Values: `Normal = 0`, `Unshaded = 1`, `LightOnly = 2`
 
 ### CanvasLayer
 
-`public class CanvasLayer : Node` - A group of UI drawn together (Godot's CanvasLayer).
+`public class CanvasLayer : Node, ICanvas2DNode` - A group of UI drawn together (Godot's CanvasLayer).
 
 - `public event Action VisibilityChanged`
 - `public int Layer { get; set; }` - The draw order among layers: higher is drawn over lower.
@@ -7382,14 +7382,25 @@ Values: `Inherit = 0`, `Pausable = 1`, `WhenPaused = 2`, `Always = 3`, `Disabled
 
 ### Node2D
 
-`public class Node2D : CanvasItem` - A node with a 2D transform (Godot's Node2D).
+`public class Node2D : CanvasItem, ICanvas2DNode` - A node with a 2D transform (Godot's Node2D).
 
 - `public Vector2 Position { get; set; }`
 - `public float Rotation { get; set; }`
+- `public float RotationDegrees { get; set; }`
 - `public Vector2 Scale { get; set; }`
-- `public int ZIndex { get; set; }`
-- `public Vector2 GlobalPosition { get; set; }` - Same as Position: there is no 2D parent chain to compose with.
+- `public float Skew { get; set; }` - Godot's skew: kept, and not drawn (the engine's 2D transform has none).
+- `public Transform2D Transform { get; set; }` - The position, rotation and scale as one transform, relative to the parent.
+- `public Transform2D GlobalTransform { get; set; }` - The transform in the canvas: the parents' composed with this one, stopping at a top-level node.
+- `public Vector2 GlobalPosition { get; set; }`
 - `public float GlobalRotation { get; set; }`
+- `public float GlobalRotationDegrees { get; set; }`
+- `public Vector2 GlobalScale { get; set; }`
+- `public void Translate(Vector2 offset)` - Moves by an offset in the node's own axes.
+- `public void GlobalTranslate(Vector2 offset)`
+- `public void Rotate(float radians)`
+- `public void ApplyScale(Vector2 ratio)`
+- `public Vector2 ToLocal(Vector2 globalPoint)`
+- `public Vector2 ToGlobal(Vector2 localPoint)`
 
 ### Node3D
 
@@ -9920,7 +9931,7 @@ Values: `Visible = 0`, `Hidden = 1`, `HiddenCollapsed = 2`
 
 ### Sprite2D
 
-`public class Sprite2D : Node2D` - A 2D image node (Godot's Sprite2D).
+`public class Sprite2D : Node2D` - A 2D image node (Godot's Sprite2D), drawn by the engine's 2D canvas in one draw order with the Controls: canvas layer, then z, then tree order.
 
 - `public Texture2D? Texture { get; set; }`
 - `public bool Centered { get; set; }`
