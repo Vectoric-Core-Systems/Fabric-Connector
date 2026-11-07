@@ -336,6 +336,9 @@ static class Wave4Tests
         InstanceFlags f = m.ComputeInstanceFlags();
         T.Check("shadows off, dynamic GI, 2 m margin, occlusion opt-out and a bias of 4 are the engine's flag word 0x15, 200 cm and 2 stops",
             f.ShadowMode == 1 && f.GiMode == 1 && f.IgnoreOcclusion && f.RenderFlags == 0x15 && T.Near(f.CullMarginCm, 200f) && T.Near(f.LodBiasStops, 2f) && !f.IsDefault);
+        InstanceFlags fp = new MeshInstance3D { FirstPerson = true }.ComputeInstanceFlags();
+        T.Check("FirstPerson adds the engine's first-person bit 0x20 and is not the default; off it adds nothing", fp.RenderFlags == 0x20 && fp.FirstPerson && !fp.IsDefault &&
+            new MeshInstance3D { FirstPerson = true, IgnoreOcclusionCulling = true }.ComputeInstanceFlags().RenderFlags == 0x30 && def.FirstPerson == false);
         T.Check("shadows only is mode 2, double sided casts as on", new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly }.ComputeInstanceFlags().ShadowMode == 2 &&
             new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.DoubleSided }.ComputeInstanceFlags().ShadowMode == 0);
         T.Check("disabled GI is mode 2 and static is the default", new MeshInstance3D { GIMode = GeometryInstance3D.GIModeEnum.Disabled }.ComputeInstanceFlags().GiMode == 2 && def.GIMode == GeometryInstance3D.GIModeEnum.Static);

@@ -1,0 +1,28 @@
+[remap]
+
+importer="scene"
+importer_version=1
+type="PackedScene"
+uid="uid://cvmgunmodel1"
+path="res://.godot/imported/gun.gltf-0123abcd.scn"
+
+[deps]
+
+source_file="res://models/gun.gltf"
+dest_files=["res://.godot/imported/gun.gltf-0123abcd.scn"]
+
+[params]
+
+nodes/root_type=""
+nodes/root_name=""
+nodes/apply_root_scale=true
+nodes/root_scale=1.0
+_subresources={
+"materials": {
+"GunSkin": {
+"use_external/enabled": true,
+"use_external/fallback_path": "res://materials/viewmodel.tres",
+"use_external/path": "uid://cvmviewmodel01"
+}
+}
+}

@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-899 public types and 9761 public members, read from `managed/Aver.Fabric/` (175 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+899 public types and 9762 public members, read from `managed/Aver.Fabric/` (175 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -4912,7 +4912,8 @@ Values: `LinearLowerLimit = 0`, `LinearUpperLimit = 1`, `LinearLimitSoftness = 2
 - `public float GILightmapTexelScale { get; set; }` - Stored, not applied: there is no lightmap to size.
 - `public LightmapScaleEnum GILightmapScale { get; set; }` - Stored, not applied: there is no lightmap to size.
 - `public float ExtraCullMargin { get; set; }` - Metres the box the frustum and occlusion tests use grows by, so a vertex shader that moves geometry is not culled early.
-- `public bool IgnoreOcclusionCulling { get; set; }` - Opts the instance out of the occlusion test (the editor's Play; the shipped runtime has no occlusion culling).
+- `public bool FirstPerson { get; set; }` - Opts the instance out of the occlusion test (the editor's Play; the shipped runtime has no occlusion culling).
+- `public bool IgnoreOcclusionCulling { get; set; }`
 - `public Aabb CustomAabb { get; set; }` - Stored, not applied: the engine uses the mesh's own bounds.
 
 ### GeometryInstance3D.GIModeEnum
