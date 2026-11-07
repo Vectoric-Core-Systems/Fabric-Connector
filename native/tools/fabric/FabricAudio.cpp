@@ -265,8 +265,9 @@ bool Converter::convertBusLayout(const std::string& resPath, const gd::GodotReso
                         report_.add("resource", resPath, "", "AudioBusLayout", p.name, Rating::Unsupported, "the effect resource is not declared", p.line);
                         continue;
                     }
-                    effects[k].className = sr->type;
-                    const EffectKind kind = Effect::kindFromClassName(sr->type.c_str());
+                    // Godot's AudioEffectFilter base class is usable on its own and filters as a low-pass (its constructor's default mode).
+                    effects[k].className = sr->type == "AudioEffectFilter" ? std::string("AudioEffectLowPassFilter") : sr->type;
+                    const EffectKind kind = Effect::kindFromClassName(effects[k].className.c_str());
                     std::unique_ptr<Effect> probe = kind == EffectKind::Count ? nullptr : Effect::create(kind, 48000);
                     if (!probe) {
                         report_.add("resource", resPath, "", sr->type, "", Rating::Unsupported,

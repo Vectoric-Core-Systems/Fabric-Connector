@@ -316,6 +316,8 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
         const gde::GdEngineUniform* uni = nullptr;
         for (const gde::GdEngineUniform& u : ps.params) if (u.name == pname) uni = &u;
         if (!uni) { report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Approximated, "the shader declares no uniform of this name; the value is ignored", p.line); continue; }
+        // null is no override in Godot (set_shader_parameter(name, null) clears it): the uniform keeps the shader's default.
+        if (p.value.type == VType::Nil) { report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Converted, "null: the uniform keeps the shader's default", p.line); continue; }
         std::vector<double> nums;
         if (!valueNumbers(p.value, uni->type, nums)) {
             report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Unsupported,
@@ -450,6 +452,7 @@ std::string Converter::envShaderAsset(const std::string& materialKey, int kindIn
         const gde::GdEngineUniform* uni = nullptr;
         for (const gde::GdEngineUniform& u : es.params) if (u.name == pname) uni = &u;
         if (!uni) { report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Approximated, "the shader declares no uniform of this name; the value is ignored", p.line); continue; }
+        if (p.value.type == VType::Nil) { report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Converted, "null: the uniform keeps the shader's default", p.line); continue; }
         std::vector<double> nums;
         if (!valueNumbers(p.value, uni->type, nums)) {
             report_.add("property", doc.file, w.node, "ShaderMaterial", p.name, Rating::Unsupported,

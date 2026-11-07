@@ -9,6 +9,7 @@ render_priority = 2
 shader = ExtResource("1_water")
 shader_parameter/shallow = Color(0.2, 0.7, 0.8, 0.6)
 shader_parameter/amplitude = 0.5
+shader_parameter/speed = null
 shader_parameter/octaves = 3
 shader_parameter/foam = false
 shader_parameter/flow = Vector2(0.25, -0.5)

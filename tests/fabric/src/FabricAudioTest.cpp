@@ -147,6 +147,9 @@ int main() {
         check(near(lay.buses[1].volumeDb, -6.0) && lay.buses[1].send == "Master" && !lay.buses[1].mute, "Music: -6 dB, sends to Master");
         check(lay.buses[2].mute && !lay.buses[2].solo && !lay.buses[2].bypass, "SFX is muted");
         check(lay.buses[1].effects.size() == 1 && lay.buses[1].effects[0].className == "AudioEffectReverb" && lay.buses[1].effects[0].params.size() == 2, "Music has its reverb with two parameters");
+        check(lay.buses[0].effects.size() == 1 && lay.buses[0].effects[0].className == "AudioEffectLowPassFilter" && lay.buses[0].effects[0].params.size() == 1 &&
+                  near(lay.buses[0].effects[0].params[0].second, 5000.0),
+              "Godot's base AudioEffectFilter is the low-pass it filters as, with its cutoff");
         bool room = false, wet = false;
         for (const auto& p : lay.buses[1].effects[0].params) { room |= p.first == "room_size" && near(p.second, 0.6); wet |= p.first == "wet" && near(p.second, 0.3); }
         check(room && wet, "room_size 0.6 and wet 0.3");

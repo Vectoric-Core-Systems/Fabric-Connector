@@ -231,6 +231,7 @@ int main() {
         };
         check(has("\"type\":\"ShaderMaterial\"", "\"property\":\"shader_parameter/amplitude\"", "\"rating\":\"converted\""), "a shader parameter is converted");
         check(has("\"type\":\"ShaderMaterial\"", "shader_parameter/no_such_uniform", "\"rating\":\"approximated\""), "a parameter the shader does not declare is approximated (ignored), with the reason");
+        check(has("shader_parameter/speed", "\"rating\":\"converted\"", "keeps the shader's default"), "a null parameter is no override, as in Godot: the uniform keeps its default");
         check(has("\"type\":\"Shader\"", "\"rating\":\"unsupported\"", "this_does_not_exist"), "a shader error is unsupported with the compiler's message");
         check(has("\"type\":\"Shader\"", "\"rating\":\"unsupported\"", "shader_type particles"), "a particles shader is unsupported with its reason");
         check(has("\"type\":\"Shader\"", "\"property\":\"light()\"", "\"rating\":\"unsupported\""), "light() is unsupported");
