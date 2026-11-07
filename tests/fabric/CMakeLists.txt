@@ -370,6 +370,17 @@ target_compile_definitions(FabricSkinTest PRIVATE
 set_target_properties(FabricSkinTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricViewmodelTest -- Fabric step 9 of docs/plans/FIRST_PERSON.md on tests/fabric/data/ViewmodelGame: a viewmodel shader (own projection, POSITION.z depth push) is
+# recognised and the meshes that draw with it (material_override, surface override, a mesh's own material, a model's import remap) get aver_first_person.
+add_executable(FabricViewmodelTest src/FabricViewmodelTest.cpp)
+target_link_libraries(FabricViewmodelTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricViewmodelTest)
+target_compile_definitions(FabricViewmodelTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricViewmodelTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricCorpusPatternsTest -- the patterns two Godot demo projects showed, on tests/fabric/data/CorpusGame: children and overrides below the nodes of an
 # instanced glTF model, Godot 3 key codes and joypad numbers, libraries/ properties, a curve's _limits. Runs the tool as a process, like FabricTreeTest.
 add_executable(FabricCorpusPatternsTest src/FabricCorpusPatternsTest.cpp)

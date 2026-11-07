@@ -346,6 +346,7 @@ std::string Converter::shaderMaterialAsset(const std::string& materialKey, const
     std::string err;
     if (!fmt::saveOcmat(contentDir_ + "/" + asset, d, &ex, &err)) return fail("the material could not be written: " + err);
     si.materials.push_back(asset);
+    if (ps.firstPerson) firstPersonMaterials_.insert(stem);
     report_.add("resource", doc.file, "", "ShaderMaterial", "", Rating::Converted, materialKey + " written as " + asset + " running " + si.graphAsset, 0);
     shaderMaterialAssets_[materialKey] = asset;
     return asset;

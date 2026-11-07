@@ -1,0 +1,41 @@
+[gd_scene load_steps=9 format=3 uid="uid://cvmmain000001"]
+
+[ext_resource type="PackedScene" path="res://models/gun.gltf" id="1_gun"]
+[ext_resource type="PackedScene" path="res://models/rock.gltf" id="2_rock"]
+[ext_resource type="Material" path="res://materials/viewmodel.tres" id="3_vm"]
+[ext_resource type="Material" path="res://materials/plain.tres" id="4_plain"]
+
+[sub_resource type="BoxMesh" id="Box_plain"]
+
+[sub_resource type="BoxMesh" id="Box_own"]
+material = ExtResource("3_vm")
+
+[sub_resource type="BoxMesh" id="Box_ownplain"]
+material = ExtResource("4_plain")
+
+[node name="Main" type="Node3D"]
+
+[node name="Gun" parent="." instance=ExtResource("1_gun")]
+
+[node name="Rock" parent="." instance=ExtResource("2_rock")]
+
+[node name="Override" type="MeshInstance3D" parent="."]
+mesh = SubResource("Box_plain")
+material_override = ExtResource("3_vm")
+
+[node name="PlainOverride" type="MeshInstance3D" parent="."]
+mesh = SubResource("Box_plain")
+material_override = ExtResource("4_plain")
+
+[node name="Surface" type="MeshInstance3D" parent="."]
+mesh = SubResource("Box_plain")
+surface_material_override/0 = ExtResource("3_vm")
+
+[node name="OwnMaterial" type="MeshInstance3D" parent="."]
+mesh = SubResource("Box_own")
+
+[node name="OwnPlain" type="MeshInstance3D" parent="."]
+mesh = SubResource("Box_ownplain")
+
+[node name="Bare" type="MeshInstance3D" parent="."]
+mesh = SubResource("Box_plain")

@@ -932,6 +932,26 @@ std::string viewportKeyOf(const std::string& level, const FNode& n) {
     return key;
 }
 
+bool Converter::drawsFirstPersonMaterial(const std::vector<std::pair<std::string, Var>>& props) {
+    if (firstPersonMaterials_.empty()) return false;
+    const auto mat = [&](const Var& v) { return v.type == VType::Resource && firstPersonMaterials_.count(stemOf(v.s)) > 0; };
+    for (const auto& kv : props)
+        if (kv.first == "material_override" && kv.second.type == VType::Resource) return mat(kv.second);   // replaces every surface
+    std::vector<std::string> slots;
+    for (const auto& kv : props) {
+        if (kv.first != "mesh" || kv.second.type != VType::Resource) continue;
+        fmt::OcMeshData md;
+        if (fmt::loadOcMesh(contentDir_ + "/" + kv.second.s, md)) slots = md.materialSlots;
+    }
+    for (const auto& kv : props) {
+        if (kv.first.rfind("surface_material_override/", 0) != 0 || kv.second.type != VType::Resource) continue;
+        const int i = std::atoi(kv.first.c_str() + std::strlen("surface_material_override/"));
+        if (i >= 0 && i < 64) { if (static_cast<size_t>(i) >= slots.size()) slots.resize(static_cast<size_t>(i) + 1); slots[static_cast<size_t>(i)] = stemOf(kv.second.s); }
+    }
+    for (const std::string& sl : slots) if (firstPersonMaterials_.count(sl)) return true;
+    return false;
+}
+
 size_t Converter::meshSlotCount(const std::string& meshAsset) {
     if (const auto it = meshSlotCounts_.find(meshAsset); it != meshSlotCounts_.end()) return it->second;
     fmt::OcMeshData md;
@@ -1163,6 +1183,12 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
             ++it;
         }
         if (collapsed) props.emplace_back("material_override", *collapsed);
+        // A viewmodel shader on any of the mesh's materials: the engine's first-person pass draws the mesh (Aver.Fabric GeometryInstance3D.FirstPerson).
+        if (drawsFirstPersonMaterial(props)) {
+            props.emplace_back("aver_first_person", makeBool(true));
+            report_.add("property", fn.reportFile, fn.reportPath, fn.type, "aver_first_person", Rating::Converted,
+                        "the mesh draws with a viewmodel shader: it is flagged for the engine's first-person pass", 0);
+        }
     }
 
     // Godot's defaults, made explicit so Aver's own defaults never decide a body's behaviour.
