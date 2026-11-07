@@ -387,7 +387,7 @@ Values: `Ignore = 0`, `Pass = 1`, `Stop = 2`, `Blend = 3`
 - `public StringName Animation { get; set; }` - The key of the animation in the tree's libraries ("walk" or "library/walk").
 - `public PlayModeEnum PlayMode { get; set; }`
 - `public bool AdvanceOnStart { get; set; }` - Stored; the first pass always includes the key at the start.
-- `public bool UseCustomTimeline { get; set; }` - Stored: the timeline of the animation itself is used (a custom start, length and stretch are not applied).
+- `public bool UseCustomTimeline { get; set; }` - The node runs on its own timeline (TimelineLength, LoopMode) instead of the animation's: its time plus StartOffset, stretched to the animation's length when StretchTimeScale, is where the animation plays.
 - `public double TimelineLength { get; set; }`
 - `public bool StretchTimeScale { get; set; }`
 - `public double StartOffset { get; set; }`
