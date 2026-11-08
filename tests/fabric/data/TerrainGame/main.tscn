@@ -1,0 +1,67 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Texture2D" path="res://textures/rock.png" id="1_rock"]
+
+[sub_resource type="Image" id="Image_a"]
+data = {
+"data": PackedByteArray(7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87,92,97,102,107,112,117,122,127,132,137,142,147,152,157,162,167,172,177,182,187,192,197,202,207,212,217,222,227,232,237,242),
+"format": "RGB8",
+"height": 4,
+"mipmaps": false,
+"width": 4
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_a"]
+image = SubResource("Image_a")
+
+[sub_resource type="Terrain3DTextureAsset" id="Tex_grass"]
+name = ""
+albedo_texture = SubResource("ImageTexture_a")
+
+[sub_resource type="Terrain3DTextureAsset" id="Tex_rock"]
+name = "Rock stone!"
+id = 1
+albedo_texture = ExtResource("1_rock")
+uv_scale = 0.25
+
+[sub_resource type="Terrain3DTextureAsset" id="Tex_sand"]
+name = "Sand"
+id = 2
+albedo_texture = SubResource("ImageTexture_a")
+vertical_projection = true
+
+[sub_resource type="Terrain3DTextureAsset" id="Tex_unused"]
+name = "Unused"
+id = 3
+albedo_texture = SubResource("ImageTexture_a")
+
+[sub_resource type="Terrain3DMeshAsset" id="Mesh_a"]
+generated_type = 1
+
+[sub_resource type="Terrain3DAssets" id="Assets_1"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Mesh_a")])
+texture_list = Array[Terrain3DTextureAsset]([SubResource("Tex_grass"), SubResource("Tex_rock"), SubResource("Tex_sand"), SubResource("Tex_unused")])
+
+[sub_resource type="Terrain3DMaterial" id="Mat_1"]
+_shader_parameters = {
+&"auto_base_texture": 2,
+&"auto_overlay_texture": 1,
+&"auto_slope": 1.0,
+&"blend_sharpness": 0.5,
+&"enable_macro_variation": true,
+&"height_blending": true,
+&"macro_variation1": Color(1, 1, 1, 1)
+}
+world_background = 2
+auto_shader = true
+
+[node name="Main" type="Node3D"]
+
+[node name="Terrain" type="Terrain3D" parent="."]
+data_directory = "res://terrain_data"
+material = SubResource("Mat_1")
+assets = SubResource("Assets_1")
+collision_mode = 3
+mesh_lods = 7
+show_heightmap = true
+top_level = true

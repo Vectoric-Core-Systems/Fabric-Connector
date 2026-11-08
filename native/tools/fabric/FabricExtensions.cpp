@@ -71,6 +71,14 @@ void Converter::convertExtensions() {
                     report_.add("file", res, "", "GDExtension", "", Rating::Unsupported, "the .gdextension file could not be read: " + x.message, x.line);
             continue;
         }
+        // Terrain3D is mapped onto the engine's landscape (FabricTerrain.cpp), not hosted: its libraries are not copied and its classes are not registered.
+        if (std::any_of(ext.icons.begin(), ext.icons.end(), [](const auto& i) { return i.first == "Terrain3D"; })) {
+            report_.add("file", res, "", "GDExtension", "", Rating::Approximated,
+                        "the Terrain3D addon: its terrain is converted onto the engine's landscape (.ocland sections, a layered terrain material), so the extension and its libraries are not copied "
+                        "and the GDExtension host does not load it; scripts that call Terrain3D's API do not convert",
+                        0);
+            continue;
+        }
         ExtensionInfo info;
         info.resPath = res;
         info.contentPath = contentPathOf(res);

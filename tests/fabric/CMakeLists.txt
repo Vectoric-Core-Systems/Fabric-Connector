@@ -347,6 +347,21 @@ target_compile_definitions(FabricCanvas2DTest PRIVATE
 set_target_properties(FabricCanvas2DTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricTerrain3DTest -- a Terrain3D node through the converter on tests/fabric/data/TerrainGame: generated Terrain3DRegion resources (src/Terrain3DFixtures.hpp) become .ocland sections,
+# LANDSCAPE records and a layered terrain material; heights, spacing, origins and paint are checked at known points, and what the engine's landscape cannot hold is in the report.
+add_executable(FabricTerrain3DTest src/FabricTerrain3DTest.cpp)
+target_link_libraries(FabricTerrain3DTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+if(TARGET Aver.Formats.Material)
+  target_link_libraries(FabricTerrain3DTest PRIVATE Aver.Formats.Material Aver.Render.PBR.Materials)
+  target_compile_definitions(FabricTerrain3DTest PRIVATE AVER_FABRIC_TEST_OCMAT=1)
+endif()
+fabric_needs_converter(FabricTerrain3DTest)
+target_compile_definitions(FabricTerrain3DTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricTerrain3DTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricWidgetTest -- G5 U2 (widgets and rich text) through the converter on tests/fabric/data/WidgetGame: widgets placed as their classes, every property rated, LabelSettings /
 # FontVariation / SystemFont / ButtonGroup / Shortcut as Object(...) values or one shared Resource(), and UI/Fonts.ocfonts the engine's font set parser reads.
 add_executable(FabricWidgetTest src/FabricWidgetTest.cpp)

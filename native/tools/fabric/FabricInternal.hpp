@@ -453,6 +453,18 @@ public:
     // Rates the properties of NavigationRegion3D, NavigationLink3D, NavigationObstacle3D and NavigationAgent3D.
     void noteNavigationNode(const FNode& fn);
 
+    // ---- FabricTerrain.cpp ----
+    // A Terrain3D node (the GDExtension addon): its data_directory's regions written as .ocland sections, the texture list as a layered terrain material and one LANDSCAPE
+    // record per section appended to `level`; every property rated. The node itself stays a plain Node3D.
+    void convertTerrain3D(const FNode& fn, fmt::OcWorldData& level);
+    struct TerrainResult {
+        struct Section { std::string name, asset; double x = 0, y = 0, extent = 0; };
+        std::vector<Section> sections;
+        std::string material;   // the Materials/ stem; empty without a texture list
+    };
+    std::map<std::string, TerrainResult> terrainResults_;   // data_directory|node name -> what it became, so an instanced scene writes its files once
+    std::set<std::string> terrainRegionFiles_;               // the region resources a Terrain3D node read
+
     // ---- FabricNet.cpp (G6 NET2) ----
     // A SceneReplicationConfig as `Object(SceneReplicationConfig, "properties": [{"path": NodePath, "spawn": bool, "replication_mode": 0|1|2}, ...])`, every entry rated (4.0 / 4.1 sync + watch become modes).
     Var replicationConfigObject(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line);

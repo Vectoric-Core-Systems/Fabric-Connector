@@ -1838,6 +1838,13 @@ void Converter::convertStandaloneResources() {
                 report_.add("resource", res, "", t, "", Rating::Converted, "converted where a scene uses it", 0);
                 continue;
             }
+            if (t.rfind("Terrain3D", 0) == 0) {   // FabricTerrain.cpp reads the regions, the texture list and the material where a Terrain3D node names them
+                if (t == "Terrain3DRegion" && !terrainRegionFiles_.count(res))
+                    report_.add("resource", res, "", t, "", Rating::Unsupported, "no Terrain3D node names this folder as its data_directory, so the region was not converted", 0);
+                else
+                    report_.add("resource", res, "", t, "", Rating::Converted, "converted where a Terrain3D node uses it", 0);
+                continue;
+            }
             if (t == "AudioBusLayout") { convertBusLayout(res, *r); continue; }
             if (t == "Theme") { themeAsset(res, r->props, *r, stemOf(res), w); continue; }   // G5 U1: every theme is written, whether or not a scene names it
             if (isStyleBoxType(t) || isWidgetResourceType(t)) {

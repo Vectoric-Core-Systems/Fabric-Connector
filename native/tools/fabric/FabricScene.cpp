@@ -148,6 +148,13 @@ bool isNode3DClass(const std::string& t) {
 ClassChoice chooseClass(const std::string& t) {
     ClassChoice c;
     if (t.empty()) { c.fabricClass = "Node"; return c; }
+    if (t == "Terrain3D") {
+        c.fabricClass = "Node3D";
+        c.rating = Rating::Approximated;
+        c.reason = "mapped onto the engine's landscape (FabricTerrain.cpp): the regions of its data_directory become .ocland sections with LANDSCAPE records and a layered terrain material; "
+                   "the node stays a plain Node3D with no Terrain3D script API (data, get_height, the instancer)";
+        return c;
+    }
     if (t == "Skeleton3D") {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
@@ -1096,7 +1103,9 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
     noteNavigationNode(fn);
     if (fn.type == "MultiplayerSpawner" || fn.type == "MultiplayerSynchronizer") noteMultiplayerNode(fn);   // G6 NET2
     if (isControlClass(fn.type)) noteUiNode(fn);
+    if (fn.type == "Terrain3D") convertTerrain3D(fn, level);   // its properties are rated there; none is converted as node metadata
     for (const Prop& pr : fn.props) {
+        if (fn.type == "Terrain3D") break;
         if (fn.type == "CollisionPolygon3D" && havePolygonShape && (pr.key == "polygon" || pr.key == "depth" || pr.key == "margin")) continue;
         if (inSubViewport && fn.type == "Camera3D" && pr.key == "current") {
             // A camera below a SubViewport is that view's camera and must never take the window's view: the node is told under a private name that only a
