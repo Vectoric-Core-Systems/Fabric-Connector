@@ -58,13 +58,11 @@ internal readonly struct InstanceFlags
     public int ShadowMode { get; init; }
     public int GiMode { get; init; }
     public bool IgnoreOcclusion { get; init; }
-    /// <summary>Bit 5 (<c>kRenderFirstPerson</c>): the engine draws the mesh with the first-person projection and depth range.</summary>
-    public bool FirstPerson { get; init; }
     public float CullMarginCm { get; init; }
     public float LodBiasStops { get; init; }
 
-    /// <summary>The renderFlags word: bits 0-1 the shadow mode, bits 2-3 the GI mode, bit 4 the occlusion opt-out, bit 5 first person.</summary>
-    public int RenderFlags => (ShadowMode & 3) | ((GiMode & 3) << 2) | (IgnoreOcclusion ? 0x10 : 0) | (FirstPerson ? 0x20 : 0);
+    /// <summary>The renderFlags word: bits 0-1 the shadow mode, bits 2-3 the GI mode, bit 4 the occlusion opt-out.</summary>
+    public int RenderFlags => (ShadowMode & 3) | ((GiMode & 3) << 2) | (IgnoreOcclusion ? 0x10 : 0);
 
     /// <summary>True when every field is the ordinary mesh's: nothing needs writing.</summary>
     public bool IsDefault => RenderFlags == 0 && CullMarginCm == 0f && LodBiasStops == 0f;
@@ -139,7 +137,6 @@ public class GeometryInstance3D : VisualInstance3D
         // Godot's Static is Aver's default; Dynamic and Disabled both leave the voxel bake.
         GiMode = _giMode switch { GIModeEnum.Dynamic => 1, GIModeEnum.Disabled => 2, _ => 0 },
         IgnoreOcclusion = _ignoreOcclusion,
-        FirstPerson = _firstPerson,
         CullMarginCm = FabricSpace.ToAverLength(Mathf.Max(_extraCullMargin, 0f)),
         LodBiasStops = RenderMapping.LodBiasStops(_lodBias),
     };
@@ -269,7 +266,6 @@ public class GeometryInstance3D : VisualInstance3D
     private GIModeEnum _giMode = GIModeEnum.Static;
     private float _extraCullMargin, _lodBias = 1f;
     private bool _ignoreOcclusion;
-    private bool _firstPerson;
 
     /// <summary>Off casts no shadow into the sun's cascade and global-illumination shadow maps (the ray-traced sun shadow still sees the mesh); ShadowsOnly draws nothing for
     /// a camera and keeps the mesh for shadows, global illumination and reflections; DoubleSided casts as On does.</summary>
@@ -300,10 +296,6 @@ public class GeometryInstance3D : VisualInstance3D
     public float ExtraCullMargin { get => _extraCullMargin; set { _extraCullMargin = value; ApplyRenderMasks(); } }
 
     /// <summary>Opts the instance out of the occlusion test (the editor's Play; the shipped runtime has no occlusion culling).</summary>
-    /// <summary>Aver-specific (Godot has no such property): the engine draws this mesh in its first-person pass, with its own projection and its depth squeezed in
-    /// front of the world, so it never clips into walls. The converter sets it (<c>aver_first_person</c>) on meshes that use a viewmodel shader, whose
-    /// POSITION / PROJECTION_MATRIX work is dropped. Sets CMeshRenderer.renderFlags bit 0x20.</summary>
-    public bool FirstPerson { get => _firstPerson; set { _firstPerson = value; ApplyRenderMasks(); } }
     public bool IgnoreOcclusionCulling { get => _ignoreOcclusion; set { _ignoreOcclusion = value; ApplyRenderMasks(); } }
 
     /// <summary>Stored, not applied: the engine uses the mesh's own bounds.</summary>
@@ -339,7 +331,6 @@ public partial class MeshInstance3D : GeometryInstance3D
     internal override bool TryDynamicSet(string name, Variant value)
     {
         if (name == "aver_blend_shapes") { SetShapeNames(value.AsString()); return true; }   // the mesh's blend shape names, '|' between them
-        if (name == "aver_first_person") { FirstPerson = value.AsBool(); return true; }   // the converter marks meshes drawn with a viewmodel shader
         if (name == "aver_skinned") { _skinned = value.AsBool(); return true; }   // the converter marks the meshes the importer skinned to a bound Skeleton3D
         if (name.StartsWith("surface_material_override/", StringComparison.Ordinal) && int.TryParse(name.AsSpan("surface_material_override/".Length), out int surface))
         {

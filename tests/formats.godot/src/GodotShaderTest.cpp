@@ -1562,7 +1562,7 @@ static int printFunctions() {
     return 0;
 }
 
-// Fabric step 9 (docs/plans/FIRST_PERSON.md): a viewmodel vertex function is recognised and its clip-space work dropped.
+// A viewmodel vertex function is recognised and its clip-space work dropped: the mesh draws with the main camera.
 static GdEngineShader forEngine(const std::string& vertexBody, const std::string& extra = "") {
     GdEngineShader r;
     gdShaderForEngine("shader_type spatial;\n" + extra + "void vertex() {\n" + vertexBody + "\n}\nvoid fragment() { ALBEDO = vec3(1.0); }\n", "vm.gdshader", {}, r);
@@ -1573,38 +1573,38 @@ static bool hasNote(const GdEngineShader& r, const std::string& severity, const 
     return false;
 }
 static void testViewmodel() {
-    AVER_INFO("=== viewmodel shaders (first person) ===");
+    AVER_INFO("=== viewmodel shaders ===");
     const std::string full = R"(float scale = 1.0 / tan(60.0 * 0.5 * PI / 180.0);
     PROJECTION_MATRIX[0][0] = scale / (VIEWPORT_SIZE.x / VIEWPORT_SIZE.y);
     PROJECTION_MATRIX[1][1] = -scale;
     POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX.xyz, 1.0);
     POSITION.z = mix(POSITION.z, 0, -2);)";
     const GdEngineShader a = forEngine(full);
-    check(a.ok && a.firstPerson, "the full viewmodel pattern is recognised: " + a.error);
+    check(a.ok && a.viewmodel, "the full viewmodel pattern is recognised: " + a.error);
     check(hasNote(a, "approximated", "POSITION") && !hasNote(a, "unsupported", "POSITION"), "recognised: reported as approximated, not unsupported");
     check(a.vertexSource.find("AVER_CUSTOM_POSITION") == std::string::npos, "the generated vertex code no longer writes POSITION");
     check(a.vertexSource.find("AVER_CUSTOM_PROJECTION_MATRIX") == std::string::npos, "the generated vertex code no longer touches PROJECTION_MATRIX");
     check(a.vertexSource.find("scale") != std::string::npos, "other statements of vertex() stay");
 
     const GdEngineShader b = forEngine("POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);\n    POSITION.z = mix(POSITION.z, 0, -2);");
-    check(b.ok && b.firstPerson, "without the projection edits: recognised");
+    check(b.ok && b.viewmodel, "without the projection edits: recognised");
     const GdEngineShader c = forEngine("PROJECTION_MATRIX[1][1] = -1.5;\n    POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX.xyz, 1.0);");
-    check(c.ok && c.firstPerson && c.vertexSource.find("AVER_CUSTOM_POSITION") == std::string::npos, "without the depth push: recognised");
+    check(c.ok && c.viewmodel && c.vertexSource.find("AVER_CUSTOM_POSITION") == std::string::npos, "without the depth push: recognised");
     const GdEngineShader d = forEngine("POSITION = PROJECTION_MATRIX * VIEW_MATRIX * MODEL_MATRIX * vec4(VERTEX, 1.0);");
-    check(d.ok && d.firstPerson, "VIEW_MATRIX * MODEL_MATRIX in place of MODELVIEW_MATRIX: recognised");
+    check(d.ok && d.viewmodel, "VIEW_MATRIX * MODEL_MATRIX in place of MODELVIEW_MATRIX: recognised");
     const GdEngineShader e = forEngine("POSITION = (PROJECTION_MATRIX * (VIEW_MATRIX * MODEL_MATRIX)) * vec4(VERTEX.xyz, 1.0);");
-    check(e.ok && e.firstPerson, "parenthesised product: recognised");
+    check(e.ok && e.viewmodel, "parenthesised product: recognised");
 
     const GdEngineShader n1 = forEngine("POSITION = vec4(VERTEX.xy, 0.5, 1.0);");
-    check(n1.ok && !n1.firstPerson && hasNote(n1, "unsupported", "POSITION"), "a POSITION write of another shape stays unsupported");
+    check(n1.ok && !n1.viewmodel && hasNote(n1, "unsupported", "POSITION"), "a POSITION write of another shape stays unsupported");
     const GdEngineShader n2 = forEngine("POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX * 2.0, 1.0);");
-    check(!n2.firstPerson && hasNote(n2, "unsupported", "POSITION"), "a scaled vertex is not the standard projection");
+    check(!n2.viewmodel && hasNote(n2, "unsupported", "POSITION"), "a scaled vertex is not the standard projection");
     const GdEngineShader n3 = forEngine("POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);\n    POSITION.x += 0.1;");
-    check(!n3.firstPerson && hasNote(n3, "unsupported", "POSITION"), "an extra POSITION.x write after the projection: not recognised");
+    check(!n3.viewmodel && hasNote(n3, "unsupported", "POSITION"), "an extra POSITION.x write after the projection: not recognised");
     const GdEngineShader n4 = forEngine("POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);\n    if (UV.x > 0.5) { POSITION.z = 0.0; }");
-    check(!n4.firstPerson, "a conditional POSITION.z write: not recognised");
+    check(!n4.viewmodel, "a conditional POSITION.z write: not recognised");
     const GdEngineShader n5 = forEngine("VERTEX += NORMAL * 0.01;");
-    check(n5.ok && !n5.firstPerson && !hasNote(n5, "approximated", "POSITION"), "an ordinary vertex function is not a viewmodel");
+    check(n5.ok && !n5.viewmodel && !hasNote(n5, "approximated", "POSITION"), "an ordinary vertex function is not a viewmodel");
 }
 
 int main(int argc, char** argv) {

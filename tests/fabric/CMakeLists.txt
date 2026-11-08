@@ -381,8 +381,8 @@ target_compile_definitions(FabricSkinTest PRIVATE
 set_target_properties(FabricSkinTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# FabricViewmodelTest -- Fabric step 9 of docs/plans/FIRST_PERSON.md on tests/fabric/data/ViewmodelGame: a viewmodel shader (own projection, POSITION.z depth push) is
-# recognised and the meshes that draw with it (material_override, surface override, a mesh's own material, a model's import remap) get aver_first_person.
+# FabricViewmodelTest -- tests/fabric/data/ViewmodelGame: a viewmodel shader (own projection, POSITION.z depth push) is recognised, its clip-space work dropped,
+# and the meshes that draw with it (material_override, surface override, a mesh's own material, a model's import remap) convert as ordinary meshes.
 add_executable(FabricViewmodelTest src/FabricViewmodelTest.cpp)
 target_link_libraries(FabricViewmodelTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
 fabric_needs_converter(FabricViewmodelTest)

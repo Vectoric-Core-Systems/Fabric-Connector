@@ -1,6 +1,6 @@
-// FabricViewmodelTest -- Fabric step 9 of docs/plans/FIRST_PERSON.md through the converter: `AverAssetC fabric` on tests/fabric/data/ViewmodelGame, which has a viewmodel
-// shader (its own projection and a POSITION.z depth push) and an ordinary vertex shader. Exactly the meshes that draw with the viewmodel material get aver_first_person: a
-// material_override, a surface override, a mesh resource's own material and a model whose import replaces its material (_subresources > materials > use_external).
+// FabricViewmodelTest -- through the converter: `AverAssetC fabric` on tests/fabric/data/ViewmodelGame, which has a viewmodel shader (its own projection and a
+// POSITION.z depth push) and an ordinary vertex shader. The viewmodel's clip-space work is dropped, so every mesh that draws with it (a material_override, a surface
+// override, a mesh resource's own material, a model whose import replaces its material) converts as an ordinary mesh: no node carries a first-person flag.
 #include "aver/core/ErrorCodes.hpp"
 #include "aver/core/Hash.hpp"
 #include "aver/core/Log.hpp"
@@ -92,34 +92,24 @@ int main() {
     std::string err;
     check(fmt::loadOcworld(content + "/Maps/main.ocworld", w, &err), "the level loads: " + err);
 
-    const auto flagged = [&](std::initializer_list<const char*> path) {
-        const std::string v = propOf(w, path, "aver_first_person");
-        return v.find("true") != std::string::npos;
-    };
     const auto exists = [&](std::initializer_list<const char*> path) { return find(w, path) >= 0; };
-    AVER_INFO("-- the meshes that draw with the viewmodel material --");
-    check(exists({"Main", "Override"}) && flagged({"Main", "Override"}), "material_override: marked");
-    check(flagged({"Main", "Surface"}), "surface_material_override/0 (one surface): marked");
-    check(flagged({"Main", "OwnMaterial"}), "a mesh resource's own material: marked");
-    check(exists({"Main", "Gun", "GunMesh"}) && flagged({"Main", "Gun", "GunMesh"}), "a model whose import replaces its material with the project's viewmodel material: marked");
-
-    AVER_INFO("-- the meshes that do not --");
-    check(exists({"Main", "PlainOverride"}) && !flagged({"Main", "PlainOverride"}), "an ordinary shader as material_override: not marked");
-    check(exists({"Main", "OwnPlain"}) && !flagged({"Main", "OwnPlain"}), "a mesh resource's own ordinary shader material: not marked");
-    check(exists({"Main", "Bare"}) && !flagged({"Main", "Bare"}), "a mesh with no material: not marked");
-    check(exists({"Main", "Rock", "RockMesh"}) && !flagged({"Main", "Rock", "RockMesh"}), "a model whose import uses the ordinary shader: not marked");
+    AVER_INFO("-- the meshes that draw with the viewmodel material, and the ones that do not --");
+    check(exists({"Main", "Override"}) && exists({"Main", "Surface"}) && exists({"Main", "OwnMaterial"}) && exists({"Main", "Gun", "GunMesh"}),
+          "the four meshes drawn with the viewmodel material are converted");
+    check(exists({"Main", "PlainOverride"}) && exists({"Main", "OwnPlain"}) && exists({"Main", "Bare"}) && exists({"Main", "Rock", "RockMesh"}),
+          "the ordinary meshes are converted");
+    check(propOf(w, {"Main", "Override"}, "material_override").find("viewmodel") != std::string::npos, "material_override keeps the converted viewmodel material");
     int marked = 0;
     for (const fmt::OcWorldPlacement& p : w.placements)
         for (const fmt::OcPlacedComponent& c : p.components)
-            if (c.type == "Props")
-                if (const std::string* t = c.find("aver_first_person")) marked += t->find("true") != std::string::npos ? 1 : 0;
-    check(marked == 4, "exactly four nodes carry the property (" + std::to_string(marked) + ")");
+            if (c.type == "Props" && c.find("aver_first_person")) ++marked;
+    check(marked == 0, "no node carries a first-person property (" + std::to_string(marked) + ")");
 
     AVER_INFO("-- the report --");
     {
         std::string report;
         readFileText((root / "out" / "FabricReport.jsonl").string(), report);
-        check(report.find("a viewmodel shader (its own projection and depth push) is drawn by the engine's first-person pass") != std::string::npos,
+        check(report.find("a viewmodel shader: its own projection and depth push are dropped") != std::string::npos,
               "the report says the shader is approximated as a viewmodel");
         check(report.find("\"unsupported\"") == std::string::npos || report.find("writing POSITION is not supported") == std::string::npos, "and POSITION is not reported unsupported");
     }

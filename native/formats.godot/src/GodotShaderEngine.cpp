@@ -240,9 +240,9 @@ bool gdShaderForEngine(std::string_view source, std::string_view fileName, const
     r.hasLight = m.processor(GdProcessor::Light) != nullptr;
     if (r.hasLight) addNote(r, "unsupported", "light()", "the per-light function is not run: the material is lit by the engine's own lights (a toon or custom light() shader loses its look)");
 
-    // A viewmodel's own projection and depth push become the engine's first-person pass.
+    // A viewmodel's own projection and depth push are dropped: the mesh draws with the main camera.
     if (r.hasVertex && stripViewmodelProjection(m))
-        r.firstPerson = true, addNote(r, "approximated", "POSITION", "a viewmodel shader (its own projection and depth push) is drawn by the engine's first-person pass");
+        r.viewmodel = true, addNote(r, "approximated", "POSITION", "a viewmodel shader: its own projection and depth push are dropped, so the mesh draws with the main camera and can clip into walls");
 
     // ---- samplers -> material texture slots ----
     std::vector<int> sRgbPool(std::begin(kGdEngineSrgbSlots), std::end(kGdEngineSrgbSlots));

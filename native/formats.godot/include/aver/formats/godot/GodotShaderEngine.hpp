@@ -72,9 +72,9 @@ struct GdEngineShader {
     int blend = 0;                       // 0 mix, 1 add, 2 sub, 3 mul, 4 premultiplied alpha
     int depthDraw = 0;                   // 0 opaque only (default), 1 always, 2 never
     bool depthTestDisabled = false, shadowsDisabled = false;
-    // The vertex function was a viewmodel's (standard projection, optional projection-matrix edits and POSITION.z depth push): those writes are dropped and
-    // meshes drawn with the material belong in the engine's first-person pass (CMeshRenderer kRenderFirstPerson).
-    bool firstPerson = false;
+    // The vertex function was a viewmodel's (standard projection, optional projection-matrix edits and POSITION.z depth push): those writes are dropped, so
+    // the mesh draws as an ordinary mesh with the main camera (it can clip into walls).
+    bool viewmodel = false;
     bool writesAlpha = false, writesAlphaScissor = false, usesDiscard = false;
     std::vector<GdEngineNote> notes;
     // The built-in variables the emitted sources use, with whether each is read or written (for the report and the tests).
