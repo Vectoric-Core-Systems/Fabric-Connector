@@ -347,6 +347,17 @@ target_compile_definitions(FabricCanvas2DTest PRIVATE
 set_target_properties(FabricCanvas2DTest PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# FabricAnim2DTest -- AnimatedSprite2D, Camera2D, Parallax2D, ParallaxBackground and ParallaxLayer through the converter on tests/fabric/data/Anim2DGame: the engine's COMPONENT CSpriteAnim2D /
+# CCamera2D / CParallax2D / C2DLayer records (read back with the engine's parser), and what is unsupported or approximated in the report.
+add_executable(FabricAnim2DTest src/FabricAnim2DTest.cpp)
+target_link_libraries(FabricAnim2DTest PRIVATE Aver.Formats.Godot Aver.Formats Aver.Platform Aver.Core)
+fabric_needs_converter(FabricAnim2DTest)
+target_compile_definitions(FabricAnim2DTest PRIVATE
+  AVER_ASSETC_EXE="$<TARGET_FILE:AverAssetC>"
+  AVER_FABRIC_DATA="${FABRIC_TEST_DATA}")
+set_target_properties(FabricAnim2DTest PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # FabricTerrain3DTest -- a Terrain3D node through the converter on tests/fabric/data/TerrainGame: generated Terrain3DRegion resources (src/Terrain3DFixtures.hpp) become .ocland sections,
 # LANDSCAPE records and a layered terrain material; heights, spacing, origins and paint are checked at known points, and what the engine's landscape cannot hold is in the report.
 add_executable(FabricTerrain3DTest src/FabricTerrain3DTest.cpp)

@@ -245,7 +245,7 @@ scale = Vector3(2, 2, 2)
 [node name="Hud" type="Label" parent="."]
 text = "Hello"
 
-[node name="Icon" type="AnimatedSprite2D" parent="."]
+[node name="Icon" type="TileMapLayer" parent="."]
 position = Vector2(10, 20)
 
 [node name="Hum" type="XRFaceModifier3D" parent="."]

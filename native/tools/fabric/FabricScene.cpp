@@ -58,7 +58,7 @@ const std::set<std::string>& supportedClasses() {
                                             // 2D curves that 3D games read as data (spray and recoil patterns); nothing of them is drawn
                                             "Path2D", "PathFollow2D",
                                             // the engine's 2D scenes (docs/plans/RENDER_2D.md in the engine): the transform node and the sprite; CanvasLayer is below
-                                            "Node2D", "Sprite2D",
+                                            "Node2D", "Sprite2D", "AnimatedSprite2D", "Camera2D", "Parallax2D", "ParallaxBackground", "ParallaxLayer",
                                             // wave 7: the ragdoll nodes
                                             "PhysicalBone3D", "PhysicalBoneSimulator3D",
                                             "LookAtModifier3D", "CopyTransformModifier3D", "AimModifier3D", "ConvertTransformModifier3D",
@@ -222,6 +222,40 @@ ClassChoice chooseClass(const std::string& t) {
                    "centering, nearest filtering and modulate apply, a texture must be a file in the project (a generated or atlas texture draws nothing), and skew, 2D lights and shader materials do not apply";
         return c;
     }
+    if (t == "AnimatedSprite2D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "COMPONENT C2DTransform, CSprite2D and CSpriteAnim2D records: the engine plays the animation (sprite_frames' animations with their speeds, loops and frame durations, autoplay, animation, frame, speed_scale, playing) "
+                   "and the node's play(), stop(), pause(), frame and signals drive it; a frame texture must be a file in the project, and the engine holds 16 animations and 128 frames per sprite";
+        return c;
+    }
+    if (t == "Camera2D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "a COMPONENT C2DTransform and CCamera2D record on the engine's 2D camera: enabled, zoom, offset, anchor_mode, ignore_rotation, the four limits, position smoothing and the drag margins; "
+                   "make_current() and the zoom and offset a script sets drive it. One camera is current at a time. Rotation smoothing, limit smoothing and a custom viewport are not supported";
+        return c;
+    }
+    if (t == "Parallax2D") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "a COMPONENT C2DTransform and CParallax2D record: scroll_scale, scroll_offset, repeat_size, repeat_times, autoscroll, follow_viewport and the limits scroll the sprites below it against the 2D camera; "
+                   "screen_offset and ignore_camera_scroll are not supported";
+        return c;
+    }
+    if (t == "ParallaxBackground") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "an approximation: a COMPONENT C2DLayer record that follows the 2D camera (the layer number, offset, rotation and scale apply); its ParallaxLayer children become CParallax2D records. "
+                   "scroll_offset, scroll_base_offset, scroll_base_scale, the scroll limits and scroll_ignore_camera_zoom are not used";
+        return c;
+    }
+    if (t == "ParallaxLayer") {
+        c.fabricClass = t;
+        c.rating = Rating::Approximated;
+        c.reason = "an approximation of a layer of a ParallaxBackground: a COMPONENT C2DTransform and CParallax2D record with motion_scale as the scroll scale, motion_offset as the scroll offset and motion_mirroring as the repeat size";
+        return c;
+    }
     if (t == "XROrigin3D" || t == "XRCamera3D" || t == "XRController3D" || t == "XRAnchor3D" || t == "XRNode3D") {
         c.fabricClass = t;
         c.rating = Rating::Approximated;
@@ -311,7 +345,7 @@ ClassChoice chooseClass(const std::string& t) {
     if (is2DClass(t)) {
         c.fabricClass = "Node";
         c.rating = Rating::Unsupported;
-        c.reason = "the engine's 2D covers Node2D, Sprite2D and CanvasLayer; this 2D class has no equivalent yet (animated sprites, cameras, parallax, tile maps, 2D physics and lights are later work), "
+        c.reason = "the engine's 2D covers Node2D, Sprite2D, AnimatedSprite2D, Camera2D, Parallax2D and CanvasLayer; this 2D class has no equivalent yet (tile maps, 2D physics and lights are later work), "
                    "so the node is kept as a plain node and the tree and its script survive";
         return c;
     }

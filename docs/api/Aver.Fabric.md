@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-899 public types and 9772 public members, read from `managed/Aver.Fabric/` (176 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
+907 public types and 9859 public members, read from `managed/Aver.Fabric/` (178 source files). Signatures are single lines as declared; the sentence after each is the first line of its XML summary.
 
 ## namespace Aver.Fabric
 
@@ -92,6 +92,44 @@
 `public class AnimatableBody3D : StaticBody3D` - A body moved by script or animation that pushes others (Godot's AnimatableBody3D).
 
 - `public bool SyncToPhysics { get; set; }` - When true the body follows its node through the physics step, so what rests on it is carried.
+
+### AnimatedSprite2D
+
+`public class AnimatedSprite2D : Node2D` - A 2D sprite that plays a SpriteFrames animation (Godot's AnimatedSprite2D), drawn by the engine's 2D canvas in one order with the other sprites and the Controls.
+
+- `public event Action SpriteFramesChanged`
+- `public event Action AnimationChanged`
+- `public event Action FrameChanged`
+- `public event Action AnimationLooped`
+- `public event Action AnimationFinished`
+- `public StringName Autoplay { get; set; }`
+- `public bool Centered { get; set; }`
+- `public Vector2 Offset { get; set; }`
+- `public bool FlipH { get; set; }`
+- `public bool FlipV { get; set; }`
+- `public SpriteFrames? SpriteFrames { get; set; }`
+- `public StringName Animation { get; set; }` - The animation shown.
+- `public int Frame { get; set; }`
+- `public float FrameProgress { get; set; }` - How far through the current frame, 0 to 1.
+- `public float SpeedScale { get; set; }`
+- `public void SetFrameAndProgress(int frame, float progress)`
+- `public bool IsPlaying()`
+- `public bool Playing { get; set; }`
+- `public float GetPlayingSpeed()` - The speed in frames a second the animation runs at now: its speed times SpeedScale and the speed given to Play; negative when playing backwards.
+- `public void Play(StringName? name = null, float customSpeed = 1f, bool fromEnd = false)` - Plays an animation (the current one when no name is given).
+- `public void PlayBackwards(StringName? name = null)`
+- `public void Pause()`
+- `public void Stop()` - Stops and returns to the first frame.
+
+### AnimatedSprite2D.SignalName
+
+`public new class SignalName : Node2D.SignalName`
+
+- `public static readonly StringName SpriteFramesChanged`
+- `public static readonly StringName AnimationChanged`
+- `public static readonly StringName FrameChanged`
+- `public static readonly StringName AnimationLooped`
+- `public static readonly StringName AnimationFinished`
 
 ### AnimatedSprite3D
 
@@ -2252,6 +2290,58 @@ Values: `Begin = 0`, `Center = 1`, `End = 2`
 `public class CallbackTweener : Tweener` - Calls a callable (Godot's CallbackTweener).
 
 - `public CallbackTweener SetDelay(double delay)` - Waits this long after its step starts before calling.
+
+### Camera2D
+
+`public class Camera2D : Node2D` - A 2D camera (Godot's Camera2D) on the engine's 2D camera: the zoom, offset, anchor, the four limits, position smoothing and the drag margins move the view of the default canvas and of the layers that follow the viewport (a plain CanvasLayer stays fixed, like a HUD).
+
+- `public Vector2 Offset { get; set; }`
+- `public AnchorModeEnum AnchorMode { get; set; }`
+- `public bool IgnoreRotation { get; set; }` - True (the default): the view does not turn with the node.
+- `public bool Enabled { get; set; }`
+- `public Vector2 Zoom { get; set; }`
+- `public Camera2DProcessCallback ProcessCallback { get; set; }`
+- `public int LimitLeft { get; set; }`
+- `public int LimitTop { get; set; }`
+- `public int LimitRight { get; set; }`
+- `public int LimitBottom { get; set; }`
+- `public bool LimitSmoothed { get; set; }`
+- `public bool PositionSmoothingEnabled { get; set; }`
+- `public float PositionSmoothingSpeed { get; set; }`
+- `public bool RotationSmoothingEnabled { get; set; }`
+- `public float RotationSmoothingSpeed { get; set; }`
+- `public bool DragHorizontalEnabled { get; set; }`
+- `public bool DragVerticalEnabled { get; set; }`
+- `public float DragHorizontalOffset { get; set; }`
+- `public float DragVerticalOffset { get; set; }`
+- `public float DragLeftMargin { get; set; }`
+- `public float DragTopMargin { get; set; }`
+- `public float DragRightMargin { get; set; }`
+- `public float DragBottomMargin { get; set; }`
+- `public bool Current { get; set; }` - Godot 4.0 and 4.1's spelling of "this is the current camera".
+- `public int GetLimit(Side side)`
+- `public void SetLimit(Side side, int limit)`
+- `public float GetDragMargin(Side side)`
+- `public void SetDragMargin(Side side, float margin)`
+- `public void MakeCurrent()` - Makes this the camera that moves the view.
+- `public bool IsCurrent()`
+- `public Vector2 GetScreenCenterPosition()` - The centre of the view in the canvas, after easing and the limits (Godot's get_screen_center_position).
+- `public Vector2 GetTargetPosition()` - Where the camera wants its centre: its position in the canvas plus the offset.
+- `public void ForceUpdateScroll()` - Kept for scripts.
+- `public void ResetSmoothing()` - Kept for scripts.
+- `public void Align()` - Kept for scripts.
+
+### Camera2D.AnchorModeEnum
+
+`public enum AnchorModeEnum`
+
+Values: `FixedTopLeft = 0`, `DragCenter = 1`
+
+### Camera2D.Camera2DProcessCallback
+
+`public enum Camera2DProcessCallback`
+
+Values: `Physics = 0`, `Idle = 1`
 
 ### Camera3D
 
@@ -7769,6 +7859,41 @@ Values: `Disabled = 0`, `Instance = 1`, `Main = 2`, `MainInherited = 3`
 - `public Texture2D? Panorama { get; set; }`
 - `public bool Filter { get; set; }`
 - `public float EnergyMultiplier { get; set; }`
+
+### Parallax2D
+
+`public class Parallax2D : Node2D` - Scrolling layers (Godot 4.3's Parallax2D) on the engine's parallax: the sprites below it are drawn shifted by the camera's position times (1 - ScrollScale) plus ScrollOffset and Autoscroll times the time, and tiled by RepeatSize.
+
+- `public Vector2 ScrollScale { get; set; }`
+- `public Vector2 ScrollOffset { get; set; }`
+- `public Vector2 RepeatSize { get; set; }`
+- `public int RepeatTimes { get; set; }`
+- `public Vector2 Autoscroll { get; set; }`
+- `public Vector2 ScreenOffset { get; set; }`
+- `public Vector2 LimitBegin { get; set; }` - With a limit end above the begin, the camera position the scroll uses stays between them.
+- `public Vector2 LimitEnd { get; set; }`
+- `public bool FollowViewport { get; set; }`
+- `public bool IgnoreCameraScroll { get; set; }`
+
+### ParallaxBackground
+
+`public class ParallaxBackground : CanvasLayer` - The older scrolling background (Godot's ParallaxBackground), approximated: a canvas layer (the layer number -100 unless set) that follows the 2D camera, whose ParallaxLayer children scroll by their motion scale.
+
+- `public ParallaxBackground()`
+- `public Vector2 ScrollOffset { get; set; }`
+- `public Vector2 ScrollBaseOffset { get; set; }`
+- `public Vector2 ScrollBaseScale { get; set; }`
+- `public bool ScrollIgnoreCameraZoom { get; set; }`
+- `public Vector2 ScrollLimitBegin { get; set; }`
+- `public Vector2 ScrollLimitEnd { get; set; }`
+
+### ParallaxLayer
+
+`public class ParallaxLayer : Node2D` - A layer of a ParallaxBackground (Godot's ParallaxLayer), approximated by a parallax: MotionScale is the scroll scale, MotionOffset the scroll offset and MotionMirroring the repeat size.
+
+- `public Vector2 MotionScale { get; set; }`
+- `public Vector2 MotionOffset { get; set; }`
+- `public Vector2 MotionMirroring { get; set; }`
 
 ### ParticleProcessMaterial
 

@@ -2,7 +2,7 @@
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
 // The bridge between the 2D nodes and the engine's 2D canvas (docs/plans/RENDER_2D.md in the engine). The engine owns 2D: a Node2D, a Sprite2D and a CanvasLayer each
-// keep a C2DTransform / CSprite2D / C2DLayer component on an entity, and the host flushes the canvas into the UI draw list after the frame. Once a frame the
+// keep a C2DTransform / CSprite2D / C2DLayer component on an entity (an AnimatedSprite2D also a CSpriteAnim2D, a Camera2D a CCamera2D, a Parallax2D a CParallax2D), and the host flushes the canvas into the UI draw list after the frame. Once a frame the
 // nodes tell the engine what changed (a script that moves or retints a sprite is seen the next frame), and the tree is numbered once so that sprites and Controls
 // share one draw order: (canvas layer, z, tree order).
 
@@ -35,6 +35,25 @@ internal interface ICanvas2DBackend
     bool Set(int entity, in Aver.Framework.Layer2D l);
     void SetCanvas(CanvasStretchMode mode, CanvasStretchAspect aspect, CanvasScaleMode scaleMode, float baseWidth, float baseHeight, float scale, System.Numerics.Vector4 view);
     bool SubmitExternal(int layer, int z, long order, Action draw);
+
+    // The animation, camera and parallax calls. The defaults are for a backend that has none (every older test double): they do nothing and report failure.
+    bool Set(int entity, in Aver.Framework.Camera2D c) => false;
+    bool Set(int entity, in Aver.Framework.Parallax2D p) => false;
+    /// <summary>Writes the playback settings (speed scale, autoplay), adding the animation component.</summary>
+    bool SetAnimation(int entity, in Aver.Framework.SpriteAnim2D a) => false;
+    bool SetClip(int entity, int index, string name, float fps, bool loop, ReadOnlySpan<Aver.Framework.SpriteAnimFrame2D> frames) => false;
+    void RemoveAnimation(int entity) { }
+    bool Play(int entity, string? name, bool restart) => false;
+    void Stop(int entity) { }
+    void Pause(int entity) { }
+    void SetFrame(int entity, int frame, float progress) { }
+    bool TryGetAnimation(int entity, out Aver.Framework.SpriteAnim2D a) { a = default; return false; }
+    bool TryGetClipName(int entity, int index, out string name) { name = string.Empty; return false; }
+    IReadOnlyList<Aver.Framework.SpriteAnimEvent2D> PollAnimationEvents() => System.Array.Empty<Aver.Framework.SpriteAnimEvent2D>();
+    bool MakeCurrent(int entity) => false;
+    /// <summary>The entity of the camera that applies, 0 for none.</summary>
+    int CurrentCamera => 0;
+    bool TryGetCameraCenter(int entity, out System.Numerics.Vector2 center) { center = default; return false; }
 }
 
 internal sealed class EngineCanvas2DBackend : ICanvas2DBackend
@@ -56,6 +75,27 @@ internal sealed class EngineCanvas2DBackend : ICanvas2DBackend
     public void SetCanvas(CanvasStretchMode mode, CanvasStretchAspect aspect, CanvasScaleMode scaleMode, float baseWidth, float baseHeight, float scale, System.Numerics.Vector4 view) =>
         Scene2D.SetCanvas(mode, aspect, scaleMode, baseWidth, baseHeight, scale, view);
     public bool SubmitExternal(int layer, int z, long order, Action draw) => Scene2D.SubmitExternal(layer, z, order, draw);
+
+    private static Entity E(int handle) => Aver.Framework.Hosting.ExtensionHost.EntityFromHandle(handle);
+    public bool Set(int entity, in Aver.Framework.Camera2D c) => Scene2D.Set(E(entity), in c);
+    public bool Set(int entity, in Aver.Framework.Parallax2D p) => Scene2D.Set(E(entity), in p);
+    public bool SetAnimation(int entity, in Aver.Framework.SpriteAnim2D a) => Scene2D.Set(E(entity), in a);
+    public bool SetClip(int entity, int index, string name, float fps, bool loop, ReadOnlySpan<Aver.Framework.SpriteAnimFrame2D> frames) => Scene2D.SetClip(E(entity), index, name, fps, loop, frames);
+    public void RemoveAnimation(int entity) => Scene2D.Remove(E(entity), Scene2DComponent.SpriteAnim);
+    public bool Play(int entity, string? name, bool restart) => Scene2D.Play(E(entity), name, restart);
+    public void Stop(int entity) => Scene2D.Stop(E(entity));
+    public void Pause(int entity) => Scene2D.Pause(E(entity));
+    public void SetFrame(int entity, int frame, float progress) => Scene2D.SetFrame(E(entity), frame, progress);
+    public bool TryGetAnimation(int entity, out Aver.Framework.SpriteAnim2D a) => Scene2D.TryGet(E(entity), out a);
+    public bool TryGetClipName(int entity, int index, out string name)
+    {
+        bool ok = Scene2D.TryGetClip(E(entity), index, out name, out _, out _, out _);
+        return ok;
+    }
+    public IReadOnlyList<Aver.Framework.SpriteAnimEvent2D> PollAnimationEvents() => Scene2D.PollAnimationEvents();
+    public bool MakeCurrent(int entity) => Scene2D.MakeCurrent(E(entity));
+    public int CurrentCamera => Scene2D.CurrentCamera.Handle;
+    public bool TryGetCameraCenter(int entity, out System.Numerics.Vector2 center) => Scene2D.TryGetCameraCenter(E(entity), out center);
 }
 
 /// <summary>What the bridge remembers per node: the entity made for it when the engine gave the node none (a managed host, a test), and the last state written.</summary>
@@ -65,23 +105,26 @@ internal sealed class Canvas2DLink
     internal int PrivateParent;
     /// <summary>The node's place in the whole tree, counted from 1.</summary>
     internal int Order;
-    internal bool HasTransform, HasSprite, HasLayer;
+    internal bool HasTransform, HasSprite, HasLayer, HasCamera, HasParallax;
     internal Aver.Framework.Transform2D Transform;
     internal Aver.Framework.Sprite2D Sprite;
     internal Aver.Framework.Layer2D Layer;
+    internal Aver.Framework.Camera2D Camera;
+    internal Aver.Framework.Parallax2D Parallax;
 
     internal void Release(ICanvas2DBackend backend)
     {
         if (Private != 0 && backend.IsAlive(Private)) backend.DestroyEntity(Private);
         Private = 0;
         PrivateParent = 0;
-        HasTransform = HasSprite = HasLayer = false;
+        HasTransform = HasSprite = HasLayer = HasCamera = HasParallax = false;
     }
 }
 
 internal static class Canvas2D
 {
     private static readonly List<ICanvas2DNode> s_nodes = new();
+    private static readonly Dictionary<int, AnimatedSprite2D> s_animated = new();
     private static int s_orderSeen = -1;
 
     /// <summary>The engine calls; a test swaps it.</summary>
@@ -98,6 +141,7 @@ internal static class Canvas2D
 
     internal static void Exit(ICanvas2DNode n)
     {
+        if (n is AnimatedSprite2D a) Unlisten(a);
         s_nodes.Remove(n);
         n.Link.Release(Backend);
         s_orderSeen = -1;
@@ -107,8 +151,20 @@ internal static class Canvas2D
     {
         foreach (ICanvas2DNode n in s_nodes.ToArray()) n.Link.Release(Backend);
         s_nodes.Clear();
+        s_animated.Clear();
         s_orderSeen = -1;
         Backend = new EngineCanvas2DBackend();
+    }
+
+    /// <summary>The entity a node already has, without making one: the engine's own, else the one made for it. 0 for none.</summary>
+    internal static int Peek(ICanvas2DNode n) => NodeHost.Current.IsEngine && n.Node.Self.IsValid ? n.Node.Self.Handle : n.Link.Private;
+
+    /// <summary>Routes the engine's animation events for an entity to the node (its signals).</summary>
+    internal static void Listen(int entity, AnimatedSprite2D node) => s_animated[entity] = node;
+
+    private static void Unlisten(AnimatedSprite2D node)
+    {
+        foreach (var kv in s_animated.Where(kv => ReferenceEquals(kv.Value, node)).ToArray()) s_animated.Remove(kv.Key);
     }
 
     /// <summary>The entity that carries a 2D node's components: the engine's own entity for the node, else one made for it (parented like the node, so the engine composes
@@ -122,7 +178,7 @@ internal static class Canvas2D
         Canvas2DLink link = n.Link;
         if (link.Private == 0 || !backend.IsAlive(link.Private))
         {
-            link.HasTransform = link.HasSprite = link.HasLayer = false;
+            link.HasTransform = link.HasSprite = link.HasLayer = link.HasCamera = link.HasParallax = false;
             link.Private = backend.CreateEntity(node.Name.ToString());
             link.PrivateParent = 0;
             if (link.Private == 0) return 0;
@@ -161,6 +217,9 @@ internal static class Canvas2D
         if (s_nodes.Count == 0 || !Backend.Available) return;
         Backend.Register();
         RefreshOrder();
+        if (s_animated.Count > 0)
+            foreach (Aver.Framework.SpriteAnimEvent2D ev in Backend.PollAnimationEvents())
+                if (s_animated.TryGetValue(ev.Entity.Handle, out AnimatedSprite2D? sprite)) sprite.OnEngineEvent(ev);
         foreach (ICanvas2DNode n in s_nodes.ToArray())
             if (n.Node.IsInsideTree()) n.Push2D();
         SceneTree.Instance.Root.PublishCanvas();
@@ -185,6 +244,25 @@ internal static class Canvas2D
         if (link.HasLayer && Same(link.Layer, l)) return;
         if (Backend.Set(e, in l)) { link.Layer = l; link.HasLayer = true; }
     }
+
+    internal static void Write(int e, Canvas2DLink link, in Aver.Framework.Camera2D c)
+    {
+        if (link.HasCamera && Same(link.Camera, c)) return;
+        if (Backend.Set(e, in c)) { link.Camera = c; link.HasCamera = true; }
+    }
+
+    internal static void Write(int e, Canvas2DLink link, in Aver.Framework.Parallax2D p)
+    {
+        if (link.HasParallax && Same(link.Parallax, p)) return;
+        if (Backend.Set(e, in p)) { link.Parallax = p; link.HasParallax = true; }
+    }
+
+    private static bool Same(in Aver.Framework.Camera2D a, in Aver.Framework.Camera2D b) =>
+        a.Zoom == b.Zoom && a.Offset == b.Offset && a.Limit == b.Limit && a.SmoothSpeed == b.SmoothSpeed && a.Drag == b.Drag && a.Flags == b.Flags;
+
+    private static bool Same(in Aver.Framework.Parallax2D a, in Aver.Framework.Parallax2D b) =>
+        a.ScrollScale == b.ScrollScale && a.ScrollOffset == b.ScrollOffset && a.RepeatSize == b.RepeatSize && a.RepeatTimes == b.RepeatTimes && a.Autoscroll == b.Autoscroll &&
+        a.LimitBegin == b.LimitBegin && a.LimitEnd == b.LimitEnd && a.Flags == b.Flags;
 
     private static bool Same(in Aver.Framework.Transform2D a, in Aver.Framework.Transform2D b) =>
         a.Position == b.Position && a.Rotation == b.Rotation && a.Scale == b.Scale && a.ZIndex == b.ZIndex && a.Flags == b.Flags && a.TreeOrder == b.TreeOrder;

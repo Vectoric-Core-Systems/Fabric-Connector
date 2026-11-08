@@ -141,7 +141,7 @@ int main() {
     check(back >= 0 && menu >= 0 && bg >= 0 && wrap >= 0 && logo >= 0 && crop >= 0 && mid >= 0 && top >= 0 && ghost >= 0 && veil >= 0 && fx >= 0 && play >= 0, "every node of the fixture is a placement");
     auto cls = [&](int i) { return i < 0 ? std::string() : w.placements[static_cast<usize>(i)].className; };
     check(cls(back) == "Sprite2D" && cls(wrap) == "Node2D" && cls(menu) == "CanvasLayer" && cls(play) == "Button", "Sprite2D, Node2D and CanvasLayer are placed as their classes");
-    check(cls(fx) == "Node", "an AnimatedSprite2D, which has no equivalent, stays a plain node");
+    check(cls(fx) == "Node", "a TileMapLayer, which has no equivalent, stays a plain node");
     check(w.placements[static_cast<usize>(back)].asset == "none" && w.placements[static_cast<usize>(menu)].asset == "none", "a 2D placement has no mesh");
 
     // ---- the layer ----
@@ -211,7 +211,7 @@ int main() {
     check(reported("\"type\":\"Sprite2D\"", "\"rating\":\"approximated\"", "CSprite2D"), "a Sprite2D is rated approximated, with its limits in the reason");
     check(reported("\"type\":\"Node2D\"", "\"rating\":\"converted\"", "C2DTransform"), "a Node2D is rated converted");
     check(reported("\"type\":\"CanvasLayer\"", "\"rating\":\"approximated\"", "C2DLayer"), "a CanvasLayer names its record");
-    check(reported("\"type\":\"AnimatedSprite2D\"", "\"rating\":\"unsupported\"", "no equivalent yet"), "an AnimatedSprite2D is unsupported, with the reason");
+    check(reported("\"type\":\"TileMapLayer\"", "\"rating\":\"unsupported\"", "no equivalent yet"), "a TileMapLayer is unsupported, with the reason");
 
     AVER_INFO("==================================================");
     if (g_failures == 0) AVER_INFO("=== {} checks, 0 failed ===", g_checks);

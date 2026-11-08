@@ -9,9 +9,15 @@ static class Program
     {
         int failures = 0;
         GdextTests.StageNative(); // before any suite asks whether the native host is available
-        if (args.Length == 1 && args[0] == "canvas2d") // only the 2D scene suite
+        if (args.Length == 1 && args[0] == "canvas2d") // only the 2D scene suites
         {
-            failures = Canvas2DTests.RunAll();
+            failures = Canvas2DTests.RunAll() + Anim2DTests.RunAll();
+            Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
+            return failures;
+        }
+        if (args.Length == 1 && args[0] == "anim2d") // only the animation, camera and parallax suite
+        {
+            failures = Anim2DTests.RunAll();
             Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
             return failures;
         }
@@ -179,6 +185,7 @@ static class Program
         failures += Wave2Tests.RunAll();     // wave 2: Image and ImageTexture, the procedural and alias textures, a material's values reaching the engine, sampler fields, surface overrides
         failures += Wave8Tests.RunAll();     // wave 8a: draw API shapes, radial fill, draw state, Label3D, translation, text objects, CodeEdit, foldable / menu controls, layers and z order
         failures += Canvas2DTests.RunAll();  // 2D scenes: Node2D, Sprite2D and CanvasLayer on the engine's 2D components, and the Controls queued in the canvas under the shared key
+        failures += Anim2DTests.RunAll();    // AnimatedSprite2D, Camera2D and Parallax2D on the engine's sprite animation, camera and parallax
 
         Console.WriteLine(failures == 0 ? $"\nAll tests passed ({T.Checks} checks)." : $"\n{failures} check(s) failed.");
         return failures;
