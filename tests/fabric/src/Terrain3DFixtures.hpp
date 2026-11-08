@@ -46,6 +46,7 @@ inline Bytes region(int rx, int ry, bool compressed) {
     const Fmt& f = d.f;
     const int n = kRegion * kRegion;
     Bytes hm(static_cast<size_t>(n) * 4), cm(static_cast<size_t>(n) * 4), col(static_cast<size_t>(n) * 4, 255);
+    for (int i = 0; i < n; ++i) col[static_cast<size_t>(i) * 4 + 3] = 127;   // Terrain3D's neutral colour: white, alpha 0.5
     for (int z = 0; z < kRegion; ++z)
         for (int x = 0; x < kRegion; ++x) {
             const float h = static_cast<float>(heightOf(rx, ry, x, z));
@@ -60,7 +61,7 @@ inline Bytes region(int rx, int ry, bool compressed) {
         im.type = "Image";
         d.res.push_back(im);
     }
-    d.prop(d.res[0], "data", image(f, kRegion, kRegion, "RF", hm));
+    d.prop(d.res[0], "data", image(f, kRegion, kRegion, "RFloat", hm));
     d.prop(d.res[1], "data", image(f, kRegion, kRegion, "RF", cm));
     d.prop(d.res[2], "data", image(f, kRegion, kRegion, "RGBA8", col));
     FileDef::Res m;

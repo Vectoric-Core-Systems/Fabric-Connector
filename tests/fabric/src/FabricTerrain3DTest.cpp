@@ -193,7 +193,8 @@ int main() {
     check(reported("\"type\":\"BoxShape3D\"", "\"rating\":\"unsupported\"", "not a Terrain3DRegion"), "a resource that is not a region is reported and skipped");
     check(reported("\"property\":\"control_map\"", "\"rating\":\"unsupported\"", "1 texel(s) are holes"), "holes are reported");
     check(reported("\"property\":\"control_map\"", "\"rating\":\"unsupported\"", "navigation flag"), "the navigation flag is reported");
-    check(reported("\"property\":\"color_map\"", "\"rating\":\"unsupported\"", "tint"), "a colour map is reported dropped");
+    check(reported("\"property\":\"color_map\"", "\"rating\":\"unsupported\"", "1 region(s) carry a colour map"), "only the region with a tinted colour map is reported dropped (white with alpha 0.5 is neutral)");
+    check(reported("\"property\":\"control_map\"", "\"rating\":\"converted\"", "share of the terrain by layer: Texture0"), "the report says how the paint is shared between layers");
     check(reported("\"property\":\"instancer\"", "\"rating\":\"unsupported\"", "2 instanced mesh transform"), "the instancer is reported dropped, with its count");
     check(reported("\"property\":\"assets\"", "\"rating\":\"unsupported\"", "Terrain3DMeshAsset"), "the mesh list is reported dropped");
     check(reported("\"property\":\"collision_mode\"", "\"rating\":\"approximated\"", "PhysicsBridge"), "collision names the engine landscape's heightfield");

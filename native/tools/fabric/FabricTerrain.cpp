@@ -59,9 +59,13 @@ struct Img {
     const std::vector<u8>* data = nullptr;
 };
 
+// Godot's Image::get_format_name spells them "RFloat", "RHalf", "Lum8", "LumAlpha8", "Red8"; the short forms are accepted too.
+bool isFloat32(const std::string& f) { return f == "RFloat" || f == "RF"; }
+bool isFloat16(const std::string& f) { return f == "RHalf" || f == "RH"; }
+
 int channelsOf(const std::string& f) {
-    if (f == "L8") return 1;
-    if (f == "LA8") return 2;
+    if (f == "L8" || f == "Lum8" || f == "Red8") return 1;
+    if (f == "LA8" || f == "LumAlpha8") return 2;
     if (f == "RGB8") return 3;
     if (f == "RGBA8") return 4;
     return 0;
@@ -225,9 +229,9 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
                 continue;
             }
             const size_t n = static_cast<size_t>(reg.size) * reg.size;
-            const bool half = hm.format == "RH";
-            if ((hm.format != "RF" && !half) || hm.data->size() < n * (half ? 2 : 4)) {
-                report_.add("resource", res, "", "Terrain3DRegion", "height_map", Rating::Unsupported, "height map format " + hm.format + " is not RF or RH, or the data is short; the region is skipped", 0);
+            const bool half = isFloat16(hm.format);
+            if ((!isFloat32(hm.format) && !half) || hm.data->size() < n * (half ? 2 : 4)) {
+                report_.add("resource", res, "", "Terrain3DRegion", "height_map", Rating::Unsupported, "height map format " + hm.format + " is not RFloat or RHalf, or the data is short; the region is skipped", 0);
                 ++skipped;
                 continue;
             }
@@ -237,15 +241,15 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
                 else std::memcpy(&reg.height[i], hm.data->data() + i * 4, 4);
                 if (!std::isfinite(reg.height[i])) reg.height[i] = 0.0f;
             }
-            if (image("control_map", cm) && cm.format == "RF" && cm.w == reg.size && cm.h == reg.size && cm.data->size() >= n * 4) {
+            if (image("control_map", cm) && isFloat32(cm.format) && cm.w == reg.size && cm.h == reg.size && cm.data->size() >= n * 4) {
                 reg.control.resize(n);
                 std::memcpy(reg.control.data(), cm.data->data(), n * 4);
             }
             if (image("color_map", col) && col.format == "RGBA8" && col.w == reg.size && col.h == reg.size && col.data->size() >= n * 4) {
-                // Terrain3D's neutral colour is opaque white (alpha is the roughness change); anything else is a tint or painted roughness.
+                // Terrain3D's neutral colour is white with alpha 0.5 (the alpha is a roughness change around the material's own); anything else is a tint or painted roughness.
                 for (size_t i = 0; i < n && !reg.colorTinted; ++i) {
                     const u8* p = col.data->data() + i * 4;
-                    if (p[0] != 255 || p[1] != 255 || p[2] != 255 || p[3] != 255) reg.colorTinted = true;
+                    if (p[0] != 255 || p[1] != 255 || p[2] != 255 || p[3] < 127 || p[3] > 128) reg.colorTinted = true;
                 }
                 if (reg.colorTinted) ++tintedRegions;
             }
@@ -417,7 +421,7 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
                 const int iw = wv ? static_cast<int>(wv->asInt()) : 0, ih = hv ? static_cast<int>(hv->asInt()) : 0;
                 if (!ch || iw <= 0 || ih <= 0 || !bv || bv->bytes.size() < static_cast<size_t>(iw) * ih * ch) {
                     report_.add("property", t.res.file, "", "Terrain3DTextureAsset", prop, Rating::Unsupported,
-                                std::string("the ") + what + " image format " + (fv ? fv->asString() : "?") + " is not an uncompressed L8, LA8, RGB8 or RGBA8 picture", 0);
+                                std::string("the ") + what + " image format " + (fv ? fv->asString() : "?") + " is not an uncompressed Lum8, LumAlpha8, RGB8 or RGBA8 picture", 0);
                     return {};
                 }
                 proctex::Picture pic;
@@ -524,6 +528,8 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
         });
         const std::string folder = "Landscape/" + safeName(level.name.empty() ? std::string("level") : level.name, "level");
         double minH = 1e30, maxH = -1e30;
+        std::vector<double> layerShare(layerIds.size(), 0.0);
+        double shareTotal = 0.0;
         for (const Region* g : order) {
             const int R = g->size, N = R + 1;
             // The neighbours a section's last row and column read; a missing one repeats the region's own edge.
@@ -545,8 +551,8 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
             land.spacingCm = static_cast<f32>(g->spacing) * fmt::axis::kCmPerMetre;
             const double x0 = static_cast<double>(g->rx) * R * g->spacing, z0 = static_cast<double>(g->ry) * R * g->spacing;
             const Vec3 origin = fmt::axis::position(static_cast<f32>(x0), 0.0f, static_cast<f32>(z0 + R * g->spacing));   // engine position of sample (0, 0)
-            land.originCm[0] = origin.x;
-            land.originCm[1] = origin.y;
+            land.originCm[0] = origin.x + 0.0f;   // + 0 turns a negative zero into zero
+            land.originCm[1] = origin.y + 0.0f;
             land.originCm[2] = 0.0f;
             land.heights.resize(static_cast<size_t>(N) * N);
             const bool paint = !layerIds.empty();
@@ -568,6 +574,10 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
                     weights[layerOf(p.base)] += kBlendMax - p.blend;
                     if (p.blend) weights[layerOf(p.overlay)] += p.blend;
                     for (size_t l = 1; l <= planes; ++l) land.weights[(l - 1) * static_cast<size_t>(N) * N + at] = static_cast<u8>(std::min(weights[l], 255));
+                    if (ix < N - 1 && iy < N - 1) {   // the rim repeats a neighbour; it is not counted
+                        for (size_t l = 0; l < layerIds.size(); ++l) layerShare[l] += weights[l];
+                        shareTotal += kBlendMax;
+                    }
                 }
             TerrainResult::Section sec;
             sec.name = safeName(fn.name, "Terrain3D") + "_" + locationName(g->rx, g->ry);
@@ -591,6 +601,15 @@ void Converter::convertTerrain3D(const FNode& fn, fmt::OcWorldData& level) {
              std::to_string(result.sections.size()) + " region(s) of " + std::to_string(*sizes.begin()) + " pixels became .ocland sections with LANDSCAPE records (heights " +
                  std::to_string(static_cast<long long>(std::lround(minH))) + " to " + std::to_string(static_cast<long long>(std::lround(maxH))) +
                  " cm); collision is the engine landscape's own heightfield built from each section (modules/landscape PhysicsBridge)");
+        if (shareTotal > 0 && layerIds.size() > 0) {
+            std::string share;
+            for (size_t l = 0; l < layerIds.size(); ++l) {
+                char pct[32];
+                std::snprintf(pct, sizeof pct, "%.1f%%", 100.0 * layerShare[l] / shareTotal);
+                share += (share.empty() ? "" : ", ") + layerNames[l] + " " + pct;
+            }
+            note("control_map", Rating::Converted, "paint baked into the sections' weights; share of the terrain by layer: " + share);
+        }
         if (result.sections.size() > 1)
             note("", Rating::Approximated, "the engine's runtime draws and collides with the first LANDSCAPE record of a level only (the one nearest the origin here); the other sections are written but not tiled yet");
         if (skipped) note("data_directory", Rating::Unsupported, std::to_string(skipped) + " file(s) in the folder were not readable regions and were skipped");
