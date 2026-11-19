@@ -83,7 +83,7 @@ runs the C++ suites (`tests/fabric`, `tests/formats.godot`) and `FabricManagedTe
 
 ## Releases
 
-A release is one `FabricConnector-<version>.avext` holding the Windows, Linux and macOS builds (`native/win-x64`, `native/linux-x64`, `native/osx-arm64`). Versions so far are pre-releases (`0.1.0-alpha`).
+A release is one `FabricConnector-<version>.avext` holding the Windows, Linux and macOS builds (`native/win-x64`, `native/linux-x64`, `native/osx-arm64`). Versions so far are pre-releases. The first is `0.1.1-alpha`, for Aver Engine 0.8.1: a `v0.1.0-alpha` tag exists from before the runtime went through the engine's services, and no release was made from it.
 
 `scripts/pack-avext.ps1` (PowerShell 7, or Windows PowerShell 5.1) writes it from one or more built extension directories (what `FABRIC_DEPLOY_TO` copies, or `build/engine/bin/Extensions/FabricConnector`):
 
