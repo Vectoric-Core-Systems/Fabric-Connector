@@ -3,11 +3,11 @@
   "displayName": "Fabric Connector",
   "version": "0.1.0-alpha",
   "abi": 2,
-  "engine": ">=0.8.0 <0.9.0",
+  "engine": ">=0.8.1 <0.9.0",
   "license": "LGPL-2.1",
   "source": "https://github.com/Vectoric-Core-Systems/Fabric-Connector",
   "native": "Aver.Fabric.Native",
-  "managed": { "runtime": ["Aver.Fabric.dll"], "entry": "Aver.Fabric.FabricExtension", "actorBase": "Aver.Fabric.Node" },
+  "managed": { "runtime": ["Aver.Fabric.dll"], "entry": "Aver.Fabric.FabricExtension", "actorBase": "Aver.Fabric.Node", "services": { "aver.anim": 1, "aver.audio": 1, "aver.framework": 1, "aver.nav": 1, "aver.net": 1, "aver.physics": 1, "aver.ui": 1 } },
   "commands": [ { "name": "fabric", "summary": "convert a Godot 4 project", "usage": "<godot-project-dir> <out-dir> [--dry-run] [--scenes-only] [--scripts-only] [--overwrite]" } ],
   "importers": [ {
     "id": "godot-project",

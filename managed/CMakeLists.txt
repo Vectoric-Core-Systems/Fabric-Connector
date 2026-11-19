@@ -84,6 +84,14 @@ endforeach()
 set_target_properties(Aver.Fabric.TestLibs PROPERTIES FOLDER "extensions")
 
 if(AVER_FABRIC_BUILD_TESTS)
+  # The calls into the engine (Generated/Seams.g.cs) match the engine's services lock, and extension.json lists those services. A failure
+  # names the declaration and the engine signature it disagrees with. Fix: python scripts/seam-bindings.py --engine <engine> --write
+  find_package(Python3 QUIET COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME FabricSeamBindingsCheck
+      COMMAND ${Python3_EXECUTABLE} "${AVER_FABRIC_DIR}/scripts/seam-bindings.py" --engine "${AVER_ENGINE_SOURCE_DIR}" --check)
+    set_tests_properties(FabricSeamBindingsCheck PROPERTIES TIMEOUT 120)
+  endif()
   # Aver.Fabric (the Godot-compatible runtime): math, Variant, signals, node tree and lifecycle, run by the managed node host. The suites that
   # load the engine's ABI libraries or run AverAssetC find them in this build's bin (AVER_BIN_DIR) and skip, saying so, when they are not built.
   # The `dotnet run` builds Aver.Framework into the engine's obj/, so it must not overlap another dotnet build: one at a time.

@@ -7,14 +7,14 @@ extension.json     the manifest the engine's loader reads
 CMakeLists.txt     top level: builds the engine and this extension together (cmake/Standalone.cmake); added by an engine: the extension's targets (cmake/Extension.cmake)
 native/            Aver.Fabric.Native, one SHARED library
   formats.godot/     the Godot text and binary readers, the shading-language front end
-  gdext/             the GDExtension host (the aver_gdext_* exports the C# runtime P/Invokes)
+  gdext/             the GDExtension host (the aver_gdext_* exports the C# runtime P/Invokes: its own library, the only one it names)
   tools/fabric/      the converter
   src/               aver_extension_entry (the extension ABI) and the stb_image_write implementation
 managed/           Aver.Fabric (the runtime the host loads and converted scripts compile against), Aver.Fabric.Convert (the script converter), Aver.Fabric.Tests
 tests/             fabric (the converter end to end, the GDExtension host) and formats.godot, with their fixtures
 test-content/      the Aver-side levels and meshes the runtime tests load
 tools/             godot-dump: the converter checked against a headless Godot 4 (dump_scene.gd and runner scripts; see its README)
-scripts/           api-index.py (generates docs/api/Aver.Fabric.md), pack-avext.ps1 (builds the .avext package)
+scripts/           api-index.py (generates docs/api/Aver.Fabric.md), pack-avext.ps1 (builds the .avext package), seam-bindings.py (the runtime's calls into the engine's services, checked against the engine)
 third_party/       godot-gdextension: Godot's published GDExtension interface header and API dump (MIT)
 docs/              FABRIC.md (user guide), plans/ (design and contracts), api/Aver.Fabric.md
 ```
@@ -60,6 +60,18 @@ cmake --build build
 ```
 
 The copy merges into the folder (a file of the same name is replaced, nothing is deleted). Close the editor and any running `AverAssetC` first: on Windows they hold the extension's library open and that one file cannot be replaced. The number of parallel jobs is the build tool's default, or `CMAKE_BUILD_PARALLEL_LEVEL`.
+
+### Moving to another engine
+
+The runtime reaches the engine only through the services the engine hands an extension (`aver.nav`, `aver.anim`, `aver.audio` ...; the engine's
+[EXTENSIONS.md](https://github.com/Vectoric-Core-Systems/Aver-Engine/blob/main/docs/EXTENSIONS.md)). After changing `AVER_ENGINE_REF`, run
+
+```
+python scripts/seam-bindings.py --engine <the engine checkout> --write
+```
+
+It regenerates `managed/Aver.Fabric/Generated/Seams.g.cs` and `extension.json`'s `managed.services` from the engine's `scripts/abi-services.lock`,
+and refuses, naming the function, where a declaration in `managed/Aver.Fabric` no longer matches the engine. `FabricSeamBindingsCheck` runs the same check.
 
 ## Test
 

@@ -60,16 +60,15 @@ internal static class FabricView
 }
 
 // The framework's view seam (framework_abi.h: aver_fw_set_view / aver_fw_view); only the Aver.Framework library is needed.
-internal static class ViewNative
+internal static unsafe partial class ViewNative
 {
-    private const string Lib = "Aver.Framework";
 
     /// <summary>AVER_FW_VIEW_FIRST_PERSON.</summary>
     internal const int FirstPerson = 0;
 
-    [DllImport(Lib)] internal static extern void aver_fw_set_view(int mode, float eyeHeight, float boomLength);
-    [DllImport(Lib)] internal static extern void aver_fw_view(out int mode, out float eyeHeight, out float boomLength);
-    [DllImport(Lib)] internal static extern int aver_fw_view_entity();
+    internal static partial void aver_fw_set_view(int mode, float eyeHeight, float boomLength);
+    internal static partial void aver_fw_view(out int mode, out float eyeHeight, out float boomLength);
+    internal static partial int aver_fw_view_entity();
 }
 
 /// <summary>The controller of a converted project's player. The engine's own PlayerController is abstract, so a game mode needs one that is not. It

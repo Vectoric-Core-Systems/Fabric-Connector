@@ -11,7 +11,11 @@ namespace Aver.Fabric;
 /// the pawn the view is published through derive from the framework's actor types instead.</summary>
 public sealed class FabricExtension : IAverExtension
 {
-    public void Load(ExtensionContext context) => context.DeclareActors(IsGameClass);
+    public void Load(ExtensionContext context)
+    {
+        Seams.Init(context.GetService);   // the engine services Fabric calls through (extension.json managed.services)
+        context.DeclareActors(IsGameClass);
+    }
 
     internal static bool IsGameClass(Type t) => t == typeof(FabricPlayerController) || t == typeof(FabricViewPawn) || t == typeof(FabricGameMode);
 }

@@ -145,7 +145,7 @@ What was asked for as "one massive DLL" works out like this:
   "displayName": "Fabric Connector",
   "version": "0.1.0",
   "abi": 2,
-  "engine": ">=0.8.0 <0.9.0",
+  "engine": ">=0.8.1 <0.9.0",
   "license": "LGPL-2.1",
   "source": "https://github.com/Vectoric-Core-Systems/Fabric-Connector",
   "native": "Aver.Fabric.Native",
@@ -163,8 +163,16 @@ wording and options as well; the full manifest is `extension.json`, and the fiel
 phase 1 and 2 built it; where the engine's contract has moved on, the engine's document wins.)
 
 What the built loader does differently from the sketch above:
-- The engine range read `>=0.7.0 <0.9.0` while the engine was 0.7.0-1 (a `-1` suffix is ignored by the comparison). Since 0.8.0, the
-  first engine release that ships the loader (2026-11-17), it is `>=0.8.0 <0.9.0`.
+- The engine range read `>=0.7.0 <0.9.0` while the engine was 0.7.0-1 (a `-1` suffix is ignored by the comparison). 0.8.0 shipped the
+  loader (2026-11-17); since 0.8.1 the range is `>=0.8.1 <0.9.0`, because the runtime reaches the engine through its services (next item).
+- **The runtime calls the engine only through services.** Until 0.8.1 the runtime P/Invoked the engine's anim, audio, nav, net, UI,
+  framework and physics libraries by name: outside the contract, and unversioned. When the engine added an argument to
+  `aver_nav_region_set_mesh` (engine a9778ba0), every navigation mesh crashed the runtime instead of the engine refusing it. Now the
+  engine offers each seam as a service (`aver.nav` v1 ...; the engine's `scripts/abi-services.lock`), `FabricExtension.Load` takes the
+  tables from `ExtensionContext.GetService`, and `scripts/seam-bindings.py` writes every call's body (`managed/Aver.Fabric/Generated/Seams.g.cs`)
+  after matching it against the lock. A mismatch fails the build (`FabricSeamBindingsCheck`); an engine that does not offer the
+  versions in `managed.services` refuses to load the runtime, with a reason. The only library the runtime still names is its own
+  `Aver.Fabric.Native`.
 - A command has an optional `usage` (the arguments `AverAssetC --help` prints after the name).
 - The library has no `lib` prefix on any platform (`Aver.Fabric.Native.so`, `.dylib`), so the loader builds the name from `native`.
 - `runtimeFiles` are checked like the other listed files: a `{platform}` is replaced by this platform's name and a `*` in the last
@@ -448,8 +456,8 @@ phase 2, in the new repo.
 
 - `git filter-repo`: install it (a Python tool) or use `git filter-branch`. The default is `filter-branch`, which
   needs nothing new.
-- Engine 0.8.0: the extension needs a released engine to pin against. Until then the pin is a commit hash on
-  `08-gdint`/`main`, and cutting 0.8.0 needs the owner's approval.
+- Engine release: 0.8.0 shipped the loader (2026-11-17); the runtime needs 0.8.1, which offers the engine seams as services. Until
+  0.8.1 is published the pin is a commit hash on `08-gdint`, and publishing it needs the owner's approval.
 - Godot-named general features (section 2, first list): renamed in phase 1, or left for a later cleanup. The plan
   renames everything in phase 1, because the owner's rule is no Godot-named code in core, and the read aliases keep
   old files loading.

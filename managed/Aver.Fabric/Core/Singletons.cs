@@ -132,9 +132,9 @@ public static class Engine
 }
 
 /// <summary>The one export of the physics library a script reaches directly: the position inside the current step.</summary>
-internal static class PhysicsClockNative
+internal static unsafe partial class PhysicsClockNative
 {
-    [System.Runtime.InteropServices.DllImport("Aver.Physics")] internal static extern float aver_phys_step_alpha();
+    internal static partial float aver_phys_step_alpha();
 
     /// <summary>Whether an exception says the physics library is not there (a host without it: tests, tools) rather than that a call failed.</summary>
     internal static bool Missing(Exception ex) => ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException;

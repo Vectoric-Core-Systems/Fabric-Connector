@@ -8,6 +8,7 @@ static class Program
     static int Main(string[] args)
     {
         int failures = 0;
+        Aver.Fabric.Seams.InitFromLibraries(); // no extension loader here: the engine services' slots, by name from the engine's libraries
         GdextTests.StageNative(); // before any suite asks whether the native host is available
         if (args.Length == 1 && args[0] == "canvas2d") // only the 2D scene suites
         {

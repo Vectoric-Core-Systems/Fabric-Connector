@@ -1,8 +1,10 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// P/Invoke into Aver.Net.Abi (modules/net.abi, net_abi.h): OS sockets and the reliable-UDP host/peer protocol. The enums restate the header's constants and are
-// checked against it by AbiEnumTest; the declarations are checked against the header's parameter names and types.
+// Calls into Aver.Net.Abi (modules/net.abi, net_abi.h): OS sockets and the reliable-UDP host/peer protocol. The enums restate the header's constants and are
+// checked against it by AbiEnumTest.
+// The engine hands these over as the service aver.net (its docs/EXTENSIONS.md); scripts/seam-bindings.py writes each declaration's body
+// (Generated/Seams.g.cs) and fails Fabric's build when one disagrees with the engine's scripts/abi-services.lock.
 
 using System.Runtime.InteropServices;
 using System.Text;
@@ -42,9 +44,8 @@ internal enum NetHostStat { SentBytes = 0, SentPackets = 1, ReceivedBytes = 2, R
 
 /// <summary>The exports of Aver.Net.Abi. The library is looked for beside the executable (NativeResolver); a host without it makes
 /// <see cref="Available"/> false and the networking classes answer Error.Unavailable.</summary>
-internal static class NetNative
+internal static unsafe partial class NetNative
 {
-    private const string Lib = "Aver.Net.Abi";
 
     internal const int WouldBlock = -1, Failed = -2, Closed = -3;
     internal const int SendBadHandle = -4;
@@ -87,61 +88,61 @@ internal static class NetNative
         return n <= 0 ? new List<string>() : new List<string>(Text(buf, n).Split('\n', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_abi_version();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern long aver_net_now_ms();
+    internal static partial int aver_net_abi_version();
+    internal static partial long aver_net_now_ms();
 
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_resolve([MarshalAs(UnmanagedType.LPUTF8Str)] string hostName, int ipType, byte[] buffer, int capacity);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_local_addresses(byte[] buffer, int capacity);
+    internal static partial int aver_net_resolve([MarshalAs(UnmanagedType.LPUTF8Str)] string hostName, int ipType, byte[] buffer, int capacity);
+    internal static partial int aver_net_local_addresses(byte[] buffer, int capacity);
 
     // ---- sockets ----
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_open(int family);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_bind(int sock, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_local_port(int sock);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_send(int sock, byte[] data, int length, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_recv(int sock, byte[] buffer, int capacity, byte[] ipOut, int ipCapacity, out int portOut);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_wait(int sock, int timeoutMs);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_udp_set_broadcast(int sock, int enable);
+    internal static partial int aver_net_udp_open(int family);
+    internal static partial int aver_net_udp_bind(int sock, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port);
+    internal static partial int aver_net_udp_local_port(int sock);
+    internal static partial int aver_net_udp_send(int sock, byte[] data, int length, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port);
+    internal static partial int aver_net_udp_recv(int sock, byte[] buffer, int capacity, byte[] ipOut, int ipCapacity, out int portOut);
+    internal static partial int aver_net_udp_wait(int sock, int timeoutMs);
+    internal static partial int aver_net_udp_set_broadcast(int sock, int enable);
 
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_connect([MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_status(int sock);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_send(int sock, byte[] data, int length);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_recv(int sock, byte[] buffer, int capacity);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_wait(int sock, int forWrite, int timeoutMs);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_set_nodelay(int sock, int enable);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_local_port(int sock);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_remote(int sock, byte[] ipOut, int ipCapacity, out int portOut);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_listen([MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port, int backlog);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_accept(int listener);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_listener_port(int listener);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_tcp_listener_wait(int listener, int timeoutMs);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_close(int handle);
+    internal static partial int aver_net_tcp_connect([MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port);
+    internal static partial int aver_net_tcp_status(int sock);
+    internal static partial int aver_net_tcp_send(int sock, byte[] data, int length);
+    internal static partial int aver_net_tcp_recv(int sock, byte[] buffer, int capacity);
+    internal static partial int aver_net_tcp_wait(int sock, int forWrite, int timeoutMs);
+    internal static partial int aver_net_tcp_set_nodelay(int sock, int enable);
+    internal static partial int aver_net_tcp_local_port(int sock);
+    internal static partial int aver_net_tcp_remote(int sock, byte[] ipOut, int ipCapacity, out int portOut);
+    internal static partial int aver_net_tcp_listen([MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port, int backlog);
+    internal static partial int aver_net_tcp_accept(int listener);
+    internal static partial int aver_net_tcp_listener_port(int listener);
+    internal static partial int aver_net_tcp_listener_wait(int listener, int timeoutMs);
+    internal static partial int aver_net_close(int handle);
 
     // ---- hosts and peers ----
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_create([MarshalAs(UnmanagedType.LPUTF8Str)] string? bindIp, int port, int maxPeers, int channelLimit, int inBandwidth, int outBandwidth);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_destroy(int host);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_local_port(int host);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_max_peers(int host);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_channel_limit(int host, int limit);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_bandwidth_limit(int host, int inBandwidth, int outBandwidth);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_refuse(int host, int refuse);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern long aver_net_host_connect(int host, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port, int channels, uint data);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_service(int host, int timeoutMs, out int type, out long peer, out int channel, out uint data, out int reason, out int length);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_event_data(int host, byte[] buffer, int capacity);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_flush(int host);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_broadcast(int host, int channel, byte[] data, int length, int flags);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_socket_send(int host, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port, byte[] data, int length);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_host_peers(int host, long[]? keys, int capacity);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_net_host_stat(int host, int which);
+    internal static partial int aver_net_host_create([MarshalAs(UnmanagedType.LPUTF8Str)] string? bindIp, int port, int maxPeers, int channelLimit, int inBandwidth, int outBandwidth);
+    internal static partial int aver_net_host_destroy(int host);
+    internal static partial int aver_net_host_local_port(int host);
+    internal static partial int aver_net_host_max_peers(int host);
+    internal static partial int aver_net_host_channel_limit(int host, int limit);
+    internal static partial int aver_net_host_bandwidth_limit(int host, int inBandwidth, int outBandwidth);
+    internal static partial int aver_net_host_refuse(int host, int refuse);
+    internal static partial long aver_net_host_connect(int host, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port, int channels, uint data);
+    internal static partial int aver_net_host_service(int host, int timeoutMs, out int type, out long peer, out int channel, out uint data, out int reason, out int length);
+    internal static partial int aver_net_host_event_data(int host, byte[] buffer, int capacity);
+    internal static partial int aver_net_host_flush(int host);
+    internal static partial int aver_net_host_broadcast(int host, int channel, byte[] data, int length, int flags);
+    internal static partial int aver_net_host_socket_send(int host, [MarshalAs(UnmanagedType.LPUTF8Str)] string ip, int port, byte[] data, int length);
+    internal static partial int aver_net_host_peers(int host, long[]? keys, int capacity);
+    internal static partial double aver_net_host_stat(int host, int which);
 
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_send(int host, long peer, int channel, byte[] data, int length, int flags);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_state(int host, long peer);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_disconnect(int host, long peer, uint data, int mode);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_reset(int host, long peer);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_ping(int host, long peer);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_set_ping_interval(int host, long peer, int intervalMs);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_set_timeout(int host, long peer, int limit, int minimumMs, int maximumMs);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_throttle(int host, long peer, int intervalMs, int acceleration, int deceleration);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_net_peer_address(int host, long peer, byte[] ipOut, int ipCapacity, out int portOut);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern uint aver_net_peer_connect_data(int host, long peer);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern double aver_net_peer_stat(int host, long peer, int which);
+    internal static partial int aver_net_peer_send(int host, long peer, int channel, byte[] data, int length, int flags);
+    internal static partial int aver_net_peer_state(int host, long peer);
+    internal static partial int aver_net_peer_disconnect(int host, long peer, uint data, int mode);
+    internal static partial int aver_net_peer_reset(int host, long peer);
+    internal static partial int aver_net_peer_ping(int host, long peer);
+    internal static partial int aver_net_peer_set_ping_interval(int host, long peer, int intervalMs);
+    internal static partial int aver_net_peer_set_timeout(int host, long peer, int limit, int minimumMs, int maximumMs);
+    internal static partial int aver_net_peer_throttle(int host, long peer, int intervalMs, int acceleration, int deceleration);
+    internal static partial int aver_net_peer_address(int host, long peer, byte[] ipOut, int ipCapacity, out int portOut);
+    internal static partial uint aver_net_peer_connect_data(int host, long peer);
+    internal static partial double aver_net_peer_stat(int host, long peer, int which);
 }

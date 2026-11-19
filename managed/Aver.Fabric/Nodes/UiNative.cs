@@ -1,10 +1,11 @@
 // Aver Engine — Copyright (c) 2026 Hydrogen-Isotope.
 // Developed by Vectoric-Core-Systems.
 // SPDX-License-Identifier: LGPL-2.1-only. See LICENSE at the repository root.
-// P/Invoke into Aver.UI.Abi for the Control runtime (G5 U1): the style box seam (ui_style_abi.h) and the handful of HUD draw calls (ui_abi.h)
-// the GUI draws through. The enums restate the headers' constants and are checked against them by AbiEnumTest; the declarations are checked
-// against the headers' parameter names. Without the library beside the executable <see cref="UiNative.Available"/> is false: Controls still
+// Calls into Aver.UI.Abi for the Control runtime (G5 U1): the style box seam (ui_style_abi.h) and the handful of HUD draw calls (ui_abi.h)
+// the GUI draws through. The enums restate the headers' constants and are checked against them by AbiEnumTest. Without the library beside the executable <see cref="UiNative.Available"/> is false: Controls still
 // lay out, take input and run signals, and nothing is drawn.
+// The engine hands these over as the service aver.ui (its docs/EXTENSIONS.md); scripts/seam-bindings.py writes each declaration's body
+// (Generated/Seams.g.cs) and fails Fabric's build when one disagrees with the engine's scripts/abi-services.lock.
 
 using System.Runtime.InteropServices;
 
@@ -120,9 +121,8 @@ public sealed class StyleBoxMesh
     public int VertexCount => Colors.Length;
 }
 
-internal static class UiNative
+internal static unsafe partial class UiNative
 {
-    private const string Lib = "Aver.UI.Abi";
     private static int s_state;   // 0 unknown, 1 loaded, 2 missing
     private static IntPtr s_scratch;
 
@@ -408,66 +408,55 @@ internal static class UiNative
     }
 
     // ---- ui_style_abi.h ----
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_style_abi_version();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_stylebox_struct_size();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_stylebox_defaults(int kind, IntPtr outStyleBox);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_stylebox_draw(IntPtr styleBox, float x, float y, float w, float h);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int aver_ui_stylebox_mesh(IntPtr styleBox, float x, float y, float w, float h, float[]? outXYUV, uint[]? outRgba, int maxVerts, uint[]? outIdx, int maxIdx, int[] outCounts);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_stylebox_metrics(IntPtr styleBox, float[] out6);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_ninepatch_slices(IntPtr styleBox, float x, float y, float w, float h, float[]? outCells, int maxCells);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_stretch_compute(float[] in6, float windowW, float windowH, float[] out11);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_theme_default_text(IntPtr outText, int cap);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_theme_validate([MarshalAs(UnmanagedType.LPUTF8Str)] string text, IntPtr errOut, int cap);
+    internal static partial int aver_ui_style_abi_version();
+    internal static partial int aver_ui_stylebox_struct_size();
+    internal static partial void aver_ui_stylebox_defaults(int kind, IntPtr outStyleBox);
+    internal static partial void aver_ui_stylebox_draw(IntPtr styleBox, float x, float y, float w, float h);
+    internal static partial int aver_ui_stylebox_mesh(IntPtr styleBox, float x, float y, float w, float h, float[]? outXYUV, uint[]? outRgba, int maxVerts, uint[]? outIdx, int maxIdx, int[] outCounts);
+    internal static partial void aver_ui_stylebox_metrics(IntPtr styleBox, float[] out6);
+    internal static partial int aver_ui_ninepatch_slices(IntPtr styleBox, float x, float y, float w, float h, float[]? outCells, int maxCells);
+    internal static partial void aver_ui_stretch_compute(float[] in6, float windowW, float windowH, float[] out11);
+    internal static partial int aver_ui_theme_default_text(IntPtr outText, int cap);
+    internal static partial int aver_ui_theme_validate([MarshalAs(UnmanagedType.LPUTF8Str)] string text, IntPtr errOut, int cap);
 
     // ---- ui_abi.h (the draw calls and the pointer) ----
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_begin_frame(float x, float y, float w, float h);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_vertex_count();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_command_count();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_viewport(float[] outXYWH);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_layer(int layer);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_layer();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_push_clip(int left, int top, int right, int bottom);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_pop_clip();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_rect(float x, float y, float w, float h, uint rgba);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_pointer(float[] outXY);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_pointer_down(int button);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int aver_ui_text_measure([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, float[] outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern float aver_ui_text_block(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align, float[]? outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern float aver_ui_text_block_fx(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
+    internal static partial void aver_ui_begin_frame(float x, float y, float w, float h);
+    internal static partial int aver_ui_vertex_count();
+    internal static partial int aver_ui_command_count();
+    internal static partial void aver_ui_viewport(float[] outXYWH);
+    internal static partial void aver_ui_set_layer(int layer);
+    internal static partial int aver_ui_layer();
+    internal static partial void aver_ui_push_clip(int left, int top, int right, int bottom);
+    internal static partial void aver_ui_pop_clip();
+    internal static partial void aver_ui_rect(float x, float y, float w, float h, uint rgba);
+    internal static partial void aver_ui_pointer(float[] outXY);
+    internal static partial int aver_ui_pointer_down(int button);
+    internal static partial int aver_ui_text_measure([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, float[] outWHL);
+    internal static partial float aver_ui_text_block(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align, float[]? outWHL);
+    internal static partial float aver_ui_text_block_fx(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
                                                        float outlineSize, uint outlineRgba, uint shadowRgba, float shadowOffX, float shadowOffY, float shadowOutlineSize, float[]? outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_push_transform(float a, float b, float c, float d, float tx, float ty);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_pop_transform();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_sampler(int filter, int address);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_blend(int mode);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern void aver_ui_mesh(float[] xyuv, uint[] rgba, int vertexCount, uint[] indices, int indexCount, ulong texture);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int aver_ui_text_measure_ex([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, float[]? spacing4, float[] outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern float aver_ui_text_block_ex(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align, float[]? spacing4, float[]? outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern float aver_ui_text_block_fx_ex(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
+    internal static partial void aver_ui_push_transform(float a, float b, float c, float d, float tx, float ty);
+    internal static partial void aver_ui_pop_transform();
+    internal static partial void aver_ui_set_sampler(int filter, int address);
+    internal static partial void aver_ui_set_blend(int mode);
+    internal static partial void aver_ui_mesh(float[] xyuv, uint[] rgba, int vertexCount, uint[] indices, int indexCount, ulong texture);
+    internal static partial int aver_ui_text_measure_ex([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, float[]? spacing4, float[] outWHL);
+    internal static partial float aver_ui_text_block_ex(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align, float[]? spacing4, float[]? outWHL);
+    internal static partial float aver_ui_text_block_fx_ex(float x, float y, [MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, uint rgba, [MarshalAs(UnmanagedType.LPUTF8Str)] string? family, float px, int flags, float maxWidth, int align,
                                                           float outlineSize, uint outlineRgba, uint shadowRgba, float shadowOffX, float shadowOffY, float shadowOutlineSize, float[]? spacing4, float[]? outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int aver_text3d_draw([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int aver_text3d_measure([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_text3d_configure(int sdf, int sdfPx, int sdfSpread, int pageSize, int maxPages);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_text3d_stats(float[] out8);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_clipboard_available();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_clipboard_get(byte[]? @out, int cap);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_clipboard_set([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_clipboard_host(IntPtr get, IntPtr set);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_available();
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern ulong aver_ui_image_acquire([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8Path);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_image_release(ulong id);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_ui_image_size(ulong id, int[] outWH);
+    internal static partial int aver_text3d_draw([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
+    internal static partial int aver_text3d_measure([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8, ref Text3dDesc desc, float[]? outWHL);
+    internal static partial void aver_text3d_configure(int sdf, int sdfPx, int sdfSpread, int pageSize, int maxPages);
+    internal static partial void aver_text3d_stats(float[] out8);
+    internal static partial int aver_ui_clipboard_available();
+    internal static partial int aver_ui_clipboard_get(byte[]? @out, int cap);
+    internal static partial int aver_ui_clipboard_set([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8);
+    internal static partial void aver_ui_set_clipboard_host(IntPtr get, IntPtr set);
+    internal static partial int aver_ui_image_available();
+    internal static partial ulong aver_ui_image_acquire([MarshalAs(UnmanagedType.LPUTF8Str)] string utf8Path);
+    internal static partial void aver_ui_image_release(ulong id);
+    internal static partial int aver_ui_image_size(ulong id, int[] outWH);
     // A host's call, never Fabric's: here so a test's table lands in the very library Fabric calls (this assembly's resolver can load another copy).
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern void aver_ui_set_image_host(IntPtr acquire, IntPtr release, IntPtr size, IntPtr use);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern void aver_ui_textured_rect(float x, float y, float w, float h, ulong texture, float u0, float v0, float u1, float v1, uint rgba);
+    internal static partial void aver_ui_set_image_host(IntPtr acquire, IntPtr release, IntPtr size, IntPtr use);
+    internal static partial void aver_ui_textured_rect(float x, float y, float w, float h, ulong texture, float u0, float v0, float u1, float v1, uint rgba);
 }
