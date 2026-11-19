@@ -290,7 +290,7 @@ public static partial class NavigationServer3D
     public static void RegionSetNavigationMesh(Rid region, NavigationMesh? mesh, Transform3D? transform = null)
     {
         if (!Ok) return;
-        if (mesh == null || mesh.GetPolygonCount() == 0) { NavNative.aver_nav_region_set_mesh(I(region), null, 0, null, null, 0); return; }
+        if (mesh == null || mesh.GetPolygonCount() == 0) { NavNative.aver_nav_region_set_mesh(I(region), null, 0, null, 0, null, 0); return; }
         Transform3D t = transform ?? Transform3D.Identity;
         Vector3[] v = mesh.Vertices;
         var verts = new float[v.Length * 3];
@@ -303,7 +303,8 @@ public static partial class NavigationServer3D
             sizes[p] = poly.Length;
             idx.AddRange(poly);
         }
-        NavNative.aver_nav_region_set_mesh(I(region), verts, v.Length, idx.ToArray(), sizes, sizes.Length);
+        int[] indices = idx.ToArray();
+        NavNative.aver_nav_region_set_mesh(I(region), verts, v.Length, indices, indices.Length, sizes, sizes.Length);
     }
 
     /// <summary>How many edge connections the region has to other regions (Godot's region_get_connections_count).</summary>

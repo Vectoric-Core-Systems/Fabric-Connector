@@ -145,7 +145,7 @@ What was asked for as "one massive DLL" works out like this:
   "displayName": "Fabric Connector",
   "version": "0.1.0",
   "abi": 2,
-  "engine": ">=0.7.0 <0.9.0",
+  "engine": ">=0.8.0 <0.9.0",
   "license": "LGPL-2.1",
   "source": "https://github.com/Vectoric-Core-Systems/Fabric-Connector",
   "native": "Aver.Fabric.Native",
@@ -163,8 +163,8 @@ wording and options as well; the full manifest is `extension.json`, and the fiel
 phase 1 and 2 built it; where the engine's contract has moved on, the engine's document wins.)
 
 What the built loader does differently from the sketch above:
-- The engine range reads `>=0.7.0 <0.9.0` while the engine is 0.7.0-1 (a `-1` suffix is ignored by the comparison); it becomes
-  `>=0.8.0 <0.9.0` with the first engine release that ships the loader.
+- The engine range read `>=0.7.0 <0.9.0` while the engine was 0.7.0-1 (a `-1` suffix is ignored by the comparison). Since 0.8.0, the
+  first engine release that ships the loader (2026-11-17), it is `>=0.8.0 <0.9.0`.
 - A command has an optional `usage` (the arguments `AverAssetC --help` prints after the name).
 - The library has no `lib` prefix on any platform (`Aver.Fabric.Native.so`, `.dylib`), so the loader builds the name from `native`.
 - `runtimeFiles` are checked like the other listed files: a `{platform}` is replaced by this platform's name and a `*` in the last

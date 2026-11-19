@@ -100,7 +100,7 @@ internal static class NavNative
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_set_edge_connections(int region, int useEdgeConnections);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_edge_connections(int region);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_get(int region, float[] out4);
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_set_mesh(int region, float[]? verts3, int nVerts, int[]? polyIndices, int[]? polySizes, int nPolys);
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_set_mesh(int region, float[]? verts3, int nVerts, int[]? polyIndices, int nPolyIndices, int[]? polySizes, int nPolys);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_polygon_count(int region);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_closest(int region, float[] p3, float[]? outPoint3, float[]? outNormal3);
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)] internal static extern int aver_nav_region_connections(int region, float[]? out6, int cap);
