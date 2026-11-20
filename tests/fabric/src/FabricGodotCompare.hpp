@@ -365,7 +365,9 @@ struct SceneResult {
         issues.push_back({kind, where, detail});
     }
     // Kinds that are documented differences, not defects.
-    static bool documented(const std::string& kind) { return kind == "synthetic" || kind == "folded" || kind == "substituted" || kind == "inferred" || kind == "approximated"; }
+    static bool documented(const std::string& kind) {
+        return kind == "synthetic" || kind == "folded" || kind == "substituted" || kind == "inferred" || kind == "approximated" || kind == "degenerate";
+    }
     size_t mismatches() const {
         size_t n = 0;
         for (const auto& kv : counts) if (!documented(kv.first)) n += kv.second;
@@ -491,7 +493,13 @@ inline SceneResult compareScene(const std::string& sceneRes, const fmt::JsonValu
         if (g.is3d && c.is3d) {
             if (!modelMesh) {
                 const XformDiff d = diff(g.world, c.world);
-                if (!d.within()) {
+                // A zero scale on an axis (an object animated down to nothing) leaves its rotation undefined: compare where it is and its scale.
+                const auto& gm = g.world.basis.m;
+                const double det = gm[0][0] * (gm[1][1] * gm[2][2] - gm[1][2] * gm[2][1]) - gm[0][1] * (gm[1][0] * gm[2][2] - gm[1][2] * gm[2][0]) +
+                                   gm[0][2] * (gm[1][0] * gm[2][1] - gm[1][1] * gm[2][0]);
+                if (!d.within() && std::fabs(det) < 1e-9 && d.pos < 1e-3 && d.scale < 1e-3) {
+                    r.add("degenerate", g.path, "a zero scale: the position and scale match, and the rotation of a flattened object is not defined");
+                } else if (!d.within()) {
                     char buf[320];
                     const XformDiff dl = diff(g.local, c.local);
                     std::snprintf(buf, sizeof buf, "world pos %.4f m, rot %.5f rad, scale %.4f%s; local %s (%.4f m, %.5f rad, %.4f). Godot %s | level %s", d.pos, d.rot, d.scale, d.mirror ? ", mirror" : "",
@@ -569,6 +577,9 @@ inline SceneResult compareScene(const std::string& sceneRes, const fmt::JsonValu
                     r.add("material", g.path, "the level overrides the material with " + v.material + " and Godot's mesh has none");
                 }
             }
+        } else if (!c.visuals.empty() && (g.cls == "Sprite3D" || g.cls == "AnimatedSprite3D") && c.visuals[0].asset.rfind("Meshes/Generated/SpriteQuad", 0) == 0) {
+            // Godot draws a sprite through the rendering server, not a mesh, so its headless dump has none; the converter bakes the quad it draws.
+            r.add("substituted", g.path, "a " + g.cls + " is drawn as the quad mesh " + c.visuals[0].asset);
         } else if (!c.visuals.empty() && c.cls != "MultiMeshInstance3D" && !e.has("multimesh") && !(e.has("csg") && e["csg"]["root"].asBool())) {
             r.add("mesh", g.path, "the level places a mesh " + c.visuals[0].asset + " and Godot's node draws none");
         }

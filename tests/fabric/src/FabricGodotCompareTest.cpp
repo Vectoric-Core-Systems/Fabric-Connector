@@ -93,7 +93,13 @@ static std::vector<std::string> scenesRecorded(const std::string& projectDir) {
     std::vector<std::string> out;
     fmt::JsonValue j;
     if (!fmt::parseJson(slurp(projectDir + "/Fabric/nodes.json"), j)) return out;
-    for (usize i = 0; i < j["scenes"].size(); ++i) out.emplace_back(j["scenes"][i]["scene"].asString());
+    // Scenes only: nodes.json can also record res://project.godot (an autoload's owner), which is not a scene Godot can instance.
+    for (usize i = 0; i < j["scenes"].size(); ++i) {
+        const std::string s(j["scenes"][i]["scene"].asString());
+        const size_t dot = s.find_last_of('.');
+        const std::string ext = dot == std::string::npos ? std::string() : s.substr(dot);
+        if (ext == ".tscn" || ext == ".scn") out.push_back(s);
+    }
     return out;
 }
 
