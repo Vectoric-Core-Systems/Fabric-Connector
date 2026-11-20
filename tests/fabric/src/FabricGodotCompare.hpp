@@ -250,6 +250,10 @@ inline Converted readConverted(const std::string& projectDir, const std::string&
             CVisual v;
             v.asset = p.asset;
             v.material = p.material;
+            // Per-surface overrides (a SurfaceMaterials record): slot 0 is what the first surface draws, which is what is compared.
+            for (const fmt::OcPlacedComponent& comp : p.components)
+                if (comp.type == "SurfaceMaterials")
+                    if (const std::string* s0 = comp.find("slot0"); s0 && !s0->empty() && v.material.empty()) v.material = *s0;
             v.local = placementLocal(p);
             v.visible = p.visible;
             c.nodes[static_cast<usize>(parentNode)].visuals.push_back(std::move(v));
