@@ -692,6 +692,20 @@ std::unique_ptr<FNode> Converter::buildScene(const std::string& resPath, int dep
                 if (p.value.type == VType::ExtResource) {
                     const gd::GodotExtResource* e = doc->findExt(p.value.s);
                     fn.scriptPath = e ? fs_.resolve(*e, &diag_, doc->file) : std::string{};
+                } else if (p.value.type == VType::SubResource) {
+                    // A built-in script: its source is in the scene. Godot names it <scene>::<id>; the script step converts it like a file.
+                    const gd::GodotSubResource* sr = doc->findSub(p.value.s);
+                    const Var* src = nullptr;
+                    if (sr && sr->type == "GDScript")
+                        for (const gd::GodotProperty& sp : sr->props) if (sp.name == "script/source") src = &sp.value;
+                    if (src && src->isStringLike()) {
+                        fn.scriptPath = doc->file + "::" + p.value.s;
+                        builtinScripts_[fn.scriptPath] = src->s;
+                    } else {
+                        fn.scriptPath.clear();
+                        report_.add("script", doc->file, fn.reportPath.empty() ? fn.name : fn.reportPath, fn.type, "script", Rating::Unsupported,
+                                    "a built-in " + std::string(sr ? sr->type : "script") + " with no GDScript source is not converted", p.line);
+                    }
                 } else {
                     fn.scriptPath.clear();
                 }

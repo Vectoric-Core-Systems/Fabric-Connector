@@ -149,12 +149,18 @@ ScriptInfo* Converter::script(const std::string& resPath) {
     if (const auto it = scripts_.find(resPath); it != scripts_.end()) return &it->second;
     ScriptInfo si;
     si.path = resPath;
+    const auto builtin = builtinScripts_.find(resPath);
     const size_t d = resPath.find_last_of('.');
-    const std::string ext = d == std::string::npos ? std::string{} : lower(resPath.substr(d));
+    const std::string ext = builtin != builtinScripts_.end() ? std::string(".gd") : d == std::string::npos ? std::string{} : lower(resPath.substr(d));
     si.kind = ext == ".cs" ? "csharp" : "gdscript";
     std::string text;
-    const std::string disk = fs_.toDiskPath(resPath);
-    si.exists = !disk.empty() && readFileText(disk, text);
+    const std::string disk = builtin != builtinScripts_.end() ? std::string() : fs_.toDiskPath(resPath);
+    if (builtin != builtinScripts_.end()) {
+        text = builtin->second;
+        si.exists = true;
+    } else {
+        si.exists = !disk.empty() && readFileText(disk, text);
+    }
     if (si.exists) {
         if (si.kind == "csharp") scanCsScript(text, stemOf(resPath), si);
         else scanGdScript(text, si);
@@ -163,13 +169,22 @@ ScriptInfo* Converter::script(const std::string& resPath) {
     std::string uidText;
     if (!disk.empty() && readFileText(disk + ".uid", uidText)) si.uid = trim(uidText);
 
-    std::string name = si.className.empty() ? pascalCase(stemOf(resPath)) : si.className;
+    // A built-in script is named after its scene and id (3d_sprites.tscn::GDScript_ddk2o -> N3dSpritesGDScriptDdk2o).
+    const std::string stemName = builtin != builtinScripts_.end()
+                                     ? stemOf(resPath.substr(0, resPath.find("::"))) + "_" + resPath.substr(resPath.find("::") + 2)
+                                     : stemOf(resPath);
+    std::string name = si.className.empty() ? pascalCase(stemName) : si.className;
     if (reservedClassName(name)) name += "Script";
     std::string unique = name;
     for (int n = 2; usedClassNames_.count(unique); ++n) unique = name + std::to_string(n);
     usedClassNames_.insert(unique);
     si.className = unique;
     if (si.extends.empty() && si.extendsPath.empty()) si.extends = "Node";   // a script with no extends, or a missing file
+    if (builtin != builtinScripts_.end()) {
+        createDirectories(fabricDir_ + "/builtin");
+        si.source = fabricDir_ + "/builtin/" + si.className + ".gd";
+        if (!writeFileText(si.source, text)) si.exists = false;
+    }
     return &(scripts_[resPath] = std::move(si));
 }
 
@@ -193,7 +208,8 @@ bool Converter::writeScriptsManifest() {
              ", \"declaredClassName\": " + (si.declaredClassName ? "true" : "false") + ", \"extends\": " + jsonString(si.extends) +
              ", \"extendsPath\": " + jsonString(si.extendsPath) + ", \"exists\": " + (si.exists ? "true" : "false") +
              ", \"autoload\": " + (si.autoload ? "true" : "false") + ", \"uid\": " + jsonString(si.uid) +
-             ", \"output\": " + jsonString("Content/Scripts/" + si.className + ".cs") + ", \"uses\": " + jsonList(si.uses) + "}";
+             ", \"output\": " + jsonString("Content/Scripts/" + si.className + ".cs") + ", \"uses\": " + jsonList(si.uses) +
+             (si.source.empty() ? std::string() : ", \"source\": " + jsonString(si.source)) + "}";
     }
     j += first ? "]\n}\n" : "\n  ]\n}\n";
     return writeFileText(fabricDir_ + "/scripts.json", j);

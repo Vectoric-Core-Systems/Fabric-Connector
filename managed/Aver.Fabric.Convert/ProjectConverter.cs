@@ -65,7 +65,7 @@ public static class ProjectConverter
         {
             handled.Add(e.Path);
             string type = e.Kind == "gdscript" ? "gdscript" : "csharp";
-            string disk = Manifest.DiskPath(projectDir, e.Path);
+            string disk = e.Source.Length > 0 ? e.Source : Manifest.DiskPath(projectDir, e.Path);
             if (!e.Exists || !File.Exists(disk))
             {
                 res.Items.Add(new ReportItem { File = e.Path, Node = e.ClassName, Type = type, Rating = Rating.Unsupported, Reason = "the script file does not exist in the Godot project" });

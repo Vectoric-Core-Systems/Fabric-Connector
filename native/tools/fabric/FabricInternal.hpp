@@ -71,6 +71,7 @@ struct ScriptInfo {
     bool autoload = false;
     std::vector<std::string> uses;   // "res://main.tscn:Player" for every node that attaches it
     std::string uid;
+    std::string source;        // a built-in script (res://scene.tscn::GDScript_id): the file its text was extracted to, which the script step reads
 };
 
 struct Where {
@@ -305,6 +306,7 @@ public:
     bool writeProjectManifest();
     bool writeNodesManifest();   // Fabric/nodes.json: what each scene's nodes became, for the script converter's typed node access
     std::map<std::string, ScriptInfo> scripts_;
+    std::map<std::string, std::string> builtinScripts_;   // res://scene.tscn::GDScript_id -> its script/source, from the scene's sub-resource
     std::set<std::string> usedClassNames_;
     std::vector<std::string> sceneLevels_;   // content-relative level assets written
     std::vector<std::string> prefabs_;

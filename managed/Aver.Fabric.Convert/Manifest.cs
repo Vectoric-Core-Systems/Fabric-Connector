@@ -19,6 +19,8 @@ internal sealed class ManifestScript
     public string ClassName = "";
     public bool Exists = true;
     public string Output = "";
+    /// <summary>Where the text is when it is not a file of the project: a built-in script (res://scene.tscn::GDScript_id) the scene step extracted.</summary>
+    public string Source = "";
 }
 
 internal static class Manifest
@@ -41,7 +43,7 @@ internal static class Manifest
                 string Str(string name) => e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
                 list.Add(new ManifestScript
                 {
-                    Path = Str("path"), Kind = Str("kind"), ClassName = Str("className"), Output = Str("output"),
+                    Path = Str("path"), Kind = Str("kind"), ClassName = Str("className"), Output = Str("output"), Source = Str("source"),
                     Exists = !e.TryGetProperty("exists", out JsonElement ex) || ex.ValueKind != JsonValueKind.False,
                 });
             }

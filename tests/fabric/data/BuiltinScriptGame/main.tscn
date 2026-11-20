@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3 uid="uid://cbuiltinscriptmain"]
+
+[sub_resource type="GDScript" id="GDScript_spin"]
+script/source = "extends Node3D
+
+var turns := 0
+
+func _process(delta: float) -> void:
+	turns += 1
+	rotate_y(delta)
+"
+
+[node name="Main" type="Node3D"]
+
+[node name="Spinner" type="Node3D" parent="."]
+script = SubResource("GDScript_spin")

@@ -602,6 +602,27 @@ int main() {
         check(slurp((outRoot / "scriptgame2").string() + "/ScriptGame/Fabric/nodes.json") == nodes, "nodes.json is the same on a second run");
     }
 
+    // A built-in script (a GDScript sub-resource of the scene) was dropped without a word. It is converted like a file now.
+    AVER_INFO("-- a built-in script --");
+    {
+        const std::string out7 = (outRoot / "builtin").string();
+        std::string log7;
+        const int code7 = runCapture("\"" + exe.string() + "\" fabric \"" + std::string(AVER_FABRIC_DATA) + "/BuiltinScriptGame\" \"" + out7 + "\"", log7);
+        check(code7 == 0, "BuiltinScriptGame converts (exit " + std::to_string(code7) + ")");
+        const std::string scripts = slurp(out7 + "/BuiltinScriptGame/Fabric/scripts.json");
+        check(scripts.find("\"path\": \"res://main.tscn::GDScript_spin\"") != std::string::npos && scripts.find("\"className\": \"MainGDScriptSpin\"") != std::string::npos &&
+                  scripts.find("\"extends\": \"Node3D\"") != std::string::npos && scripts.find("\"source\": ") != std::string::npos,
+              "scripts.json lists it as res://main.tscn::GDScript_spin, a Node3D class named after its scene and id, with the file its text went to");
+        const std::string nodes = slurp(out7 + "/BuiltinScriptGame/Fabric/nodes.json");
+        check(nodes.find("{\"path\": \"Spinner\", \"base\": \"Node3D\", \"class\": \"MainGDScriptSpin\", \"script\": \"res://main.tscn::GDScript_spin\"") != std::string::npos,
+              "the node that holds it carries the script's class");
+        const std::string cs = slurp(out7 + "/BuiltinScriptGame/Content/Scripts/MainGDScriptSpin.cs");
+        check(cs.find("class MainGDScriptSpin : Node3D") != std::string::npos && cs.find("RotateY(") != std::string::npos,
+              "and the script step converted its source to C#");
+        check(log7.find("\"errors\":0") != std::string::npos, "with no error");
+        if (log7.find("\"errors\":0") == std::string::npos) AVER_ERROR("{}", log7.substr(log7.size() > 600 ? log7.size() - 600 : 0));
+    }
+
     // Failure modes: nothing to convert, binary scenes.
     AVER_INFO("-- failures are reported, not crashed on --");
     {

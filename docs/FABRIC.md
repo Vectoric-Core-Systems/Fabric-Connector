@@ -142,6 +142,7 @@ Converted scripts run on `Aver.Fabric`, which follows Godot's rules for: process
 |---|---|
 | GodotSharp C# | rewritten (`Godot` namespaces to `Aver.Fabric`, attributes kept, generated `SignalName` / `MethodName` / `PropertyName` tables and signal events) and compiled in memory |
 | GDScript 2.0 | parsed, typed, and written as readable C# (typed members, exports, `@onready`, signals, setters, lambdas, `match`, `await`, string formatting, built-in functions) and compiled in memory |
+| A built-in GDScript (its source a sub-resource of the scene) | converted like a file: named `<Scene><Id>` (`main.tscn::GDScript_spin` is `MainGDScriptSpin`), its text kept in `Fabric/builtin/` |
 | Godot 3 GDScript | not supported |
 | `[Tool]` / `@tool` scripts | kept, reported unsupported (there are no editor scripts) |
 | `[Rpc]` / `@rpc` | converted (mode, call-local, transfer mode and channel kept; dispatched by `SceneMultiplayer`, G6 NET2) |
