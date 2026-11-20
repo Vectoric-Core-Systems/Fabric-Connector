@@ -290,6 +290,12 @@ static class Node3DTests
         var kh = new Camera3D { Fov = 90f };
         Vector3 top = kh.ProjectRayNormal(new Vector2(640, 0));
         T.Check("vertical fov 90: the top edge ray is 45 degrees off the axis", T.Near(MathF.Atan2(top.Y, -top.Z), MathF.PI / 4f, 1e-4f));
+
+        // project_local_ray_normal: the same ray in the camera's own space, whatever way the camera turns (the ik demo's mouse target).
+        var turned = new Camera3D { Fov = 90f, Rotation = new Vector3(0, MathF.PI / 2f, 0) };
+        T.CheckVec("project_local_ray_normal: the centre ray is the camera's -Z, though the camera faces world -X", new Vector3(0, 0, -1), turned.ProjectLocalRayNormal(new Vector2(640, 360)), 1e-4f);
+        Vector3 localTop = turned.ProjectLocalRayNormal(new Vector2(640, 0));
+        T.Check("and the top edge ray is 45 degrees up in the camera's space", T.Near(MathF.Atan2(localTop.Y, -localTop.Z), MathF.PI / 4f, 1e-4f));
     }
 
     private static void LayerValues()

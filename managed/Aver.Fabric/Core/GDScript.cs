@@ -613,12 +613,18 @@ public static partial class GDScript
         throw new InvalidOperationException($"Invalid assignment of index on a base object of type '{target.VariantType}'.");
     }
 
-    /// <summary>A member of a value whose type is not known: a property by name; x/y/z/w/r/g/b/a of vectors and colours; a key of a dictionary.</summary>
+    /// <summary>A member of a value whose type is not known: a property by name, else a method as a Callable (GDScript's <c>node.grab_focus</c>
+    /// without a call); x/y/z/w/r/g/b/a of vectors and colours; a key of a dictionary.</summary>
     public static Variant GetMember(Variant target, string name)
     {
         switch (target.VariantType)
         {
-            case Variant.Type.Object: return target.AsGodotObject()?.Get(name) ?? default;
+            case Variant.Type.Object:
+            {
+                if (target.AsGodotObject() is not { } o) return default;
+                Variant v = o.Get(name);
+                return v.VariantType == Variant.Type.Nil && o.HasMethod(name) ? Variant.From(new Callable(o, name)) : v;
+            }
             case Variant.Type.Dictionary: return target.AsGodotDictionary().Get(name);
             case Variant.Type.Vector2: { var v = target.AsVector2(); return name switch { "x" => v.X, "y" => v.Y, _ => ValueMember(target, name) }; }
             case Variant.Type.Vector3: { var v = target.AsVector3(); return name switch { "x" => v.X, "y" => v.Y, "z" => v.Z, _ => ValueMember(target, name) }; }
@@ -699,6 +705,7 @@ public static partial class GDScript
             case Variant.Type.Callable when method is "call": return target.AsCallable().Call(args);
             case Variant.Type.Callable when method is "callv": return target.AsCallable().Callv(args[0].AsGodotArray());
             case Variant.Type.Callable when method is "bind": return target.AsCallable().Bind(args);
+            case Variant.Type.Callable when method is "call_deferred": target.AsCallable().CallDeferred(args); return default;
             case Variant.Type.Callable: return CallByReflection(target.AsCallable(), method, args);
             case Variant.Type.NodePath: return CallByReflection(target.AsNodePath(), method, args);
             case Variant.Type.Signal:

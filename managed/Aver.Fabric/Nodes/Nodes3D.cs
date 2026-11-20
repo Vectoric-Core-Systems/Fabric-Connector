@@ -959,6 +959,9 @@ public class Camera3D : Node3D
         return (t.Basis * new Vector3(ndc.X * hx, ndc.Y * hy, -1f)).Normalized();
     }
 
+    /// <summary>The direction of the ray through a screen point in the camera's own space (-Z forward), normalised.</summary>
+    public Vector3 ProjectLocalRayNormal(Vector2 screenPoint) => (CameraXf().Basis.Inverse() * ProjectRayNormal(screenPoint)).Normalized();
+
     /// <summary>The world point at <paramref name="zDepth"/> metres in front of the camera that appears at a screen point.</summary>
     public Vector3 ProjectPosition(Vector2 screenPoint, float zDepth)
     {

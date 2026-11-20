@@ -607,7 +607,9 @@ internal sealed partial class GdEmitter
 
     private string DefaultInit(GdType t, VarDecl vd, bool onready)
     {
-        if (onready) return "";
+        // An @onready variable with a value gets it in _OnreadyVars; one without starts as its type's default like any other (an
+        // `@onready var p: PackedVector3Array` appended to in _ready was null and threw).
+        if (onready && vd.Init != null) return "";
         // GDScript variables start as the type's default: 0, "", an empty collection, null.
         return t.Kind switch
         {

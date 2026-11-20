@@ -2,7 +2,7 @@
 
 # Aver.Fabric public API
 
-907 public types and 9859 public members, read from `managed/Aver.Fabric/` (179 source files). Members are grouped by kind and sorted alphabetically; signatures are single lines as declared, and the summary is the first sentence of the XML summary. Every type in every assembly: [index](index.md); every member: [members-a-z](members-a-z.md).
+907 public types and 9860 public members, read from `managed/Aver.Fabric/` (179 source files). Members are grouped by kind and sorted alphabetically; signatures are single lines as declared, and the summary is the first sentence of the XML summary. Every type in every assembly: [index](index.md); every member: [members-a-z](members-a-z.md).
 
 ## Contents
 
@@ -4191,6 +4191,7 @@
 | `IsPositionBehind` | `public bool IsPositionBehind(Vector3 worldPoint)` | True when the world point is nearer the camera than its near plane along the view direction. |
 | `IsPositionInFrustum` | `public bool IsPositionInFrustum(Vector3 worldPoint)` |  |
 | `MakeCurrent` | `public void MakeCurrent()` |  |
+| `ProjectLocalRayNormal` | `public Vector3 ProjectLocalRayNormal(Vector2 screenPoint)` | The direction of the ray through a screen point in the camera's own space (-Z forward), normalised. |
 | `ProjectPosition` | `public Vector3 ProjectPosition(Vector2 screenPoint, float zDepth)` | The world point at zDepth metres in front of the camera that appears at a screen point. |
 | `ProjectRayNormal` | `public Vector3 ProjectRayNormal(Vector2 screenPoint)` | The direction of the ray through a screen point, in world space, normalised. |
 | `ProjectRayOrigin` | `public Vector3 ProjectRayOrigin(Vector2 screenPoint)` | Where the ray through a screen point starts, in world space (the camera's position, or on the view plane when orthogonal). |
@@ -8384,7 +8385,7 @@
 | `Format` | `public static string Format(string fmt, Variant values)` | GDScript's format % values: an Array spreads over the placeholders, anything else is the single value. |
 | `FPosMod` | `public static double FPosMod(double a, double b)` |  |
 | `Ge` | `public static bool Ge(Variant a, Variant b)` |  |
-| `GetMember` | `public static Variant GetMember(Variant target, string name)` | A member of a value whose type is not known: a property by name; x/y/z/w/r/g/b/a of vectors and colours; a key of a dictionary. |
+| `GetMember` | `public static Variant GetMember(Variant target, string name)` | A member of a value whose type is not known: a property by name, else a method as a Callable (GDScript's node.grab_focus without a call); x/y/z/w/r/g/b/a of vectors and colours; a key of a dictionary. |
 | `Gt` | `public static bool Gt(Variant a, Variant b)` |  |
 | `In` | `public static bool In(Variant item, Variant container)` | The in operator: an element of an Array, a key of a Dictionary, a substring, a property of an Object. |
 | `Index` | `public static Variant Index(Variant target, Variant key)` |  |

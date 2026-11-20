@@ -401,8 +401,9 @@ internal sealed partial class GdEmitter
             return new Ex($"GDScript.GetMember({target.Code}, {q})", GdType.Variant) { SetTemplate = set, IsDynamic = true };
         }
         Note(at, "dynamic", name, Rating.Approximated, $"'{name}' is read by name at run time: {target.Type.Cs} has no such member");
-        string recv = Wrap(target, P.Primary);
-        return new Ex($"{recv}.Get({q})", GdType.Variant) { SetTemplate = $"{recv}.Set({q}, \u0001)", IsDynamic = true };
+        // Through GetMember, not GodotObject.Get: a member the static type lacks is often a method of the node's real class (get_child(0).grab_focus
+        // on a Control), and GDScript reads that as a Callable.
+        return new Ex($"GDScript.GetMember({target.Code}, {q})", GdType.Variant) { SetTemplate = $"GDScript.SetMember({target.Code}, {q}, \u0001)", IsDynamic = true };
     }
 
     private Ex StaticMember(Ex target, string name, Node at)

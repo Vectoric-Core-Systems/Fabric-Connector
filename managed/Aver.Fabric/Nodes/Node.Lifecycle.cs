@@ -14,6 +14,7 @@ public partial class Node
     // ---- state ----
 
     private bool _insideTree;
+    private bool _enteringTree;   // NotifyEnterTree is applying the scene's values: not in the tree yet, and not to be entered twice
     private bool _readyDone;            // _Ready has run (it runs once, on the first time in the tree)
     private bool _propsApplied;
     private bool _process, _physicsProcess, _processInput, _processUnhandledInput, _processUnhandledKeyInput;
@@ -173,8 +174,10 @@ public partial class Node
     /// <summary>Enter the tree: link to the parent, read the level's values, then _EnterTree and the signals.</summary>
     internal void NotifyEnterTree()
     {
-        if (_insideTree) return;
-        _insideTree = true;
+        if (_insideTree || _enteringTree) return;
+        _enteringTree = true;
+        // The scene's values are set before the node is in the tree, as Godot's instantiate does: a setter that checks is_inside_tree()
+        // must see false and leave its children alone (they are not ready); _ready then applies the value.
         if (Self.IsValid && NodeHost.Current.IsEngine)
         {
             LinkToEntityParent();
@@ -189,6 +192,8 @@ public partial class Node
             PendingValues = null;
             ApplyValues(pending);
         }
+        _insideTree = true;
+        _enteringTree = false;
         RefreshProcessFlags();
         OnEnteringTree();
         _Notification(NotificationEnterTree);

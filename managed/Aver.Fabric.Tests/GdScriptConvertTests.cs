@@ -168,7 +168,7 @@ static class GdScriptConvertTests
         T.Check("ui_menu: dictionary get with a default, then a typed string", m.Contains("string path = Levels.Get(levelKey, FirstLevel).AsString();"));
         T.Check("ui_menu: format with % and a typed enum export", Has(m, "GDScript.Format(\"Unknown button: %s\", buttonName)", "public Panel DefaultPanel = Panel.Main;"));
         T.Check("ui_menu: Engine.is_editor_hint() is Engine.IsEditorHint()", m.Contains("if (Engine.IsEditorHint())"));
-        T.Check("ui_menu: a $Node that is not typed is read and written by name", m.Contains("GetNode(\"%Title\").Set(\"text\", value);"));
+        T.Check("ui_menu: a $Node that is not typed is read and written by name", m.Contains("GDScript.SetMember(GetNode(\"%Title\"), \"text\", value);"), m);
 
         bool Regex(string pattern) => System.Text.RegularExpressions.Regex.IsMatch(m, pattern);
     }
@@ -241,6 +241,13 @@ static class GdScriptConvertTests
         T.Check("@export_group: [ExportGroup] on the next export", Regex("\\[ExportGroup\\(\"Look\"\\)\\]\\s+\\[Export\\]\\s+public Color Tint = Colors.White;"));
         T.Check("@onready: field, assigned in _OnreadyVars (before _Ready runs the user's code), typed from the annotation", Has(t, "public Camera3D Cam;", "Cam = GetNode<Camera3D>(\"Cam\");") &&
                 t.IndexOf("Cam = GetNode", StringComparison.Ordinal) > t.IndexOf("public override void _OnreadyVars()", StringComparison.Ordinal));
+        {
+            // An @onready variable with a type and no value starts as the type's default, as any GDScript variable does.
+            ConversionResult ro = One("extends Node3D\n\n@onready var spots: PackedVector3Array\n@onready var names: Array[String]\n@onready var label := \"\"\n\nfunc _ready() -> void:\n\tspots.append(Vector3.ONE)\n\tnames.append(\"a\")\n", "Spots");
+            string to = Text(ro);
+            T.Check("@onready with a type and no value: an empty packed array and an empty array, not null", ro.Success &&
+                    Has(to, "Vector3[] spots = new Vector3[0];", "Names = new();"), Errors(ro) + "\n" + to);
+        }
         T.Check("setget: property, backing field, the getter body", Has(t, "private long _hp = 10;", "public long Hp", "_hp = Math.Clamp(value, 0, 99);", "return _hp;"));
         T.Check("typed array and dictionary members", Has(t, "Collections.Array<long> Items = new Collections.Array<long> { 1, 2 };", "Collections.Dictionary Table = new Collections.Dictionary { { \"k\", 1 } };"));
         T.Check("a typed enum variable", t.Contains("public Mode mode = Mode.Run;") || t.Contains("public Mode Mode = Mode.Run;") || t.Contains("Mode.Run"));
@@ -433,7 +440,7 @@ static class GdScriptConvertTests
         string t = Text(r);
         T.Check("it compiles", r.Success, Errors(r));
         T.Check("$Path with no declared type is a Node read by name; with `as` or a type it is typed",
-                Has(t, "Node a = GetNode(\"Pivot/Arm\");", "a.Set(\"visible\", false);", "Node3D b = GetNode<Node3D>(\"Other\");", "Node3D c = GetNode<Node3D>(\"Pivot\");", "Node3D d = GetNode<Node3D>(\"Pivot\");"));
+                Has(t, "Node a = GetNode(\"Pivot/Arm\");", "GDScript.SetMember(a, \"visible\", false);", "Node3D b = GetNode<Node3D>(\"Other\");", "Node3D c = GetNode<Node3D>(\"Pivot\");", "Node3D d = GetNode<Node3D>(\"Pivot\");"));
         T.Check("a field of a vector property is written back whole; the vector itself is assigned",
                 Has(t, "Position = Position with { X = 4.0f };", "Position = new Vector3(1f, 2f, 3f);", "Rotation = Rotation with { Y = (float)(Rotation.Y + 0.5) };", "GlobalPosition = GlobalPosition + Vector3.Forward;"));
         T.Check("get_x() / set_x(v) / is_x() are the property x", Has(t, "Vector3 p = GlobalTransform.Origin;", "Visible = false;", "bool vis = Visible;", "Transform3D gt = GlobalTransform;"));

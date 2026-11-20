@@ -16,6 +16,8 @@ static class ConverterGapTests
     {
         T.Run("converter gap: a member the declared base type lacks is called, read and written by name", MembersByName);
         T.Run("converter gap: a signal of a script reached through Control connects and fires", SignalThroughBase);
+        T.Run("converter gap: a method the declared type lacks, read without a call, is a Callable (get_child(0).grab_focus.call_deferred())", MethodAsCallable);
+        T.Run("converter gap: a scene value reaches an exported setter before the node is in the tree, as Godot's instantiate does", SceneValueBeforeTree);
         T.Run("converter gap: emit() with more arguments than the signal declares delivers them", EmitWithExtraArguments);
         T.Run("converter gap: String methods run on a StringName, and an is-pattern local stays assigned", StringNameMethods);
         T.Run("converter gap: [self] where Array[RID] is wanted is the object's RID", RidFromObject);
@@ -106,7 +108,7 @@ static class ConverterGapTests
         T.Check("it compiles (before: CS1061 for take_damage, apply_impulse and health on Node3D)", r.Success, Errors(r));
         T.Check("take_damage is called by name with its arguments", t.Contains("body.Call(\"take_damage\", 5, Vector3.Up)"), t);
         T.Check("apply_impulse, which several subclasses have, is called by name", t.Contains("body.Call(\"apply_impulse\""), t);
-        T.Check("a property a script declares is read and written by name", t.Contains("body.Get(\"health\")") && t.Contains("body.Set(\"health\""), t);
+        T.Check("a property a script declares is read and written by name", t.Contains("GDScript.GetMember(body, \"health\")") && t.Contains("GDScript.SetMember(body, \"health\""), t);
         T.Check("the report says they are called by name, not unsupported",
             r.Items.Any(i => i.Property == "take_damage" && i.Rating == Rating.Approximated) && !r.Items.Any(i => i.Property == "take_damage" && i.Rating == Rating.Unsupported));
         var victim = New<Node3D>(r, "Victim");
@@ -118,6 +120,39 @@ static class ConverterGapTests
         T.Check("a method of the subclass the object really is runs", !Throws(() => Run(hitter, "Push", body)));
         var plain = new Node3D();
         T.Check("a node without the method fails when it runs, as in GDScript", Throws(() => Run(hitter, "Push", plain)));
+    }
+
+    // truck_town's car_select.gd: `car_container.get_child(0).grab_focus.call_deferred()`. get_child() is typed Node, which has no grab_focus, so the
+    // member was read by name as a property: nil, and call_deferred on nil threw in _ready.
+    private static void MethodAsCallable()
+    {
+        ConversionResult r = Many(
+            ("Poked", "extends Node\nclass_name Poked\n\nvar pokes := 0\n\nfunc poke() -> void:\n\tpokes += 1\n"),
+            ("Poker", "extends Node\nclass_name Poker\n\nfunc later(n: Node) -> void:\n\tn.poke.call_deferred()\n\nfunc now(n: Node) -> void:\n\tn.poke.call()\n"));
+        T.Check("it compiles", r.Success, Errors(r));
+        var poked = New<Node>(r, "Poked");
+        object poker = New<Node>(r, "Poker");
+        T.Check("n.poke.call(): the method, read by name, is a Callable that runs", !Throws(() => Run(poker, "Now", poked)) && poked.Get("pokes").AsInt64() == 1);
+        T.Check("n.poke.call_deferred() does not throw, and does not run yet", !Throws(() => Run(poker, "Later", poked)) && poked.Get("pokes").AsInt64() == 1);
+        Aver.Framework.Hosting.ExtensionHost.FlushDeferred();
+        T.Check("and runs when the deferred calls are flushed", poked.Get("pokes").AsInt64() == 2);
+    }
+
+    // waypoints' waypoint.gd: `@export var text: ... set(value): text = value; if is_inside_tree(): label.text = value`, with label an @onready child.
+    // The scene's value was applied with the node already marked in the tree, so the setter reached for the label before _ready found it.
+    private static void SceneValueBeforeTree()
+    {
+        ConversionResult r = Many(("Tagged", "extends Node\nclass_name Tagged\n\nvar seen: Array[bool] = []\nvar applied := \"\"\n\n" +
+                                   "@export var text: String = \"x\":\n\tset(value):\n\t\ttext = value\n\t\tseen.append(is_inside_tree())\n\t\tif is_inside_tree():\n\t\t\tapplied = value\n\n" +
+                                   "func _ready() -> void:\n\tself.text = text\n"));
+        T.Check("it compiles", r.Success, Errors(r));
+        var node = New<Node>(r, "Tagged");
+        node.PendingValues = new List<(string, string)> { ("text", "\"hello\"") };
+        SceneTree.Instance.Root.AddChild(node);
+        Aver.Fabric.Collections.Array seen = node.Get("seen").AsGodotArray();
+        T.Check("the setter ran for the scene's value with is_inside_tree() false", seen.Count >= 1 && !seen[0].AsBool(), string.Join(",", seen));
+        T.Check("and _ready's `self.text = text` applied it inside the tree", node.Get("applied").AsString() == "hello" && node.IsInsideTree());
+        node.QueueFree();
     }
 
     private static bool Throws(Action a)
@@ -806,7 +841,7 @@ static class ConverterGapTests
             T.Check("it compiles (before: a class as a value, Signal.Call, flags_unshaded, Input.MouseMode, ProcessMode, Array to string[], typed slice, " +
                     "Callable(untyped, m), _debug_node beside debug_node, EngineDebugger, two export categories, [self] as a RID, a bool as a Material)", r.Success, Errors(r));
             if (!r.Success) return;
-            T.Check("the Godot 3 names are made by name (Godot lacks them too), not compile errors", Text(r, 1).Contains("mat.Set(\"flags_unshaded\", true)") && Text(r, 1).Contains("label.Set(\"bbcode_text\", \"x\")"), Text(r, 1));
+            T.Check("the Godot 3 names are made by name (Godot lacks them too), not compile errors", Text(r, 1).Contains("GDScript.SetMember(mat, \"flags_unshaded\", true)") && Text(r, 1).Contains("GDScript.SetMember(label, \"bbcode_text\", \"x\")"), Text(r, 1));
             var three = New<Node3D>(r, "GapThree");
             SceneTree.Instance.Root.AddChild(three);
             long got = (long)three.GetType().GetMethod("Run")!.Invoke(three, null)!;
