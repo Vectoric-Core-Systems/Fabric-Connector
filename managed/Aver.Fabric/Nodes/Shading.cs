@@ -317,6 +317,24 @@ public partial class ShaderMaterial : Material
     /// <summary>The uniform table as the engine holds it, 4 floats a register (a copy).</summary>
     public float[] GetUniformTable() => (float[])_regs.Clone();
 
+    // Godot's property names for the parameters: `shader_parameter/<name>`, as a scene, an Object(ShaderMaterial, ...) value or an animation track
+    // (sky_material:shader_parameter/mie) names them.
+    private const string ParamPrefix = "shader_parameter/";
+
+    internal override bool TryDynamicSet(string name, Variant value)
+    {
+        if (!name.StartsWith(ParamPrefix, StringComparison.Ordinal)) return base.TryDynamicSet(name, value);
+        SetShaderParameter(name[ParamPrefix.Length..], value);
+        return true;
+    }
+
+    internal override bool TryDynamicGet(string name, out Variant value)
+    {
+        if (!name.StartsWith(ParamPrefix, StringComparison.Ordinal)) return base.TryDynamicGet(name, out value);
+        value = GetShaderParameter(name[ParamPrefix.Length..]);
+        return true;
+    }
+
     public void SetShaderParameter(StringName param, Variant value)
     {
         string name = param.ToString();

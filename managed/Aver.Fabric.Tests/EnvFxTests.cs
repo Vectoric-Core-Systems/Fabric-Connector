@@ -293,7 +293,8 @@ static class EnvFxTests
             var haze = main.GetNode<FogVolume>("Haze");
             T.Check("a world volume", haze.Shape == RenderingServer.FogVolumeShape.World && haze.Material == null);
             var custom = main.GetNode<FogVolume>("Custom");
-            T.Check("a volume whose ShaderMaterial was not converted has no material (Godot's default fog)", custom.Material == null && custom.Shape == RenderingServer.FogVolumeShape.Box);
+            T.Check("a volume whose ShaderMaterial was not converted keeps it as a plain ShaderMaterial (a script can set its parameters), not a fog shader: the volume draws Godot's default fog",
+                    custom.Material is ShaderMaterial { EnvironmentKind: "" } && custom.Shape == RenderingServer.FogVolumeShape.Box);
 
             var probe = main.GetNode<ReflectionProbe>("Probe");
             T.Check("the probe: Godot's values",

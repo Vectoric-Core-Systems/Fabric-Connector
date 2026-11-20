@@ -17,6 +17,7 @@ static class ShaderTests
         T.Run("shader: a ShaderMaterial pushes its table and its textures to the engine (G6 SH2)", Pushes);
         T.Run("shader: global shader parameters reach every live material that declares them (G6 SH2)", Globals);
         T.Run("shader: the converter's own output for the ShaderGame project loads as ShaderMaterials (G6 SH2)", ConverterOutput);
+        T.Run("shader: shader_parameter/<name> is the parameter, by property name (a scene, an Object value, an animation track)", ParameterByPropertyName);
     });
 
     private sealed class Fake : IShaderBackend
@@ -60,6 +61,18 @@ static class ShaderTests
         typeof(ShaderMaterial).GetField("_engineName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(m, engineName);
         typeof(ShaderMaterial).GetField("_regs", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(m, table ?? new float[layout.Registers * 4]);
         return m;
+    }
+
+    // The sky_shaders demo: a sky ShaderMaterial whose shader did not convert is kept as Object(ShaderMaterial, "shader_parameter/...": ...), and its
+    // AnimationPlayer animates sky_material:shader_parameter/mie. Both reach the parameter by its property name.
+    private static void ParameterByPropertyName()
+    {
+        var m = new ShaderMaterial();
+        m.Set("shader_parameter/mie", 0.25f);
+        T.Check("Set(\"shader_parameter/mie\") is set_shader_parameter(\"mie\")", T.Near((float)m.GetShaderParameter("mie").AsDouble(), 0.25f));
+        m.SetShaderParameter("rayleigh", 2.0f);
+        T.Check("and Get(\"shader_parameter/rayleigh\") reads it back", T.Near((float)m.Get("shader_parameter/rayleigh").AsDouble(), 2.0f));
+        T.Check("another property name is not a parameter", m.Get("shader_parameter_x").VariantType == Variant.Type.Nil);
     }
 
     private static void LayoutParses()
@@ -218,7 +231,8 @@ static class ShaderTests
             var dissolve = (ShaderMaterial)main.GetNode<MeshInstance3D>("Dissolve").MaterialOverride!;
             T.Check("the dissolve material's threshold reads 0.35", T.Near(dissolve.GetShaderParameter("threshold").AsSingle(), 0.35f));
             var broken = main.GetNode<MeshInstance3D>("Broken");
-            T.Check("a shader that did not convert leaves no material", broken.MaterialOverride is null);
+            T.Check("a shader that did not convert is kept as a ShaderMaterial with no engine material, so the mesh keeps drawing its own",
+                    broken.MaterialOverride is ShaderMaterial { ResourcePath.Length: 0, EngineMaterialName.Length: 0 });
             main.QueueFree();
         }
         finally

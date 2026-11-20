@@ -442,7 +442,7 @@ private:
             c.line = nt.line;
             expectP("=");
             const Token it = peek();
-            c.init = parseAssign();
+            c.init = parseDeclInit(ty, sz);
             GdType dt = ty;
             if (sz > 0) dt.arraySize = sz;
             else if (sz < 0) {
@@ -932,7 +932,7 @@ private:
             std::shared_ptr<const GdConstValue> cv;
             if (acceptP("=")) {
                 const Token it = peek();
-                d.init = parseAssign();
+                d.init = parseDeclInit(ty, sz);
                 if (sz < 0) {
                     if (!d.init->type.isArray()) typeFail(it, "cannot infer the array size from this initialiser");
                     dt.arraySize = d.init->type.arraySize;
@@ -1354,6 +1354,30 @@ private:
         }
         expectP(")");
         return args;
+    }
+
+    // A declaration's initialiser. An array may be initialised by a brace list, `const vec3 V[2] = { vec3(1.0), vec3(2.0) };`, which is its
+    // array constructor written another way (the sky_shaders demo's clouds shader); anything else is an expression.
+    GdExprP parseDeclInit(const GdType& elem, int sz) {
+        if (sz == 0 || !isP("{")) return parseAssign();
+        const Token open = next();
+        std::vector<GdExprP> args;
+        while (!isP("}")) {
+            args.push_back(parseAssign());
+            if (!acceptP(",")) break;   // a trailing comma is allowed
+        }
+        expectP("}");
+        if (gdIsSampler(elem.base)) typeFail(open, "arrays of samplers cannot be initialised");
+        const int n = sz > 0 ? sz : static_cast<int>(args.size());
+        if (args.empty() || static_cast<int>(args.size()) != n) typeFail(open, "the initialiser list needs " + std::to_string(n) + " element(s), got " + std::to_string(args.size()));
+        for (const GdExprP& a : args)
+            if (a->type != elem) typeFail(open, "array element of type '" + tn(a->type) + "' where '" + tn(elem) + "' is expected");
+        auto e = mk(GdExprKind::ArrayConstruct, open);
+        e->name = tn(elem);
+        e->type = elem;
+        e->type.arraySize = n;
+        e->args = std::move(args);
+        return e;
     }
 
     GdExprP parseConstructor() {

@@ -126,7 +126,11 @@ int main() {
         const std::string* hs = prop(w, haze, "shape");
         check(hs && *hs == "4", "a world volume keeps shape 4");
         const int custom = find(w, {"Main", "Custom"});
-        check(custom >= 0 && prop(w, custom, "material") == nullptr, "a ShaderMaterial is not written as a value");
+        // A ShaderMaterial whose shader did not convert stays a ShaderMaterial (a script can set its parameters); it is not a fog shader, so the
+        // volume draws Godot's default fog.
+        const std::string* cm = prop(w, custom, "material");
+        check(custom >= 0 && cm && cm->find("Object(ShaderMaterial") != std::string::npos && cm->find(".ocgraph") == std::string::npos,
+              "a ShaderMaterial whose shader did not convert is written as Object(ShaderMaterial), not a converted fog shader");
 
         const int probe = find(w, {"Main", "Probe"});
         check(probe >= 0 && w.placements[static_cast<usize>(probe)].className == "ReflectionProbe", "the probe is placed as a ReflectionProbe");

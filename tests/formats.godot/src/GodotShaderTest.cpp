@@ -1471,6 +1471,16 @@ static void testEmittedText() {
         check(r.ok && has(r, "float l_a[2] = { 1.0, 2.0 };") && has(r, "l_a[1]"), "an array declaration with a constructor becomes an initialiser list");
     }
     {
+        // A brace list initialises an array as its constructor does (sky_shaders' clouds shader: `const vec3 RANDOM_VECTORS[6] = { vec3(...), ... };`).
+        const GdHlslResult r = emit("const vec3 V[2] = {\n\t\tvec3(1.0, 0.0, 0.0),\n\t\tvec3(0.0, 1.0, 0.0),\n\t}; float u[] = { 1.0, 2.0, 3.0 }; float s = V[1].y + u[2];");
+        if (!r.ok || !has(r, "l_V[2] = {")) AVER_ERROR("{}\n{}", r.error, r.source);
+        check(r.ok && has(r, "l_V[2] = {") && has(r, "float l_u[3] = { 1.0, 2.0, 3.0 };"), "a brace list initialises a sized array and an unsized one (its size from the list), trailing comma allowed");
+        GdShaderModule bad = compile("shader_type spatial;\nvoid fragment() { float w[3] = { 1.0, 2.0 }; }\n");
+        check(!bad.ok, "a brace list with the wrong element count is a type error");
+        GdShaderModule global = compile("shader_type spatial;\nconst vec2 G[2] = { vec2(0.0), vec2(1.0) };\nvoid fragment() { ALBEDO = vec3(G[1], 0.0); }\n");
+        check(global.ok, "and a global constant takes one too");
+    }
+    {
         // unsupported constructs are reported, not emitted wrongly
         GdShaderModule m = compile("shader_type spatial;\nfloat[2] two() { return float[2](1.0, 2.0); }\nvoid fragment() { float f = two()[0]; }\n");
         const GdHlslResult r = gdShaderEmitHlsl(m);

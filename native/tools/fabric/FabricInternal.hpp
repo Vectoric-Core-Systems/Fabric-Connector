@@ -402,6 +402,9 @@ public:
     ScriptInfo* resourceScript(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc);
     // A PhysicsMaterial as `Object(PhysicsMaterial, ...)`: Aver.Fabric's class of that name takes friction, bounce, rough and absorbent.
     Var physicsMaterialObject(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line);
+    // A ShaderMaterial whose shader did not convert, kept as Object(ShaderMaterial) with its shader_parameter values: a script still reads and
+    // sets them, and nothing is drawn with it.
+    Var unconvertedShaderMaterial(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line);
     // An occluder shape (BoxOccluder3D, ArrayOccluder3D ...) as `Object(Class, ...)`: Aver.Fabric keeps it; the renderer's occlusion culling is automatic.
     Var occluderObject(const std::string& type, const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line);
     void convertStandaloneResources();

@@ -1467,6 +1467,18 @@ const gd::GodotResource* Converter::storeResourceDoc(const std::string& resPath,
 
 // ---- shapes and other resources -------------------------------------------------------------------------------------------
 
+Var Converter::unconvertedShaderMaterial(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line) {
+    // Nil was written before, so `sky.sky_material` was null at run time and a script's set_shader_parameter on it threw (the sky_shaders demo,
+    // whose clouds shader samples a 3D texture). Godot's material exists whatever its shader does; so does this one.
+    std::vector<std::pair<std::string, Var>> entries;
+    for (const gd::GodotProperty& p : props)
+        if (p.name.rfind("shader_parameter/", 0) == 0) entries.emplace_back(p.name, convertValue(p.value, doc, w, p.name));
+    report_.add("resource", doc.file, w.node, "ShaderMaterial", "", Rating::Approximated,
+                "its shader did not convert; kept as Object(ShaderMaterial) with its " + std::to_string(entries.size()) +
+                    " parameter value(s), so a script reads and sets them; nothing is drawn with it", line);
+    return makeObject("ShaderMaterial", std::move(entries));
+}
+
 Var Converter::physicsMaterialObject(const std::vector<gd::GodotProperty>& props, const gd::GodotDocBase& doc, const Where& w, int line) {
     // Godot stores the properties that differ from its defaults; the runtime class has the same defaults (friction 1, the rest off or 0).
     std::vector<std::pair<std::string, Var>> entries;
@@ -1660,7 +1672,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
             }
             if (t == "ShaderMaterial") {   // G6 SH2
                 const std::string a = shaderMaterialAsset(doc.file + "#" + sr->id, sr->props, doc, stemOf(doc.file) + "_" + sr->id, w);
-                return a.empty() ? makeNil() : makeResource(a);
+                return a.empty() ? unconvertedShaderMaterial(sr->props, doc, w, sr->line) : makeResource(a);
             }
             if (isProceduralTextureType(t)) return bakedTextureValue(v, doc, w);   // F26
             if (t == "ViewportTexture") {
@@ -1765,7 +1777,7 @@ Var Converter::convertValue(const Var& v, const gd::GodotDocBase& doc, const Whe
                 }
                 if (rt == "ShaderMaterial") {   // G6 SH2
                     const std::string a = shaderMaterialAsset(res, r->props, *r, stemOf(res), w);
-                    return a.empty() ? makeNil() : makeResource(a);
+                    return a.empty() ? unconvertedShaderMaterial(r->props, *r, w, 0) : makeResource(a);
                 }
                 if (isPrimitiveMeshType(rt)) {
                     const std::string a = primitiveMeshAsset(rt, r->props, *r, w);
