@@ -136,8 +136,18 @@ public class SoftBody3D : MeshInstance3D
 
     public bool IsPointPinned(int pointIndex) => _pins.Exists(p => p.Point == pointIndex);
 
+    // The rest mesh the level places below the node so the editor shows the body (the converter's _rest_mesh: a primitive mesh's asset, which the node's own
+    // mesh, generated at run time, does not name). The body gives that placement up once it simulates (ReleasePlaced) and draws its own deforming copy.
+    private string? _restAsset;
+    internal override string? PlacedAsset => _restAsset ?? base.PlacedAsset;
+
     internal override bool TryDynamicSet(string name, Variant value)
     {
+        if (name == "_rest_mesh")
+        {
+            _restAsset = value.AsGodotObject() is Mesh m ? MeshAssetOf(m) : null;
+            return true;
+        }
         if (!name.StartsWith("attachments/", StringComparison.Ordinal)) return base.TryDynamicSet(name, value);
         string[] parts = name.Split('/');
         if (parts.Length != 3 || !int.TryParse(parts[1], out int slot) || slot < 0) return false;
@@ -191,6 +201,7 @@ public class SoftBody3D : MeshInstance3D
     private static MeshSurface? ReadableSurface(Mesh? mesh) => mesh switch
     {
         PrimitiveMesh p => p.Surface(),
+        FileMesh f => f.Triangles(),   // an imported mesh, read from its .ocmesh
         ArrayMesh a when a.Surfaces.Count > 0 && a.Surfaces[0].Primitive == Mesh.PrimitiveType.Triangles => a.Surfaces[0],
         _ => null,
     };
@@ -263,8 +274,11 @@ public class SoftBody3D : MeshInstance3D
             _live = new ArrayMesh();
             Collections.Array arrays = surface.ToArrays();
             _live.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-            if (surface.Material != null) _live.SurfaceSetMaterial(0, surface.Material);
+            // An imported mesh's triangles carry no material: the file's first slot is what it drew with.
+            Material? material = surface.Material ?? source?.SurfaceGetMaterial(0);
+            if (material != null) _live.SurfaceSetMaterial(0, material);
             Mesh = _live;
+            ReleasePlaced();   // the level's rest-pose copy goes; this node draws the simulated one
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { _warned = true; }
         finally { _building = false; }

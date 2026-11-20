@@ -13,6 +13,7 @@ static class GameParityTests
         T.Run("game parity: an .ocmesh reports its material slots as surfaces, each with its .ocmat", MeshSurfaces);
         T.Run("game parity: a material from a mesh survives duplicate, override and surface writes like Godot's", MaterialRoundTrip);
         T.Run("game parity: a file that is not an .ocmesh has no surfaces and nothing throws", NotAMesh);
+        T.Run("game parity: an .ocmesh's triangles are read (get_faces, create_trimesh_shape, a soft body's mesh)", MeshTriangles);
         T.Run("game parity: Skin takes bind_count and bind/N/name, bone and pose from a scene", SkinBinds);
         T.Run("game parity: MeshInstance3D.skeleton is the property, and the other renames Godot's C# names need", RenamedProperties);
         T.Run("game parity: a downgraded node keeps its properties without a warning each", StandInNode);
@@ -33,7 +34,40 @@ static class GameParityTests
         }
         var madr = new List<byte>(BitConverter.GetBytes((uint)slots.Length));
         foreach (uint r in refs) madr.AddRange(BitConverter.GetBytes(r));
-        var chunks = new[] { ("MADR", madr.ToArray()), ("STRT", strt.ToArray()) };
+        return Container(("MADR", madr.ToArray()), ("STRT", strt.ToArray()));
+    }
+
+    // A cube of 1 m (+-50 cm on the engine's axes) as an .ocmesh (docs/formats/FORMAT_SPECS.md §5): MHDR with one level, one float3 position stream and
+    // two submeshes, VTXS, IDXS (16-bit). Each submesh is three faces over its own copy of the eight corners; the second's indices count from base vertex 8.
+    private static byte[] BoxMeshFile()
+    {
+        var vtxs = new List<byte>();
+        for (int copy = 0; copy < 2; copy++)
+            for (int i = 0; i < 8; i++)
+                foreach (float c in new[] { (i & 1) != 0 ? 50f : -50f, (i & 2) != 0 ? 50f : -50f, (i & 4) != 0 ? 50f : -50f }) vtxs.AddRange(BitConverter.GetBytes(c));
+        int[][] quads = { new[] { 0, 2, 6, 4 }, new[] { 1, 5, 7, 3 }, new[] { 0, 4, 5, 1 }, new[] { 2, 3, 7, 6 }, new[] { 0, 1, 3, 2 }, new[] { 4, 6, 7, 5 } };
+        var idxs = new List<byte>();
+        foreach (int[] q in quads)
+            foreach (int k in new[] { q[0], q[1], q[2], q[0], q[2], q[3] }) idxs.AddRange(BitConverter.GetBytes((ushort)k));   // relative to the submesh's base vertex
+        var mhdr = new List<byte>();
+        mhdr.AddRange(BitConverter.GetBytes(0u));                    // flags: float positions, 16-bit indices
+        mhdr.AddRange(new byte[] { 1, 2, 1, 0 });                    // one level, two submeshes, one stream, no UV channel
+        mhdr.AddRange(new byte[24 + 16]);                            // bounds, not read
+        mhdr.AddRange(BitConverter.GetBytes(2u)); mhdr.AddRange(BitConverter.GetBytes(0u));   // slot count, builder version
+        mhdr.AddRange(new byte[] { 0, 0, 0, 0 }); mhdr.AddRange(BitConverter.GetBytes((ushort)12)); mhdr.AddRange(BitConverter.GetBytes((ushort)0));   // POSITION, stride 12
+        mhdr.AddRange(BitConverter.GetBytes(16u)); mhdr.AddRange(BitConverter.GetBytes(36u));   // the level: 16 vertices, 36 indices
+        mhdr.AddRange(BitConverter.GetBytes(0UL)); mhdr.AddRange(new byte[8]); mhdr.AddRange(BitConverter.GetBytes(0UL)); mhdr.AddRange(new byte[56 - 32]);
+        mhdr.AddRange(new byte[2 * 12]);                             // the submesh table, not read
+        foreach ((uint start, uint count, uint baseVertex) in new[] { (0u, 18u, 0u), (18u, 18u, 8u) })
+        {
+            mhdr.AddRange(BitConverter.GetBytes(start)); mhdr.AddRange(BitConverter.GetBytes(count)); mhdr.AddRange(BitConverter.GetBytes(baseVertex));
+            mhdr.AddRange(new byte[40 - 12]);
+        }
+        return Container(("MHDR", mhdr.ToArray()), ("VTXS", vtxs.ToArray()), ("IDXS", idxs.ToArray()));
+    }
+
+    private static byte[] Container(params (string Id, byte[] Data)[] chunks)
+    {
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
         w.Write("AVR1"u8.ToArray());
@@ -124,6 +158,29 @@ static class GameParityTests
             T.Check("a material set on the mesh's surface replaces the slot's", ReferenceEquals(mi.GetActiveMaterial(1), other));
             var dup = (Mesh)mi.Mesh.Duplicate();
             T.Check("a copy of the mesh has the surfaces and still draws the file", dup.GetSurfaceCount() == 2 && MeshInstance3D.MeshAssetOf(dup) == "Meshes/m.ocmesh" && ReferenceEquals(dup.SurfaceGetMaterial(1), other));
+        });
+    }
+
+    // The engine-written box in test-content. Godot reads an imported mesh's arrays; Aver.Fabric's file mesh had none, so get_faces was empty,
+    // create_trimesh_shape null, and a SoftBody3D on an imported mesh never simulated (the soft_body_physics demo's boxes).
+    private static void MeshTriangles()
+    {
+        T.Reset();
+        Content(dir =>
+        {
+            File.WriteAllBytes(Path.Combine(dir, "Meshes", "triangles_cube.ocmesh"), BoxMeshFile());   // a name no other suite loads: the loader caches by path
+            var mesh = ResourceLoader.Load<Mesh>("res://Meshes/triangles_cube.ocmesh")!;
+            Vector3[] faces = mesh.GetFaces();
+            T.Check("the box's faces are read: both submeshes, twelve triangles", faces.Length == 36,
+                    faces.Length.ToString());
+            if (faces.Length == 0) return;
+            var lo = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            var hi = -lo;
+            foreach (Vector3 f in faces) { lo = new Vector3(MathF.Min(lo.X, f.X), MathF.Min(lo.Y, f.Y), MathF.Min(lo.Z, f.Z)); hi = new Vector3(MathF.Max(hi.X, f.X), MathF.Max(hi.Y, f.Y), MathF.Max(hi.Z, f.Z)); }
+            T.Check("in metres on Godot's axes: a 1 m cube around the origin", T.Near(lo.X, -0.5f, 1e-4f) && T.Near(hi.X, 0.5f, 1e-4f) && T.Near(lo.Y, -0.5f, 1e-4f) &&
+                    T.Near(hi.Y, 0.5f, 1e-4f) && T.Near(lo.Z, -0.5f, 1e-4f) && T.Near(hi.Z, 0.5f, 1e-4f), $"{lo} .. {hi}");
+            T.Check("create_trimesh_shape makes a shape of those faces", mesh.CreateTrimeshShape() is { } shape && shape.Data.Length == 36);
+            T.Check("create_convex_shape makes one of its eight corners", mesh.CreateConvexShape() is { } hull && hull.Points.Length == 8, mesh.CreateConvexShape()?.Points.Length.ToString() ?? "none");
         });
     }
 

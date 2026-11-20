@@ -980,8 +980,9 @@ bool planPlacedVisual(Report& report, const FNode& fn, const std::vector<std::pa
         }
         return true;
     }
-    if (fn.type != "MeshInstance3D" && fn.type != "Sprite3D" && !isCsgClass(fn.type)) return false;
-    const Var* mesh = find("mesh");
+    if (fn.type != "MeshInstance3D" && fn.type != "Sprite3D" && fn.type != "SoftBody3D" && !isCsgClass(fn.type)) return false;
+    // A soft body's rest pose: its primitive mesh's asset (the mesh property itself is the generator the runtime simulates), else its mesh.
+    const Var* mesh = fn.type == "SoftBody3D" && find("_rest_mesh") ? find("_rest_mesh") : find("mesh");
     if (!mesh || mesh->type != VType::Resource || !endsWithOcMesh(mesh->s)) return false;
     out.mesh = mesh->s;
     out.instances.push_back(Xform{});
@@ -1164,13 +1165,16 @@ void Converter::emitNode(FNode& fn, int parent, const Xform& parentWorld, fmt::O
         const Where pw{fn.reportFile, fn.reportPath, fn.type};
         if (fn.type == "GridMap" && pr.key == "mesh_library") { props.emplace_back(pr.key, makeNil()); continue; }   // geometryNode reads the library itself
         if (fn.type == "MultiplayerSpawner" && pr.key == "_spawnable_scenes") { props.emplace_back(pr.key, spawnableScenesValue(pr.value, fn, pr)); continue; }   // G6 NET2
-        // A soft body simulates the vertices of its mesh: a primitive mesh stays an Object(...) whose generator makes them at run time; any other mesh is an asset the
-        // runtime cannot read.
+        // A soft body simulates the vertices of its mesh: a primitive mesh stays an Object(...) whose generator makes them at run time, and its asset is placed
+        // below the node as the rest pose the editor shows (_rest_mesh); any other mesh is its .ocmesh, whose triangles Aver.Fabric reads (FileMesh).
         if (fn.type == "SoftBody3D" && pr.key == "mesh" && pr.doc) {
             Var inlineMesh = inlinePrimitiveMesh(pr.value, *pr.doc, pw);
-            if (!inlineMesh.isNil()) { props.emplace_back(pr.key, std::move(inlineMesh)); continue; }
-            report_.add("property", fn.reportFile, fn.reportPath, fn.type, pr.key, Rating::Unsupported,
-                        "this mesh is an imported file whose vertices the runtime cannot read; the soft body stays an ordinary mesh", pr.line);
+            if (!inlineMesh.isNil()) {
+                props.emplace_back(pr.key, std::move(inlineMesh));
+                Var asset = convertValue(pr.value, *pr.doc, pw, pr.key);
+                if (asset.type == VType::Resource) props.emplace_back("_rest_mesh", std::move(asset));
+                continue;
+            }
         }
         Var cv = pr.doc ? convertValue(pr.value, *pr.doc, pw, pr.key) : pr.value;
         if (cv.isNil() && !pr.value.isNil()) continue;   // a resource that could not be converted; already reported
